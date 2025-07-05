@@ -149,7 +149,7 @@ const PaymentStatusTracker = ({
               <div className="flex-1">
                 <div className="font-medium">{getStatusMessage()}</div>
                 <div className="text-sm opacity-90">
-                  Amount: GH₵ {amount.toFixed(2)}
+                  Amount: GH₵ {(parseFloat(amount) || 0).toFixed(2)}
                 </div>
                 {lastUpdated && (
                   <div className="text-xs opacity-75 mt-1">

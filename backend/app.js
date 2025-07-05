@@ -15,6 +15,7 @@ import uploadRoutes from './routes/upload.js';
 import usersRoutes from './routes/users.js';
 import payoutsRoutes from './routes/payouts.js';
 import paymentsRoutes from './routes/payments.js';
+import adminRoutes from './routes/admin.js';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const MySQLStore = require('express-mysql-session')(session);
@@ -88,6 +89,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/payouts', payoutsRoutes);
 app.use('/api/payments', paymentsRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

@@ -232,4 +232,66 @@ export async function cancelPayment(paymentId) {
     credentials: 'include',
   });
   return res.json();
+}
+
+// Admin Dashboard APIs
+export async function getDashboardStats() {
+  const res = await fetch('http://localhost:4000/api/admin/dashboard/stats', {
+    credentials: 'include',
+  });
+  return res.json();
+}
+
+export async function getRecentActivity() {
+  const res = await fetch('http://localhost:4000/api/admin/dashboard/activity', {
+    credentials: 'include',
+  });
+  return res.json();
+}
+
+// Admin Payment APIs
+export async function getPaymentStats() {
+  const res = await fetch('http://localhost:4000/api/admin/payments/stats', {
+    credentials: 'include',
+  });
+  return res.json();
+}
+
+export async function getAdminPayments(page = 1, limit = 100) {
+  const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
+  
+  const res = await fetch(`http://localhost:4000/api/admin/payments?${params}`, {
+    credentials: 'include',
+  });
+  return res.json();
+}
+
+// Admin Order APIs
+export async function getAdminOrders() {
+  const res = await fetch('http://localhost:4000/api/admin/orders', {
+    credentials: 'include',
+  });
+  return res.json();
+}
+
+export async function getOrderStats() {
+  const res = await fetch('http://localhost:4000/api/admin/orders/stats', {
+    credentials: 'include',
+  });
+  return res.json();
+}
+
+// Admin Crop APIs
+export async function getAdminCrops() {
+  const res = await fetch('http://localhost:4000/api/admin/crops', {
+    credentials: 'include',
+  });
+  return res.json();
+}
+
+export async function getCropStats() {
+  const res = await fetch('http://localhost:4000/api/admin/crops/stats', {
+    credentials: 'include',
+  });
+  return res.json();
 } 

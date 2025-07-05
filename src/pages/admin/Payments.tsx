@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Filter, Eye, Download, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
+import { Search, Filter, Eye, Download, TrendingUp, TrendingDown, DollarSign, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import AdminLayout from "@/components/admin/AdminLayout";
 import PaymentStatusTracker from "@/components/PaymentStatusTracker";
-import { getPaymentStatus } from "../../api";
+import { getPaymentStatus, getPaymentHistory, getPaymentStats, getAdminPayments } from "../../api";
+import { toast } from "@/components/ui/sonner";
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface Payment {
   id: number;
@@ -32,69 +35,52 @@ const Payments = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [methodFilter, setMethodFilter] = useState("all");
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [paymentStats, setPaymentStats] = useState({
+    totalPayments: 0,
+    completed: { count: 0, amount: 0 },
+    pending: { count: 0, amount: 0 },
+    failed: 0
+  });
+  const [exporting, setExporting] = useState(false);
+  const [exportScope, setExportScope] = useState<'filtered' | 'all'>('filtered');
+  const [exportingPDF, setExportingPDF] = useState(false);
 
-  // Mock data for demonstration
   useEffect(() => {
-    const mockPayments: Payment[] = [
-      {
-        id: 1,
-        order_id: 101,
-        buyer_id: 1,
-        farmer_id: 2,
-        amount: 150.00,
-        payment_method: "mtn-momo",
-        phone_number: "0241234567",
-        transaction_id: "MM-123456789",
-        reference_id: "AGRO-1703123456-ABCD",
-        status: "completed",
-        payment_provider: "mobile_money",
-        created_at: "2024-01-15T10:30:00Z",
-        completed_at: "2024-01-15T10:32:00Z"
-      },
-      {
-        id: 2,
-        order_id: 102,
-        buyer_id: 3,
-        farmer_id: 4,
-        amount: 75.50,
-        payment_method: "vodafone-cash",
-        phone_number: "0209876543",
-        transaction_id: "VC-987654321",
-        reference_id: "AGRO-1703123457-EFGH",
-        status: "processing",
-        payment_provider: "mobile_money",
-        created_at: "2024-01-15T11:15:00Z"
-      },
-      {
-        id: 3,
-        order_id: 103,
-        buyer_id: 5,
-        farmer_id: 6,
-        amount: 200.00,
-        payment_method: "card",
-        transaction_id: "CARD-456789123",
-        reference_id: "AGRO-1703123458-IJKL",
-        status: "failed",
-        payment_provider: "card_processor",
-        created_at: "2024-01-15T12:00:00Z"
-      },
-      {
-        id: 4,
-        order_id: 104,
-        buyer_id: 7,
-        farmer_id: 8,
-        amount: 120.75,
-        payment_method: "bank-transfer",
-        transaction_id: "BANK-789123456",
-        reference_id: "AGRO-1703123459-MNOP",
-        status: "pending",
-        payment_provider: "bank_transfer",
-        created_at: "2024-01-15T13:45:00Z"
+    const fetchData = async () => {
+      try {
+        // Try admin endpoint first, fallback to regular endpoint
+        let paymentsData;
+        try {
+          paymentsData = await getAdminPayments(1, 100);
+        } catch (adminError) {
+          paymentsData = await getPaymentHistory(1, 100);
+        }
+        
+        const statsData = await getPaymentStats();
+        
+        // Handle both possible response formats
+        if (!paymentsData.error) {
+          const paymentsArray = paymentsData.payments || paymentsData;
+          if (Array.isArray(paymentsArray)) {
+            setPayments(paymentsArray);
+          } else {
+            console.error('Unexpected payments data format:', paymentsArray);
+            setPayments([]);
+          }
+        }
+        
+        if (!statsData.error) {
+          setPaymentStats(statsData);
+        }
+      } catch (error) {
+        console.error('Error fetching payments data:', error);
+        setPayments([]);
+      } finally {
+        setLoading(false);
       }
-    ];
+    };
 
-    setPayments(mockPayments);
-    setLoading(false);
+    fetchData();
   }, []);
 
   const filteredPayments = payments.filter(payment => {
@@ -146,40 +132,271 @@ const Payments = () => {
     }
   };
 
-  const totalAmount = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const totalAmount = payments.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
   const completedAmount = payments
     .filter(payment => payment.status === 'completed')
-    .reduce((sum, payment) => sum + payment.amount, 0);
+    .reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
   const pendingAmount = payments
     .filter(payment => payment.status === 'pending' || payment.status === 'processing')
-    .reduce((sum, payment) => sum + payment.amount, 0);
+    .reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
 
   const stats = [
     {
       title: "Total Payments",
-      value: payments.length,
+      value: paymentStats.totalPayments,
       icon: DollarSign,
       color: "text-blue-600"
     },
     {
       title: "Completed",
-      value: payments.filter(p => p.status === 'completed').length,
+      value: paymentStats.completed.count,
       icon: TrendingUp,
       color: "text-green-600"
     },
     {
       title: "Pending",
-      value: payments.filter(p => p.status === 'pending' || p.status === 'processing').length,
+      value: paymentStats.pending.count,
       icon: TrendingDown,
       color: "text-yellow-600"
     },
     {
       title: "Total Amount",
-      value: `GH₵ ${totalAmount.toFixed(2)}`,
+      value: `GH₵ ${((parseFloat(paymentStats.completed.amount) || 0) + (parseFloat(paymentStats.pending.amount) || 0)).toFixed(2)}`,
       icon: DollarSign,
       color: "text-purple-600"
     }
   ];
+
+  const exportPaymentsReport = () => {
+    setExporting(true);
+    
+    try {
+      // Use filtered or all payments based on export scope
+      const paymentsToExport = exportScope === 'filtered' ? filteredPayments : payments;
+      
+      // Calculate summary statistics
+      const totalAmount = paymentsToExport.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+      const completedAmount = paymentsToExport
+        .filter(payment => payment.status === 'completed')
+        .reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+      const pendingAmount = paymentsToExport
+        .filter(payment => payment.status === 'pending' || payment.status === 'processing')
+        .reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+      
+      const statusCounts = paymentsToExport.reduce((acc, payment) => {
+        acc[payment.status] = (acc[payment.status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const methodCounts = paymentsToExport.reduce((acc, payment) => {
+        const method = getMethodLabel(payment.payment_method);
+        acc[method] = (acc[method] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      // Create CSV content with summary
+      const summarySection = [
+        'PAYMENT REPORT SUMMARY',
+        `Generated on: ${new Date().toLocaleString()}`,
+        `Export Scope: ${exportScope === 'filtered' ? 'Filtered Results' : 'All Payments'}`,
+        `Total Payments: ${paymentsToExport.length}`,
+        `Total Amount: GH₵ ${totalAmount.toFixed(2)}`,
+        `Completed Amount: GH₵ ${completedAmount.toFixed(2)}`,
+        `Pending Amount: GH₵ ${pendingAmount.toFixed(2)}`,
+        '',
+        'Status Breakdown:',
+        ...Object.entries(statusCounts).map(([status, count]) => `${status.toUpperCase()}: ${count}`),
+        '',
+        'Payment Method Breakdown:',
+        ...Object.entries(methodCounts).map(([method, count]) => `${method}: ${count}`),
+        '',
+        'DETAILED PAYMENT RECORDS',
+        ''
+      ];
+
+      const headers = [
+        'Reference ID',
+        'Order ID',
+        'Payment Method',
+        'Phone Number',
+        'Amount (GH₵)',
+        'Status',
+        'Transaction ID',
+        'Created Date',
+        'Completed Date'
+      ];
+
+      const paymentRecords = paymentsToExport.map(payment => [
+        payment.reference_id,
+        payment.order_id,
+        getMethodLabel(payment.payment_method),
+        payment.phone_number || 'N/A',
+        (parseFloat(payment.amount) || 0).toFixed(2),
+        payment.status.toUpperCase(),
+        payment.transaction_id || 'N/A',
+        new Date(payment.created_at).toLocaleString(),
+        payment.completed_at ? new Date(payment.completed_at).toLocaleString() : 'N/A'
+      ]);
+
+      const csvContent = [
+        ...summarySection,
+        headers.join(','),
+        ...paymentRecords.map(record => record.join(','))
+      ].join('\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `payments-report-${exportScope}-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success(`Payments report (${exportScope}) exported successfully!`);
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error("Failed to export payments report. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const exportPaymentsPDF = () => {
+    setExportingPDF(true);
+    
+    try {
+      // Use filtered or all payments based on export scope
+      const paymentsToExport = exportScope === 'filtered' ? filteredPayments : payments;
+      
+      // Calculate summary statistics
+      const totalAmount = paymentsToExport.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+      const completedAmount = paymentsToExport
+        .filter(payment => payment.status === 'completed')
+        .reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+      const pendingAmount = paymentsToExport
+        .filter(payment => payment.status === 'pending' || payment.status === 'processing')
+        .reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+      
+      const statusCounts = paymentsToExport.reduce((acc, payment) => {
+        acc[payment.status] = (acc[payment.status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const methodCounts = paymentsToExport.reduce((acc, payment) => {
+        const method = getMethodLabel(payment.payment_method);
+        acc[method] = (acc[method] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      // Create PDF
+      const doc = new jsPDF();
+      
+      // Add title
+      doc.setFontSize(20);
+      doc.setFont('helvetica', 'bold');
+      doc.text('AgroFresh GH - Payment Report', 20, 20);
+      
+      // Add generation info
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, 20, 30);
+      doc.text(`Export Scope: ${exportScope === 'filtered' ? 'Filtered Results' : 'All Payments'}`, 20, 35);
+      doc.text(`Total Payments: ${paymentsToExport.length}`, 20, 40);
+      
+      // Add summary statistics
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Summary Statistics', 20, 55);
+      
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Total Amount: GH₵ ${totalAmount.toFixed(2)}`, 20, 65);
+      doc.text(`Completed Amount: GH₵ ${completedAmount.toFixed(2)}`, 20, 70);
+      doc.text(`Pending Amount: GH₵ ${pendingAmount.toFixed(2)}`, 20, 75);
+      
+      // Add status breakdown
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Status Breakdown', 20, 90);
+      
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      let yPos = 100;
+      Object.entries(statusCounts).forEach(([status, count]) => {
+        doc.text(`${status.toUpperCase()}: ${count}`, 20, yPos);
+        yPos += 5;
+      });
+      
+      // Add payment method breakdown
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Payment Method Breakdown', 20, yPos + 10);
+      
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      yPos += 20;
+      Object.entries(methodCounts).forEach(([method, count]) => {
+        doc.text(`${method}: ${count}`, 20, yPos);
+        yPos += 5;
+      });
+      
+      // Add detailed payment records table
+      if (paymentsToExport.length > 0) {
+        doc.addPage();
+        
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Detailed Payment Records', 20, 20);
+        
+        // Prepare table data
+        const tableData = paymentsToExport.map(payment => [
+          payment.reference_id,
+          payment.order_id.toString(),
+          getMethodLabel(payment.payment_method),
+          payment.phone_number || 'N/A',
+          `GH₵ ${(parseFloat(payment.amount) || 0).toFixed(2)}`,
+          payment.status.toUpperCase(),
+          payment.transaction_id || 'N/A',
+          new Date(payment.created_at).toLocaleDateString(),
+          payment.completed_at ? new Date(payment.completed_at).toLocaleDateString() : 'N/A'
+        ]);
+        
+        // Add table using autoTable
+        autoTable(doc, {
+          startY: 30,
+          head: [['Reference', 'Order ID', 'Method', 'Phone', 'Amount', 'Status', 'Transaction ID', 'Created', 'Completed']],
+          body: tableData,
+          theme: 'grid',
+          headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' },
+          styles: { fontSize: 8 },
+          columnStyles: {
+            0: { cellWidth: 25 }, // Reference
+            1: { cellWidth: 15 }, // Order ID
+            2: { cellWidth: 20 }, // Method
+            3: { cellWidth: 20 }, // Phone
+            4: { cellWidth: 20 }, // Amount
+            5: { cellWidth: 15 }, // Status
+            6: { cellWidth: 25 }, // Transaction ID
+            7: { cellWidth: 20 }, // Created
+            8: { cellWidth: 20 }  // Completed
+          }
+        });
+      }
+      
+      // Save PDF
+      doc.save(`payments-report-${exportScope}-${new Date().toISOString().split('T')[0]}.pdf`);
+      
+      toast.success(`Payments report (${exportScope}) exported as PDF successfully!`);
+    } catch (error) {
+      console.error('PDF export error:', error);
+      toast.error("Failed to export PDF report. Please try again.");
+    } finally {
+      setExportingPDF(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -203,10 +420,25 @@ const Payments = () => {
             <h1 className="text-2xl sm:text-3xl font-bold">Payment Management</h1>
             <p className="text-muted-foreground">Monitor and manage all payment transactions</p>
           </div>
-          <Button className="gap-2">
-            <Download className="h-4 w-4" />
-            Export Report
-          </Button>
+          <div className="flex items-center gap-2">
+            <Select value={exportScope} onValueChange={(value: 'filtered' | 'all') => setExportScope(value)}>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="filtered">Filtered Results</SelectItem>
+                <SelectItem value="all">All Payments</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" className="gap-2" onClick={exportPaymentsReport} disabled={exporting}>
+              <Download className="h-4 w-4" />
+              {exporting ? 'Exporting...' : 'CSV'}
+            </Button>
+            <Button className="gap-2" onClick={exportPaymentsPDF} disabled={exportingPDF}>
+              <FileText className="h-4 w-4" />
+              {exportingPDF ? 'Exporting PDF...' : 'PDF'}
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -319,7 +551,7 @@ const Payments = () => {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="text-sm font-medium">GH₵ {payment.amount.toFixed(2)}</div>
+                        <div className="text-sm font-medium">GH₵ {(parseFloat(payment.amount) || 0).toFixed(2)}</div>
                       </td>
                       <td className="px-4 py-3">
                         <Badge variant={getStatusBadgeVariant(payment.status)}>
@@ -366,7 +598,7 @@ const Payments = () => {
               <CardContent className="space-y-4">
                 <PaymentStatusTracker
                   paymentId={selectedPayment.id}
-                  amount={selectedPayment.amount}
+                  amount={parseFloat(selectedPayment.amount) || 0}
                   showDetails={true}
                   autoRefresh={true}
                 />
@@ -388,7 +620,7 @@ const Payments = () => {
                       <div><strong>Order ID:</strong> #{selectedPayment.order_id}</div>
                       <div><strong>Buyer ID:</strong> {selectedPayment.buyer_id}</div>
                       <div><strong>Farmer ID:</strong> {selectedPayment.farmer_id}</div>
-                      <div><strong>Amount:</strong> GH₵ {selectedPayment.amount.toFixed(2)}</div>
+                      <div><strong>Amount:</strong> GH₵ {(parseFloat(selectedPayment.amount) || 0).toFixed(2)}</div>
                     </div>
                   </div>
                 </div>

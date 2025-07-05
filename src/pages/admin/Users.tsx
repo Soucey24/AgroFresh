@@ -19,11 +19,28 @@ const Users = () => {
   const [filter, setFilter] = useState({ role: "", status: "", location: "" });
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [userStats, setUserStats] = useState({
+    totalUsers: 0,
+    farmers: 0,
+    buyers: 0,
+    activeUsers: 0
+  });
 
   const fetchUsers = async () => {
     setLoading(true);
     const data = await listUsers();
-    setUsers(Array.isArray(data) ? data : []);
+    if (!data.error) {
+      setUsers(Array.isArray(data) ? data : []);
+      
+      // Calculate user statistics
+      const stats = {
+        totalUsers: data.length,
+        farmers: data.filter(u => u.role === 'farmer').length,
+        buyers: data.filter(u => u.role === 'buyer').length,
+        activeUsers: data.filter(u => u.status === 'Active').length
+      };
+      setUserStats(stats);
+    }
     setLoading(false);
   };
 
@@ -129,6 +146,34 @@ const Users = () => {
               </form>
             </DialogContent>
           </Dialog>
+        </div>
+
+        {/* User Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-primary">{userStats.totalUsers}</div>
+              <p className="text-sm text-muted-foreground">Total Users</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-accent">{userStats.farmers}</div>
+              <p className="text-sm text-muted-foreground">Farmers</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-secondary">{userStats.buyers}</div>
+              <p className="text-sm text-muted-foreground">Buyers</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-green-600">{userStats.activeUsers}</div>
+              <p className="text-sm text-muted-foreground">Active Users</p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Search and Filters */}

@@ -7,7 +7,7 @@ export async function createUsersTable() {
       name VARCHAR(100) NOT NULL,
       email VARCHAR(100) NOT NULL,
       password_hash VARCHAR(255) NOT NULL,
-      role ENUM('farmer', 'buyer', 'vendor') NOT NULL,
+      role ENUM('farmer', 'buyer', 'vendor', 'admin') NOT NULL,
       location VARCHAR(100),
       avatar VARCHAR(255),
       status ENUM('Active', 'Inactive') DEFAULT 'Active',

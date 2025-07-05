@@ -163,7 +163,7 @@ const PaymentModal = ({ isOpen, onClose, amount, orderId, deliveryInfo, onPaymen
         <CardHeader className="text-center">
           <CardTitle className="text-xl sm:text-2xl">Complete Payment</CardTitle>
           <CardDescription className="text-base sm:text-lg">
-            Total Amount: <span className="font-bold text-primary">GH₵ {amount.toFixed(2)}</span>
+            Total Amount: <span className="font-bold text-primary">GH₵ {(parseFloat(amount) || 0).toFixed(2)}</span>
           </CardDescription>
         </CardHeader>
         
@@ -328,7 +328,7 @@ const PaymentModal = ({ isOpen, onClose, amount, orderId, deliveryInfo, onPaymen
                       Processing...
                     </>
                   ) : (
-                    `Pay GH₵ ${amount.toFixed(2)}`
+                    `Pay GH₵ ${(parseFloat(amount) || 0).toFixed(2)}`
                   )}
                 </Button>
               </>

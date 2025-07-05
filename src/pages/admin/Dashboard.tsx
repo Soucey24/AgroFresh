@@ -1,48 +1,113 @@
+import { useState, useEffect } from "react";
 import { Users, Package, ShoppingCart, TrendingUp, AlertCircle, CheckCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { useNavigate } from "react-router-dom";
+import { getDashboardStats, getRecentActivity } from "../../api";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const stats = [
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    activeListings: 0,
+    ordersToday: 0,
+    totalRevenue: 0,
+    changes: {
+      users: '+0%',
+      listings: '+0%',
+      orders: '+0%',
+      revenue: '+0%'
+    }
+  });
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [statsData, activityData] = await Promise.all([
+          getDashboardStats(),
+          getRecentActivity()
+        ]);
+        
+        if (!statsData.error) {
+          setStats({
+            totalUsers: statsData.totalUsers,
+            activeListings: statsData.activeListings,
+            ordersToday: statsData.ordersToday,
+            totalRevenue: statsData.totalRevenue,
+            changes: statsData.changes
+          });
+        }
+        
+        if (!activityData.error) {
+          setRecentActivity(activityData);
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const statsConfig = [
     {
       title: "Total Users",
-      value: "1,247",
-      change: "+12%",
+      value: stats.totalUsers.toLocaleString(),
+      change: stats.changes.users,
       icon: Users,
       color: "text-primary"
     },
     {
       title: "Active Listings",
-      value: "324",
-      change: "+8%",
+      value: stats.activeListings.toLocaleString(),
+      change: stats.changes.listings,
       icon: Package,
       color: "text-accent"
     },
     {
       title: "Orders Today",
-      value: "89",
-      change: "+23%",
+      value: stats.ordersToday.toLocaleString(),
+      change: stats.changes.orders,
       icon: ShoppingCart,
       color: "text-secondary"
     },
     {
       title: "Revenue (GHS)",
-      value: "45,678",
-      change: "+15%",
+      value: stats.totalRevenue.toLocaleString(),
+      change: stats.changes.revenue,
       icon: TrendingUp,
       color: "text-primary"
     }
   ];
 
-  const recentActivity = [
-    { id: 1, action: "New farmer registration", user: "Kwame Asante", time: "2 hours ago", status: "success" },
-    { id: 2, action: "Crop listing expired", item: "Tomatoes - 50kg", time: "4 hours ago", status: "warning" },
-    { id: 3, action: "Order completed", order: "#1234", time: "6 hours ago", status: "success" },
-    { id: 4, action: "Payment processed", amount: "GHS 234", time: "8 hours ago", status: "success" },
-  ];
+  const formatTimeAgo = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor((now - date) / (1000 * 60 * 60));
+    
+    if (diffInHours < 1) return 'Just now';
+    if (diffInHours < 24) return `${diffInHours} hours ago`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    return `${diffInDays} days ago`;
+  };
+
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p>Loading dashboard...</p>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>
@@ -55,7 +120,7 @@ const Dashboard = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat, index) => (
+          {statsConfig.map((stat, index) => (
             <Card key={index} className="hover:shadow-lg transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
@@ -79,24 +144,32 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    {activity.status === "success" ? (
-                      <CheckCircle className="h-5 w-5 text-primary" />
-                    ) : (
-                      <AlertCircle className="h-5 w-5 text-accent" />
-                    )}
-                    <div>
-                      <p className="font-medium">{activity.action}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {activity.user || activity.item || activity.order || activity.amount}
-                      </p>
+              {recentActivity.length > 0 ? (
+                recentActivity.map((activity, index) => (
+                  <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      {activity.status === "success" ? (
+                        <CheckCircle className="h-5 w-5 text-primary" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-accent" />
+                      )}
+                      <div>
+                        <p className="font-medium">{activity.action}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {activity.name}
+                        </p>
+                      </div>
                     </div>
+                    <span className="text-sm text-muted-foreground">
+                      {formatTimeAgo(activity.created_at)}
+                    </span>
                   </div>
-                  <span className="text-sm text-muted-foreground">{activity.time}</span>
+                ))
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  No recent activity
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>

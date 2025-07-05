@@ -85,7 +85,7 @@ export const getPaymentStatus = async (req, res) => {
     res.json({
       payment_id: payment.id,
       order_id: payment.order_id,
-      amount: payment.amount,
+      amount: parseFloat(payment.amount) || 0,
       payment_method: payment.payment_method,
       status: payment.status,
       reference_id: payment.reference_id,
@@ -231,8 +231,14 @@ export const getPaymentHistory = async (req, res) => {
       params
     );
 
+    // Convert amount to number for frontend compatibility
+    const processedPayments = payments.map(payment => ({
+      ...payment,
+      amount: parseFloat(payment.amount) || 0
+    }));
+
     res.json({
-      payments,
+      payments: processedPayments,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),

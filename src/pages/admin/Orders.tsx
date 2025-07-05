@@ -5,81 +5,84 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { listOrders, getCrop, getUser, updateOrder } from "../../api";
+import { getAdminOrders, getOrderStats } from "../../api";
 
 const Orders = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [orders, setOrders] = useState<any[]>([]);
-  const [cropDetails, setCropDetails] = useState<{[key: number]: any}>({});
-  const [buyerDetails, setBuyerDetails] = useState<{[key: number]: any}>({});
-  const [farmerDetails, setFarmerDetails] = useState<{[key: number]: any}>({});
-  const [updating, setUpdating] = useState<string | null>(null);
+  const [orders, setOrders] = useState([]);
+  const [orderStats, setOrderStats] = useState({
+    completed: 0,
+    inTransit: 0,
+    pending: 0,
+    cancelled: 0
+  });
   const [statusFilter, setStatusFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    listOrders().then(async data => {
-      if (Array.isArray(data)) {
-        setOrders(data);
-        // Fetch crop, buyer, and farmer details for each order
-        const cropMap = {};
-        const buyerMap = {};
-        const farmerMap = {};
-        for (const order of data) {
-          if (order.crop_id && !cropMap[order.crop_id]) {
-            const crop = await getCrop(order.crop_id);
-            cropMap[order.crop_id] = crop;
-            if (crop.farmer_id && !farmerMap[crop.farmer_id]) {
-              farmerMap[crop.farmer_id] = await getUser(crop.farmer_id);
-            }
-          }
-          if (order.buyer_id && !buyerMap[order.buyer_id]) {
-            buyerMap[order.buyer_id] = await getUser(order.buyer_id);
-          }
+    const fetchData = async () => {
+      try {
+        const [ordersData, statsData] = await Promise.all([
+          getAdminOrders(),
+          getOrderStats()
+        ]);
+        
+        if (!ordersData.error) {
+          setOrders(ordersData);
         }
-        setCropDetails(cropMap);
-        setBuyerDetails(buyerMap);
-        setFarmerDetails(farmerMap);
+        
+        if (!statsData.error) {
+          setOrderStats(statsData);
+        }
+      } catch (error) {
+        console.error('Error fetching orders data:', error);
+      } finally {
+        setLoading(false);
       }
-    });
+    };
+
+    fetchData();
   }, []);
 
-  const filteredOrders = orders.filter(order =>
-    (statusFilter === 'all' || order.status === statusFilter) &&
-    (
-      order.id.toString().includes(searchTerm) ||
-      (order.crop?.toLowerCase?.().includes(searchTerm.toLowerCase()) ?? false) ||
-      (order.farmer?.toLowerCase?.().includes(searchTerm.toLowerCase()) ?? false) ||
-      (order.vendor?.toLowerCase?.().includes(searchTerm.toLowerCase()) ?? false)
-    )
-  );
+  const filteredOrders = orders.filter(order => {
+    const matchesSearch = 
+      order.crop_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.buyer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.farmer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.id.toString().includes(searchTerm);
+    
+    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
 
-  const getStatusColor = (status: string) => {
+  const getStatusBadgeVariant = (status) => {
     switch (status) {
-      case "Completed":
-        return "bg-primary text-primary-foreground";
-      case "In Transit":
-        return "bg-accent text-accent-foreground";
-      case "Pending":
-        return "bg-secondary text-secondary-foreground";
-      case "Cancelled":
-        return "bg-destructive text-destructive-foreground";
-      default:
-        return "bg-muted text-muted-foreground";
+      case 'pending': return 'secondary';
+      case 'confirmed': return 'default';
+      case 'preparing': return 'default';
+      case 'ready': return 'default';
+      case 'shipped': return 'default';
+      case 'delivered': return 'default';
+      case 'completed': return 'default';
+      case 'paid': return 'default';
+      case 'cancelled': return 'destructive';
+      default: return 'secondary';
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "Completed":
-        return <CheckCircle className="h-4 w-4" />;
-      case "In Transit":
-        return <Package className="h-4 w-4" />;
-      case "Cancelled":
-        return <XCircle className="h-4 w-4" />;
-      default:
-        return null;
-    }
-  };
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p>Loading orders...</p>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>
@@ -113,25 +116,25 @@ const Orders = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
             <CardContent className="p-4">
-              <div className="text-2xl font-bold text-primary">156</div>
+              <div className="text-2xl font-bold text-primary">{orderStats.completed}</div>
               <p className="text-sm text-muted-foreground">Completed</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
-              <div className="text-2xl font-bold text-accent">23</div>
+              <div className="text-2xl font-bold text-accent">{orderStats.inTransit}</div>
               <p className="text-sm text-muted-foreground">In Transit</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
-              <div className="text-2xl font-bold text-secondary">45</div>
+              <div className="text-2xl font-bold text-secondary">{orderStats.pending}</div>
               <p className="text-sm text-muted-foreground">Pending</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
-              <div className="text-2xl font-bold text-destructive">8</div>
+              <div className="text-2xl font-bold text-destructive">{orderStats.cancelled}</div>
               <p className="text-sm text-muted-foreground">Cancelled</p>
             </CardContent>
           </Card>
@@ -148,7 +151,13 @@ const Orders = () => {
           >
             <option value="all">All Statuses</option>
             <option value="pending">Pending</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="preparing">Preparing</option>
+            <option value="ready">Ready</option>
+            <option value="shipped">Shipped</option>
+            <option value="delivered">Delivered</option>
             <option value="completed">Completed</option>
+            <option value="paid">Paid</option>
             <option value="cancelled">Cancelled</option>
           </select>
         </div>
@@ -161,71 +170,67 @@ const Orders = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <table className="min-w-full divide-y divide-border bg-card/40 backdrop-blur-sm rounded-lg">
-                <thead>
-                  <tr>
-                    <th className="px-4 py-2 text-left">Order #</th>
-                    <th className="px-4 py-2 text-left">Crop</th>
-                    <th className="px-4 py-2 text-left">Buyer</th>
-                    <th className="px-4 py-2 text-left">Farmer</th>
-                    <th className="px-4 py-2 text-left">Quantity</th>
-                    <th className="px-4 py-2 text-left">Status</th>
-                    <th className="px-4 py-2 text-left">Date</th>
-                    <th className="px-4 py-2 text-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredOrders.map(order => (
-                    <tr key={order.id} className="border-b">
-                      <td className="px-4 py-2">{order.id}</td>
-                      <td className="px-4 py-2 flex items-center gap-2">
-                        {cropDetails[order.crop_id]?.image ? (
-                          <img
-                            src={cropDetails[order.crop_id].image.startsWith('http') ? cropDetails[order.crop_id].image : `http://localhost:4000${cropDetails[order.crop_id].image}`}
-                            alt={cropDetails[order.crop_id]?.name}
-                            className="w-8 h-8 rounded-full object-cover"
-                            onError={e => (e.currentTarget.style.display = 'none')}
-                          />
-                        ) : (
-                          <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-muted-foreground text-xs">
-                            No Image
-                          </div>
-                        )}
-                        {cropDetails[order.crop_id]?.name || `Crop ID ${order.crop_id}`}
-                      </td>
-                      <td className="px-4 py-2">{buyerDetails[order.buyer_id]?.name || `ID ${order.buyer_id}`}</td>
-                      <td className="px-4 py-2">{farmerDetails[cropDetails[order.crop_id]?.farmer_id]?.name || `ID ${cropDetails[order.crop_id]?.farmer_id}`}</td>
-                      <td className="px-4 py-2">{order.quantity}</td>
-                      <td className="px-4 py-2">
-                        <Badge>{order.status}</Badge>
-                        <select
-                          value={order.status}
-                          disabled={updating === order.id}
-                          onChange={async (e) => {
-                            setUpdating(order.id);
-                            const result = await updateOrder(order.id, { status: e.target.value });
-                            if (!result.error) {
-                              setOrders(orders.map(o => o.id === order.id ? { ...o, status: e.target.value } : o));
-                            }
-                            setUpdating(null);
-                          }}
-                          className="ml-2 border rounded px-2 py-1"
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="completed">Completed</option>
-                          <option value="cancelled">Cancelled</option>
-                        </select>
-                      </td>
-                      <td className="px-4 py-2">{new Date(order.created_at).toLocaleString()}</td>
-                      <td className="px-4 py-2">
-                        <Button variant="ghost" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </td>
+              {filteredOrders.length > 0 ? (
+                <table className="min-w-full divide-y divide-border bg-card/40 backdrop-blur-sm rounded-lg">
+                  <thead>
+                    <tr>
+                      <th className="px-4 py-2 text-left">Order #</th>
+                      <th className="px-4 py-2 text-left">Crop</th>
+                      <th className="px-4 py-2 text-left">Buyer</th>
+                      <th className="px-4 py-2 text-left">Farmer</th>
+                      <th className="px-4 py-2 text-left">Quantity</th>
+                      <th className="px-4 py-2 text-left">Status</th>
+                      <th className="px-4 py-2 text-left">Date</th>
+                      <th className="px-4 py-2 text-left">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {filteredOrders.map(order => (
+                      <tr key={order.id} className="border-b">
+                        <td className="px-4 py-2">{order.id}</td>
+                        <td className="px-4 py-2 flex items-center gap-2">
+                          {order.crop_image ? (
+                            <img
+                              src={order.crop_image.startsWith('http') ? order.crop_image : `http://localhost:4000${order.crop_image}`}
+                              alt={order.crop_name}
+                              className="w-8 h-8 rounded-full object-cover"
+                              onError={e => (e.currentTarget.style.display = 'none')}
+                            />
+                          ) : (
+                            <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-muted-foreground text-xs">
+                              No Image
+                            </div>
+                          )}
+                          {order.crop_name || `Crop ID ${order.crop_id}`}
+                        </td>
+                        <td className="px-4 py-2">{order.buyer_name || `ID ${order.buyer_id}`}</td>
+                        <td className="px-4 py-2">{order.farmer_name || `ID ${order.farmer_id}`}</td>
+                        <td className="px-4 py-2">{order.quantity}</td>
+                        <td className="px-4 py-2">
+                          <Badge variant={getStatusBadgeVariant(order.status)}>
+                            {order.status}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2">{new Date(order.created_at).toLocaleString()}</td>
+                        <td className="px-4 py-2">
+                          <div className="flex space-x-2">
+                            <Button variant="ghost" size="sm" onClick={() => alert('View order details coming soon!')}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => alert('Update order status coming soon!')}>
+                              <CheckCircle className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  {searchTerm || statusFilter !== 'all' ? 'No orders found matching your criteria' : 'No orders available'}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
