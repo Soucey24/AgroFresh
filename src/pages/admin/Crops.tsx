@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Search, Filter, Eye, Edit, Trash2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -102,7 +101,7 @@ const Crops = () => {
               className="pl-10"
             />
           </div>
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => alert('Filter dialog coming soon!')}>
             <Filter className="h-4 w-4 mr-2" />
             Filter
           </Button>
@@ -183,13 +182,13 @@ const Crops = () => {
                     </div>
                     
                     <div className="flex space-x-2">
-                      <Button variant="ghost" size="sm">
+                      <Button variant="ghost" size="sm" onClick={() => alert('View crop details coming soon!')}>
                         <Eye className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm">
+                      <Button variant="ghost" size="sm" onClick={() => alert('Edit crop coming soon!')}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => alert('Delete crop coming soon!')}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

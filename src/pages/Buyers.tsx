@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Filter, MapPin, Clock, Star, ShoppingCart, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Navigation from "@/components/Navigation";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
+import { listCrops } from "../api";
+import { useNavigate } from "react-router-dom";
 
 interface Crop {
   id: string;
@@ -26,57 +28,18 @@ const Buyers = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [cart, setCart] = useState<Array<{crop: Crop, quantity: number}>>([]);
+  const [crops, setCrops] = useState<Crop[]>([]);
+  const navigate = useNavigate();
   
-  const [crops] = useState<Crop[]>([
-    {
-      id: "1",
-      name: "Fresh Tomatoes",
-      quantity: 50,
-      unit: "kg",
-      price: 8.50,
-      description: "Fresh organic tomatoes, perfect for cooking",
-      farmer: "Kwame Asante",
-      location: "Kumasi, Ashanti",
-      harvestDate: "2024-01-15",
-      expiryDate: "2024-01-22"
-    },
-    {
-      id: "2",
-      name: "Red Onions",
-      quantity: 30,
-      unit: "kg",
-      price: 6.00,
-      description: "Premium red onions, well dried and stored",
-      farmer: "Ama Serwaa",
-      location: "Techiman, Brong Ahafo",
-      harvestDate: "2024-01-10",
-      expiryDate: "2024-01-17"
-    },
-    {
-      id: "3",
-      name: "Green Pepper",
-      quantity: 25,
-      unit: "kg",
-      price: 12.00,
-      description: "Fresh green bell peppers",
-      farmer: "Kofi Mensah",
-      location: "Accra, Greater Accra",
-      harvestDate: "2024-01-14",
-      expiryDate: "2024-01-21"
-    },
-    {
-      id: "4",
-      name: "Cassava",
-      quantity: 100,
-      unit: "kg",
-      price: 3.50,
-      description: "Fresh cassava tubers",
-      farmer: "Akosua Boateng",
-      location: "Cape Coast, Central",
-      harvestDate: "2024-01-12",
-      expiryDate: "2024-01-19"
-    }
-  ]);
+  useEffect(() => {
+    listCrops().then(data => {
+      if (Array.isArray(data)) setCrops(data);
+    });
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('cart', JSON.stringify(cart));
+  }, [cart]);
 
   const filteredCrops = crops.filter(crop => {
     const matchesSearch = crop.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -121,12 +84,12 @@ const Buyers = () => {
       <div className="relative z-10">
         <Navigation />
         
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-4 sm:py-8">
           {/* Header */}
-          <div className="bg-card/40 backdrop-blur-sm rounded-lg p-6 mb-8">
-            <div className="flex justify-between items-center">
-              <h1 className="text-2xl font-bold text-foreground">Fresh Produce Marketplace</h1>
-              <Button className="gap-2">
+          <div className="bg-card/40 backdrop-blur-sm rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground">Fresh Produce Marketplace</h1>
+              <Button className="gap-2 w-full sm:w-auto" onClick={() => navigate('/checkout')}>
                 <ShoppingCart className="h-4 w-4" />
                 Cart ({getTotalItems()})
                 {getTotalItems() > 0 && (
@@ -137,9 +100,9 @@ const Buyers = () => {
           </div>
 
           {/* Search and Filters */}
-          <div className="bg-card/40 backdrop-blur-sm rounded-lg p-6 mb-8">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
+          <div className="bg-card/40 backdrop-blur-sm rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
+            <div className="flex flex-col gap-4">
+              <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search crops or farmers..."
@@ -150,7 +113,7 @@ const Buyers = () => {
               </div>
               
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="w-full md:w-48">
+                <SelectTrigger className="w-full">
                   <Filter className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
@@ -166,45 +129,58 @@ const Buyers = () => {
           </div>
 
           {/* Products Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             {filteredCrops.map((crop) => {
               const daysUntilExpiry = getDaysUntilExpiry(crop.expiryDate);
               
               return (
                 <Card key={crop.id} className="bg-card/40 backdrop-blur-sm border-border/50 hover:shadow-lg transition-all duration-300 group">
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg">{crop.name}</CardTitle>
-                        <CardDescription className="text-sm">{crop.description}</CardDescription>
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-base sm:text-lg truncate">{crop.name}</CardTitle>
+                        <CardDescription className="text-xs sm:text-sm line-clamp-2">{crop.description}</CardDescription>
                       </div>
                       {daysUntilExpiry <= 2 && (
-                        <Badge variant="destructive" className="text-xs">
+                        <Badge variant="destructive" className="text-xs flex-shrink-0">
                           Expires in {daysUntilExpiry} days
                         </Badge>
                       )}
                     </div>
                   </CardHeader>
                   
-                  <CardContent>
-                    <div className="space-y-3">
+                  <CardContent className="space-y-3">
+                    {crop.image ? (
+                      <img
+                        src={crop.image.startsWith('http') ? crop.image : `http://localhost:4000${crop.image}`}
+                        alt={crop.name}
+                        className="w-full h-32 sm:h-40 object-cover rounded"
+                        onError={e => (e.currentTarget.style.display = 'none')}
+                      />
+                    ) : (
+                      <div className="w-full h-32 sm:h-40 bg-muted rounded flex items-center justify-center text-muted-foreground">
+                        No Image
+                      </div>
+                    )}
+                    
+                    <div className="space-y-2">
                       <div className="flex justify-between items-center">
-                        <span className="text-2xl font-bold text-primary">
+                        <span className="text-xl sm:text-2xl font-bold text-primary">
                           GH₵ {crop.price}
                         </span>
-                        <span className="text-sm text-muted-foreground">per {crop.unit}</span>
+                        <span className="text-xs sm:text-sm text-muted-foreground">per {crop.unit}</span>
                       </div>
                       
-                      <div className="space-y-2 text-sm">
+                      <div className="space-y-1 text-xs sm:text-sm">
                         <div className="flex items-center gap-2">
-                          <MapPin className="h-3 w-3 text-muted-foreground" />
-                          <span>{crop.location}</span>
+                          <MapPin className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                          <span className="truncate">{crop.location}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                          <span>Expires: {crop.expiryDate}</span>
+                          <Clock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                          <span className="truncate">Expires: {crop.expiryDate}</span>
                         </div>
-                        <div className="text-muted-foreground">
+                        <div className="text-muted-foreground truncate">
                           Farmer: {crop.farmer}
                         </div>
                         <div className="text-muted-foreground">
@@ -212,17 +188,17 @@ const Buyers = () => {
                         </div>
                       </div>
                       
-                      <div className="flex gap-2 pt-2">
+                      <div className="flex flex-col sm:flex-row gap-2 pt-2">
                         <Input 
                           type="number" 
                           placeholder="Qty" 
-                          className="w-20" 
+                          className="w-full sm:w-20" 
                           min="1" 
                           max={crop.quantity}
                           id={`quantity-${crop.id}`}
                         />
                         <Button 
-                          className="flex-1 gap-2" 
+                          className="gap-2" 
                           onClick={() => {
                             const quantityInput = document.getElementById(`quantity-${crop.id}`) as HTMLInputElement;
                             const quantity = parseInt(quantityInput?.value || "1");
@@ -233,7 +209,8 @@ const Buyers = () => {
                           }}
                         >
                           <ShoppingCart className="h-4 w-4" />
-                          Add to Cart
+                          <span className="hidden sm:inline">Add to Cart</span>
+                          <span className="sm:hidden">Add</span>
                         </Button>
                       </div>
                     </div>

@@ -1,67 +1,56 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Filter, Eye, CheckCircle, XCircle, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { listOrders, getCrop, getUser, updateOrder } from "../../api";
 
 const Orders = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [orders, setOrders] = useState<any[]>([]);
+  const [cropDetails, setCropDetails] = useState<{[key: number]: any}>({});
+  const [buyerDetails, setBuyerDetails] = useState<{[key: number]: any}>({});
+  const [farmerDetails, setFarmerDetails] = useState<{[key: number]: any}>({});
+  const [updating, setUpdating] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState('all');
 
-  const orders = [
-    {
-      id: "#1234",
-      crop: "Fresh Tomatoes",
-      farmer: "Kwame Asante",
-      vendor: "Golden Palace Restaurant",
-      quantity: "25kg",
-      amount: "GHS 125",
-      status: "Completed",
-      orderDate: "2024-06-07",
-      deliveryDate: "2024-06-08"
-    },
-    {
-      id: "#1235",
-      crop: "Green Peppers",
-      farmer: "Kofi Osei",
-      vendor: "University Hostel",
-      quantity: "15kg",
-      amount: "GHS 120",
-      status: "In Transit",
-      orderDate: "2024-06-08",
-      deliveryDate: "2024-06-09"
-    },
-    {
-      id: "#1236",
-      crop: "Sweet Potatoes",
-      farmer: "Ama Boateng",
-      vendor: "Local Market",
-      quantity: "50kg",
-      amount: "GHS 150",
-      status: "Pending",
-      orderDate: "2024-06-08",
-      deliveryDate: "2024-06-10"
-    },
-    {
-      id: "#1237",
-      crop: "Plantains",
-      farmer: "Yaw Mensah",
-      vendor: "Mama's Kitchen",
-      quantity: "40 pieces",
-      amount: "GHS 80",
-      status: "Cancelled",
-      orderDate: "2024-06-06",
-      deliveryDate: "-"
-    }
-  ];
+  useEffect(() => {
+    listOrders().then(async data => {
+      if (Array.isArray(data)) {
+        setOrders(data);
+        // Fetch crop, buyer, and farmer details for each order
+        const cropMap = {};
+        const buyerMap = {};
+        const farmerMap = {};
+        for (const order of data) {
+          if (order.crop_id && !cropMap[order.crop_id]) {
+            const crop = await getCrop(order.crop_id);
+            cropMap[order.crop_id] = crop;
+            if (crop.farmer_id && !farmerMap[crop.farmer_id]) {
+              farmerMap[crop.farmer_id] = await getUser(crop.farmer_id);
+            }
+          }
+          if (order.buyer_id && !buyerMap[order.buyer_id]) {
+            buyerMap[order.buyer_id] = await getUser(order.buyer_id);
+          }
+        }
+        setCropDetails(cropMap);
+        setBuyerDetails(buyerMap);
+        setFarmerDetails(farmerMap);
+      }
+    });
+  }, []);
 
   const filteredOrders = orders.filter(order =>
-    order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.crop.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.farmer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.vendor.toLowerCase().includes(searchTerm.toLowerCase())
+    (statusFilter === 'all' || order.status === statusFilter) &&
+    (
+      order.id.toString().includes(searchTerm) ||
+      (order.crop?.toLowerCase?.().includes(searchTerm.toLowerCase()) ?? false) ||
+      (order.farmer?.toLowerCase?.().includes(searchTerm.toLowerCase()) ?? false) ||
+      (order.vendor?.toLowerCase?.().includes(searchTerm.toLowerCase()) ?? false)
+    )
   );
 
   const getStatusColor = (status: string) => {
@@ -114,7 +103,7 @@ const Orders = () => {
               className="pl-10"
             />
           </div>
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => alert('Filter dialog coming soon!')}>
             <Filter className="h-4 w-4 mr-2" />
             Filter
           </Button>
@@ -148,6 +137,22 @@ const Orders = () => {
           </Card>
         </div>
 
+        {/* Status Filter */}
+        <div className="mb-4 flex items-center gap-4">
+          <label htmlFor="statusFilter">Filter by Status:</label>
+          <select
+            id="statusFilter"
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="border rounded px-2 py-1"
+          >
+            <option value="all">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+
         {/* Orders Table */}
         <Card>
           <CardHeader>
@@ -156,53 +161,71 @@ const Orders = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {filteredOrders.map((order) => (
-                <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                      <Package className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium">{order.id}</h3>
-                      <p className="text-sm text-muted-foreground">{order.crop}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-6">
-                    <div className="text-center">
-                      <p className="font-medium">{order.farmer}</p>
-                      <p className="text-sm text-muted-foreground">Farmer</p>
-                    </div>
-                    
-                    <div className="text-center">
-                      <p className="font-medium">{order.vendor}</p>
-                      <p className="text-sm text-muted-foreground">Vendor</p>
-                    </div>
-                    
-                    <div className="text-center">
-                      <p className="font-medium">{order.quantity}</p>
-                      <p className="text-sm text-muted-foreground">Quantity</p>
-                    </div>
-                    
-                    <div className="text-center">
-                      <p className="font-medium">{order.amount}</p>
-                      <p className="text-sm text-muted-foreground">Amount</p>
-                    </div>
-                    
-                    <div className="text-center">
-                      <div className="flex items-center space-x-1 justify-center">
-                        {getStatusIcon(order.status)}
-                        <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">{order.orderDate}</p>
-                    </div>
-                    
-                    <Button variant="ghost" size="sm">
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+              <table className="min-w-full divide-y divide-border bg-card/40 backdrop-blur-sm rounded-lg">
+                <thead>
+                  <tr>
+                    <th className="px-4 py-2 text-left">Order #</th>
+                    <th className="px-4 py-2 text-left">Crop</th>
+                    <th className="px-4 py-2 text-left">Buyer</th>
+                    <th className="px-4 py-2 text-left">Farmer</th>
+                    <th className="px-4 py-2 text-left">Quantity</th>
+                    <th className="px-4 py-2 text-left">Status</th>
+                    <th className="px-4 py-2 text-left">Date</th>
+                    <th className="px-4 py-2 text-left">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.map(order => (
+                    <tr key={order.id} className="border-b">
+                      <td className="px-4 py-2">{order.id}</td>
+                      <td className="px-4 py-2 flex items-center gap-2">
+                        {cropDetails[order.crop_id]?.image ? (
+                          <img
+                            src={cropDetails[order.crop_id].image.startsWith('http') ? cropDetails[order.crop_id].image : `http://localhost:4000${cropDetails[order.crop_id].image}`}
+                            alt={cropDetails[order.crop_id]?.name}
+                            className="w-8 h-8 rounded-full object-cover"
+                            onError={e => (e.currentTarget.style.display = 'none')}
+                          />
+                        ) : (
+                          <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-muted-foreground text-xs">
+                            No Image
+                          </div>
+                        )}
+                        {cropDetails[order.crop_id]?.name || `Crop ID ${order.crop_id}`}
+                      </td>
+                      <td className="px-4 py-2">{buyerDetails[order.buyer_id]?.name || `ID ${order.buyer_id}`}</td>
+                      <td className="px-4 py-2">{farmerDetails[cropDetails[order.crop_id]?.farmer_id]?.name || `ID ${cropDetails[order.crop_id]?.farmer_id}`}</td>
+                      <td className="px-4 py-2">{order.quantity}</td>
+                      <td className="px-4 py-2">
+                        <Badge>{order.status}</Badge>
+                        <select
+                          value={order.status}
+                          disabled={updating === order.id}
+                          onChange={async (e) => {
+                            setUpdating(order.id);
+                            const result = await updateOrder(order.id, { status: e.target.value });
+                            if (!result.error) {
+                              setOrders(orders.map(o => o.id === order.id ? { ...o, status: e.target.value } : o));
+                            }
+                            setUpdating(null);
+                          }}
+                          className="ml-2 border rounded px-2 py-1"
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="completed">Completed</option>
+                          <option value="cancelled">Cancelled</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-2">{new Date(order.created_at).toLocaleString()}</td>
+                      <td className="px-4 py-2">
+                        <Button variant="ghost" size="sm">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </CardContent>
         </Card>

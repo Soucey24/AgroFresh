@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -8,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Leaf, User, Mail, Lock, MapPin } from "lucide-react";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
+import { register } from '../api';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -19,11 +19,34 @@ const Register = () => {
     userType: "",
     location: ""
   });
+  const [error, setError] = useState("");
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate registration - in real app, create user account
-    navigate("/dashboard");
+    setError("");
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters long.");
+      return;
+    }
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    // Call backend API
+    const result = await register(formData);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    if (result.role === "farmer") {
+      navigate("/farmers");
+    } else if (result.role === "buyer") {
+      navigate("/buyers");
+    } else if (result.role === "vendor") {
+      navigate("/admin");
+    } else {
+      navigate("/dashboard");
+    }
   };
 
   return (
@@ -85,7 +108,7 @@ const Register = () => {
                   <SelectContent>
                     <SelectItem value="farmer">Farmer</SelectItem>
                     <SelectItem value="buyer">Buyer (Restaurant/Individual)</SelectItem>
-                    <SelectItem value="vendor">Vendor</SelectItem>
+                    <SelectItem value="vendor">Admin</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -136,6 +159,10 @@ const Register = () => {
                   />
                 </div>
               </div>
+
+              {error && (
+                <div className="text-red-500 text-sm mb-2 text-center">{error}</div>
+              )}
 
               <Button type="submit" className="w-full">
                 Create Account

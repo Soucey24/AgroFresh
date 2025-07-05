@@ -1,11 +1,11 @@
-
 import { ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
   LayoutDashboard, 
   Users, 
   Package, 
   ShoppingCart, 
+  CreditCard,
   Settings, 
   LogOut,
   Leaf
@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
+import { logout } from "@/api";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -20,12 +21,14 @@ interface AdminLayoutProps {
 
 const AdminLayout = ({ children }: AdminLayoutProps) => {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const navigationItems = [
     { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/admin/users", icon: Users, label: "Users" },
     { href: "/admin/crops", icon: Package, label: "Crops" },
     { href: "/admin/orders", icon: ShoppingCart, label: "Orders" },
+    { href: "/admin/payments", icon: CreditCard, label: "Payments" },
     { href: "/admin/settings", icon: Settings, label: "Settings" },
   ];
 
@@ -81,7 +84,14 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                 Back to Site
               </Button>
             </Link>
-            <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive">
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-destructive hover:text-destructive"
+              onClick={async () => {
+                await logout();
+                navigate("/");
+              }}
+            >
               <LogOut className="h-4 w-4 mr-2" />
               Logout
             </Button>

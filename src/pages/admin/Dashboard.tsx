@@ -1,10 +1,11 @@
-
 import { Users, Package, ShoppingCart, TrendingUp, AlertCircle, CheckCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { useNavigate } from "react-router-dom";
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const stats = [
     {
       title: "Total Users",
@@ -108,7 +109,7 @@ const Dashboard = () => {
               <CardDescription>Manage farmers and vendors</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full">View All Users</Button>
+              <Button className="w-full" onClick={() => navigate('/admin/users')}>View All Users</Button>
             </CardContent>
           </Card>
           
@@ -118,7 +119,7 @@ const Dashboard = () => {
               <CardDescription>Monitor active listings</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" variant="outline">Manage Listings</Button>
+              <Button className="w-full" variant="outline" onClick={() => navigate('/admin/crops')}>Manage Listings</Button>
             </CardContent>
           </Card>
           
@@ -128,7 +129,7 @@ const Dashboard = () => {
               <CardDescription>Configure platform settings</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" variant="secondary">Open Settings</Button>
+              <Button className="w-full" variant="secondary" onClick={() => navigate('/admin/settings')}>Open Settings</Button>
             </CardContent>
           </Card>
         </div>

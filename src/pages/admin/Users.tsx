@@ -1,69 +1,83 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Filter, MoreHorizontal, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { listUsers, createUser, updateUser, deleteUser } from "@/api";
 
 const Users = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+  const [addForm, setAddForm] = useState({ name: "", email: "", role: "Farmer", location: "", password: "" });
+  const [editForm, setEditForm] = useState({ id: null, name: "", email: "", role: "Farmer", location: "", status: "Active" });
+  const [filter, setFilter] = useState({ role: "", status: "", location: "" });
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const users = [
-    {
-      id: 1,
-      name: "Kwame Asante",
-      email: "kwame@example.com",
-      role: "Farmer",
-      status: "Active",
-      location: "Kumasi",
-      joinDate: "2024-01-15",
-      lastActive: "2 hours ago"
-    },
-    {
-      id: 2,
-      name: "Akosua Mensah",
-      email: "akosua@restaurant.com",
-      role: "Vendor",
-      status: "Active",
-      location: "Accra",
-      joinDate: "2024-02-20",
-      lastActive: "1 day ago"
-    },
-    {
-      id: 3,
-      name: "Kofi Osei",
-      email: "kofi@farm.gh",
-      role: "Farmer",
-      status: "Inactive",
-      location: "Tamale",
-      joinDate: "2024-01-08",
-      lastActive: "1 week ago"
-    },
-    {
-      id: 4,
-      name: "Ama Boateng",
-      email: "ama@hostel.com",
-      role: "Vendor",
-      status: "Active",
-      location: "Cape Coast",
-      joinDate: "2024-03-01",
-      lastActive: "5 hours ago"
+  const fetchUsers = async () => {
+    setLoading(true);
+    const data = await listUsers();
+    setUsers(Array.isArray(data) ? data : []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const handleAddUser = async () => {
+    const result = await createUser(addForm);
+    if (!result.error) {
+      setIsAddDialogOpen(false);
+      setAddForm({ name: "", email: "", role: "Farmer", location: "", password: "" });
+      fetchUsers();
+    } else {
+      alert(result.error);
     }
-  ];
+  };
+
+  const handleEditUser = async () => {
+    const { id, ...rest } = editForm;
+    const result = await updateUser(id, rest);
+    if (!result.error) {
+      setIsEditDialogOpen(false);
+      setEditForm({ id: null, name: "", email: "", role: "Farmer", location: "", status: "Active" });
+      fetchUsers();
+    } else {
+      alert(result.error);
+    }
+  };
+
+  const handleDeleteUser = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this user?")) return;
+    const result = await deleteUser(id);
+    if (!result.error) {
+      fetchUsers();
+    } else {
+      alert(result.error);
+    }
+  };
 
   const filteredUsers = users.filter(user =>
-    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.role.toLowerCase().includes(searchTerm.toLowerCase())
+    (filter.role ? user.role === filter.role : true) &&
+    (filter.status ? user.status === filter.status : true) &&
+    (filter.location ? user.location?.toLowerCase().includes(filter.location.toLowerCase()) : true) &&
+    (user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.role.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status) => {
     return status === "Active" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground";
   };
 
-  const getRoleColor = (role: string) => {
+  const getRoleColor = (role) => {
     return role === "Farmer" ? "bg-accent text-accent-foreground" : "bg-secondary text-secondary-foreground";
   };
 
@@ -76,10 +90,45 @@ const Users = () => {
             <h1 className="text-3xl font-bold text-foreground">User Management</h1>
             <p className="text-muted-foreground">Manage farmers and vendors on your platform</p>
           </div>
-          <Button>
-            <UserPlus className="h-4 w-4 mr-2" />
-            Add User
-          </Button>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => setIsAddDialogOpen(true)}>
+                <UserPlus className="h-4 w-4 mr-2" />
+                Add User
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New User</DialogTitle>
+              </DialogHeader>
+              <form className="space-y-4" onSubmit={e => { e.preventDefault(); handleAddUser(); }}>
+                <div>
+                  <label className="block mb-1">Name</label>
+                  <Input value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} required />
+                </div>
+                <div>
+                  <label className="block mb-1">Email</label>
+                  <Input value={addForm.email} onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))} required />
+                </div>
+                <div>
+                  <label className="block mb-1">Role</label>
+                  <select className="w-full border rounded px-2 py-1" value={addForm.role} onChange={e => setAddForm(f => ({ ...f, role: e.target.value }))} required>
+                    <option value="Farmer">Farmer</option>
+                    <option value="Vendor">Vendor</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block mb-1">Location</label>
+                  <Input value={addForm.location} onChange={e => setAddForm(f => ({ ...f, location: e.target.value }))} required />
+                </div>
+                <div>
+                  <label className="block mb-1">Password</label>
+                  <Input type="password" value={addForm.password} onChange={e => setAddForm(f => ({ ...f, password: e.target.value }))} required />
+                </div>
+                <Button type="submit" className="w-full">Create User</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Search and Filters */}
@@ -93,10 +142,42 @@ const Users = () => {
               className="pl-10"
             />
           </div>
-          <Button variant="outline">
-            <Filter className="h-4 w-4 mr-2" />
-            Filter
-          </Button>
+          <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" onClick={() => setIsFilterDialogOpen(true)}>
+                <Filter className="h-4 w-4 mr-2" />
+                Filter
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Filter Users</DialogTitle>
+              </DialogHeader>
+              <form className="space-y-4" onSubmit={e => { e.preventDefault(); setIsFilterDialogOpen(false); }}>
+                <div>
+                  <label className="block mb-1">Role</label>
+                  <select className="w-full border rounded px-2 py-1" value={filter.role} onChange={e => setFilter(f => ({ ...f, role: e.target.value }))}>
+                    <option value="">All</option>
+                    <option value="Farmer">Farmer</option>
+                    <option value="Vendor">Vendor</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block mb-1">Status</label>
+                  <select className="w-full border rounded px-2 py-1" value={filter.status} onChange={e => setFilter(f => ({ ...f, status: e.target.value }))}>
+                    <option value="">All</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block mb-1">Location</label>
+                  <Input value={filter.location} onChange={e => setFilter(f => ({ ...f, location: e.target.value }))} />
+                </div>
+                <Button type="submit" className="w-full">Apply Filter</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Users Table */}
@@ -106,6 +187,7 @@ const Users = () => {
             <CardDescription>A list of all registered users on the platform</CardDescription>
           </CardHeader>
           <CardContent>
+            {loading ? <div>Loading...</div> : (
             <div className="space-y-4">
               {filteredUsers.map((user) => (
                 <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
@@ -129,18 +211,77 @@ const Users = () => {
                     
                     <div className="text-right">
                       <Badge className={getStatusColor(user.status)}>{user.status}</Badge>
-                      <p className="text-sm text-muted-foreground mt-1">Last active: {user.lastActive}</p>
+                      <p className="text-sm text-muted-foreground mt-1">Joined: {new Date(user.created_at).toLocaleDateString()}</p>
+                      {user.last_login && (
+                        <p className="text-xs text-muted-foreground">Last login: {new Date(user.last_login).toLocaleString()}</p>
+                      )}
                     </div>
-                    
-                    <Button variant="ghost" size="sm">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem onClick={() => {
+                          setEditForm({
+                            id: user.id,
+                            name: user.name,
+                            email: user.email,
+                            role: user.role,
+                            location: user.location,
+                            status: user.status || "Active"
+                          });
+                          setIsEditDialogOpen(true);
+                        }}>Edit</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDeleteUser(user.id)}>Delete</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               ))}
             </div>
+            )}
           </CardContent>
         </Card>
+
+        {/* Edit User Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit User</DialogTitle>
+            </DialogHeader>
+            <form className="space-y-4" onSubmit={e => { e.preventDefault(); handleEditUser(); }}>
+              <div>
+                <label className="block mb-1">Name</label>
+                <Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} required />
+              </div>
+              <div>
+                <label className="block mb-1">Email</label>
+                <Input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} required />
+              </div>
+              <div>
+                <label className="block mb-1">Role</label>
+                <select className="w-full border rounded px-2 py-1" value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))} required>
+                  <option value="Farmer">Farmer</option>
+                  <option value="Vendor">Vendor</option>
+                </select>
+              </div>
+              <div>
+                <label className="block mb-1">Location</label>
+                <Input value={editForm.location} onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))} required />
+              </div>
+              <div>
+                <label className="block mb-1">Status</label>
+                <select className="w-full border rounded px-2 py-1" value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))} required>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+              <Button type="submit" className="w-full">Save Changes</Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   );
