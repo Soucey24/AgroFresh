@@ -294,4 +294,22 @@ export async function getCropStats() {
     credentials: 'include',
   });
   return res.json();
+}
+
+// Admin Settings APIs
+export async function getAdminSettings() {
+  const res = await fetch('http://localhost:4000/api/admin/settings', {
+    credentials: 'include',
+  });
+  return res.json();
+}
+
+export async function updateAdminSettings(settings) {
+  const res = await fetch('http://localhost:4000/api/admin/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(settings),
+  });
+  return res.json();
 } 

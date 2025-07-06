@@ -7,7 +7,9 @@ import {
   getPaymentStats,
   getAdminCrops,
   getAdminOrders,
-  getAdminPayments
+  getAdminPayments,
+  getAdminSettings,
+  updateAdminSettings
 } from '../controllers/adminController.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 
@@ -39,5 +41,9 @@ router.get('/orders', getAdminOrders);
 
 // Admin payments with all details
 router.get('/payments', getAdminPayments);
+
+// Admin settings
+router.get('/settings', getAdminSettings);
+router.put('/settings', updateAdminSettings);
 
 export default router; 

@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
   LayoutDashboard, 
@@ -8,7 +8,9 @@ import {
   CreditCard,
   Settings, 
   LogOut,
-  Leaf
+  Leaf,
+  Menu,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -22,6 +24,7 @@ interface AdminLayoutProps {
 const AdminLayout = ({ children }: AdminLayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navigationItems = [
     { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
@@ -39,14 +42,31 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     return location.pathname.startsWith(path);
   };
 
+  const handleNavigation = () => {
+    // Close sidebar on mobile when navigation item is clicked
+    setSidebarOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-background flex relative">
       <BackgroundSlideshow />
       <div className="relative z-10 flex w-full">
+        {/* Mobile Overlay */}
+        {sidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         {/* Sidebar */}
-        <div className="w-64 bg-card/40 backdrop-blur-sm border-r border-border/50 flex flex-col">
+        <div className={`
+          fixed lg:static inset-y-0 left-0 z-50 w-64 bg-card/40 backdrop-blur-sm border-r border-border/50 flex flex-col
+          transform transition-transform duration-300 ease-in-out
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}>
           {/* Logo */}
-          <div className="p-6 border-b border-border/50">
+          <div className="p-6 border-b border-border/50 flex items-center justify-between">
             <Link to="/" className="flex items-center space-x-2">
               <Leaf className="h-8 w-8 text-primary" />
               <div>
@@ -54,14 +74,24 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                 <p className="text-sm text-muted-foreground">Admin Panel</p>
               </div>
             </Link>
+            {/* Close button for mobile */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+            >
+              <X className="h-5 w-5" />
+            </Button>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2">
+          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
             {navigationItems.map((item) => (
               <Link
                 key={item.href}
                 to={item.href}
+                onClick={handleNavigation}
                 className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
                   isActive(item.href)
                     ? "bg-primary text-primary-foreground"
@@ -78,7 +108,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
 
           {/* User Actions */}
           <div className="p-4 space-y-2">
-            <Link to="/">
+            <Link to="/" onClick={handleNavigation}>
               <Button variant="outline" className="w-full justify-start">
                 <Leaf className="h-4 w-4 mr-2" />
                 Back to Site
@@ -99,8 +129,29 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 p-8 bg-card/20 backdrop-blur-sm">
-          {children}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Mobile Header */}
+          <div className="lg:hidden p-4 border-b border-border/50 bg-card/40 backdrop-blur-sm">
+            <div className="flex items-center justify-between">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+              <div className="flex items-center space-x-2">
+                <Leaf className="h-6 w-6 text-primary" />
+                <span className="font-semibold text-foreground">Admin</span>
+              </div>
+              <div className="w-10" /> {/* Spacer for centering */}
+            </div>
+          </div>
+
+          {/* Content Area */}
+          <div className="flex-1 p-4 lg:p-8 bg-card/20 backdrop-blur-sm overflow-auto">
+            {children}
+          </div>
         </div>
       </div>
     </div>

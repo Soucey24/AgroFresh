@@ -330,4 +330,138 @@ export const getAdminPayments = async (req, res) => {
   }
 };
 
+// Get admin settings
+export const getAdminSettings = async (req, res) => {
+  try {
+    // Get settings from database
+    const [settings] = await db.query('SELECT * FROM platform_settings WHERE id = 1');
+    
+    if (settings.length === 0) {
+      // Return default settings if none exist
+      const defaultSettings = {
+        platformName: "AgroFresh GH",
+        platformDescription: "Connecting farmers and buyers for fresh agricultural products",
+        contactEmail: "support@agrofreshgh.com",
+        supportPhone: "+233 24 123 4567",
+        timezone: "Africa/Accra",
+        currency: "GHS",
+        enablePayments: true,
+        paymentMethods: ["mtn-momo", "vodafone-cash", "airteltigo-money", "card"],
+        transactionFee: 2.5,
+        minimumPayout: 50,
+        emailNotifications: true,
+        smsNotifications: true,
+        pushNotifications: false,
+        requireEmailVerification: true,
+        requirePhoneVerification: false,
+        maxLoginAttempts: 5,
+        sessionTimeout: 24,
+        maintenanceMode: false,
+        debugMode: false,
+        autoBackup: true,
+        backupFrequency: "daily"
+      };
+      
+      res.json(defaultSettings);
+    } else {
+      // Parse JSON fields
+      const settingsData = settings[0];
+      settingsData.paymentMethods = JSON.parse(settingsData.paymentMethods || '[]');
+      res.json(settingsData);
+    }
+  } catch (err) {
+    console.error('Admin settings error:', err);
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+};
+
+// Update admin settings
+export const updateAdminSettings = async (req, res) => {
+  try {
+    const settings = req.body;
+    
+    // Validate required fields
+    if (!settings.platformName || !settings.contactEmail) {
+      return res.status(400).json({ error: 'Platform name and contact email are required' });
+    }
+    
+    // Check if settings exist
+    const [existingSettings] = await db.query('SELECT id FROM platform_settings WHERE id = 1');
+    
+    if (existingSettings.length === 0) {
+      // Create new settings
+      await db.query(`
+        INSERT INTO platform_settings (
+          platformName, platformDescription, contactEmail, supportPhone, 
+          timezone, currency, enablePayments, paymentMethods, transactionFee, 
+          minimumPayout, emailNotifications, smsNotifications, pushNotifications,
+          requireEmailVerification, requirePhoneVerification, maxLoginAttempts,
+          sessionTimeout, maintenanceMode, debugMode, autoBackup, backupFrequency
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        settings.platformName,
+        settings.platformDescription,
+        settings.contactEmail,
+        settings.supportPhone,
+        settings.timezone,
+        settings.currency,
+        settings.enablePayments,
+        JSON.stringify(settings.paymentMethods),
+        settings.transactionFee,
+        settings.minimumPayout,
+        settings.emailNotifications,
+        settings.smsNotifications,
+        settings.pushNotifications,
+        settings.requireEmailVerification,
+        settings.requirePhoneVerification,
+        settings.maxLoginAttempts,
+        settings.sessionTimeout,
+        settings.maintenanceMode,
+        settings.debugMode,
+        settings.autoBackup,
+        settings.backupFrequency
+      ]);
+    } else {
+      // Update existing settings
+      await db.query(`
+        UPDATE platform_settings SET
+          platformName = ?, platformDescription = ?, contactEmail = ?, supportPhone = ?,
+          timezone = ?, currency = ?, enablePayments = ?, paymentMethods = ?, transactionFee = ?,
+          minimumPayout = ?, emailNotifications = ?, smsNotifications = ?, pushNotifications = ?,
+          requireEmailVerification = ?, requirePhoneVerification = ?, maxLoginAttempts = ?,
+          sessionTimeout = ?, maintenanceMode = ?, debugMode = ?, autoBackup = ?, backupFrequency = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = 1
+      `, [
+        settings.platformName,
+        settings.platformDescription,
+        settings.contactEmail,
+        settings.supportPhone,
+        settings.timezone,
+        settings.currency,
+        settings.enablePayments,
+        JSON.stringify(settings.paymentMethods),
+        settings.transactionFee,
+        settings.minimumPayout,
+        settings.emailNotifications,
+        settings.smsNotifications,
+        settings.pushNotifications,
+        settings.requireEmailVerification,
+        settings.requirePhoneVerification,
+        settings.maxLoginAttempts,
+        settings.sessionTimeout,
+        settings.maintenanceMode,
+        settings.debugMode,
+        settings.autoBackup,
+        settings.backupFrequency
+      ]);
+    }
+    
+    res.json({ success: true, message: 'Settings updated successfully' });
+  } catch (err) {
+    console.error('Update settings error:', err);
+    res.status(500).json({ error: 'Failed to update settings' });
+  }
+};
+
  
