@@ -118,4 +118,19 @@ export const salesReport = async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch sales report' });
   }
+};
+
+export const getOrderTracking = async (req, res) => {
+  // Mock tracking info
+  const tracking = {
+    orderId: req.params.id,
+    status: 'In Transit',
+    lastUpdated: new Date().toISOString(),
+    history: [
+      { status: 'Order Placed', timestamp: new Date(Date.now() - 86400000).toISOString() },
+      { status: 'Dispatched', timestamp: new Date(Date.now() - 43200000).toISOString() },
+      { status: 'In Transit', timestamp: new Date(Date.now() - 3600000).toISOString() }
+    ]
+  };
+  res.json(tracking);
 }; 

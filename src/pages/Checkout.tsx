@@ -11,6 +11,9 @@ import Navigation from "@/components/Navigation";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
 import { createOrder } from '../api';
 import { useToast } from "@/components/ui/use-toast";
+import { saveAs } from 'file-saver';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface CartItem {
   id: string;
@@ -33,6 +36,10 @@ const Checkout = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [orderId, setOrderId] = useState<number | null>(null);
   const { toast } = useToast();
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [receiptData, setReceiptData] = useState(null);
+  const [trackingInfo, setTrackingInfo] = useState(null);
+  const [showTracking, setShowTracking] = useState(false);
 
   useEffect(() => {
     const storedCart = localStorage.getItem('cart');
@@ -59,8 +66,6 @@ const Checkout = () => {
   }, []);
 
   const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
-  const deliveryFee = 15.00;
-  const total = subtotal + deliveryFee;
 
   const handleProceedToPayment = async () => {
     if (!deliveryInfo.fullName || !deliveryInfo.phone || !deliveryInfo.address) {
@@ -103,14 +108,26 @@ const Checkout = () => {
 
   const handlePaymentSuccess = async () => {
     try {
-      // Orders are already created, just clear the cart and redirect
       localStorage.removeItem('cart');
       toast({ 
         title: "Order Placed Successfully!", 
         description: "Your order has been confirmed and payment processed.",
       });
-      
-      setTimeout(() => navigate("/buyer-orders"), 1500);
+      // Fetch order details for receipt
+      const res = await fetch(`/api/orders/${orderId}`);
+      const contentType = res.headers.get("content-type");
+      if (!res.ok) {
+        throw new Error('Order not found or server error');
+      }
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        const order = await res.json();
+        setReceiptData(order);
+        setShowReceipt(true);
+      } else {
+        const text = await res.text();
+        console.error("Non-JSON response:", text);
+        throw new Error('Server returned non-JSON response');
+      }
     } catch (error) {
       console.error('Error handling payment success:', error);
       toast({ 
@@ -119,6 +136,14 @@ const Checkout = () => {
         variant: "destructive"
       });
     }
+  };
+
+  const fetchTracking = async () => {
+    if (!orderId) return;
+    const res = await fetch(`/api/orders/${orderId}/tracking`);
+    const tracking = await res.json();
+    setTrackingInfo(tracking);
+    setShowTracking(true);
   };
 
   if (cartItems.length === 0) {
@@ -137,6 +162,129 @@ const Checkout = () => {
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (showReceipt && receiptData) {
+    const handleDownloadPDF = () => {
+      const doc = new jsPDF();
+      // Header with logo placeholder
+      doc.setFillColor(34, 197, 94); // Green color
+      doc.rect(0, 0, 210, 30, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(24);
+      doc.text('🌱 AgroFresh GH', 105, 18, { align: 'center' });
+      doc.setFontSize(12);
+      doc.text('Connecting Ghana\'s Farmers & Vendors', 105, 25, { align: 'center' });
+      
+      // Reset text color
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(20);
+      doc.text('Order Receipt', 105, 45, { align: 'center' });
+      doc.setFontSize(12);
+      doc.text('Thank you for your purchase!', 105, 52, { align: 'center' });
+      
+      // Order details table
+      autoTable(doc, {
+        startY: 65,
+        head: [['Order Information', 'Details']],
+        body: [
+          ['Order ID', receiptData.id.toString()],
+          ['Status', receiptData.status],
+          ['Date', new Date().toLocaleDateString()],
+          ['Time', new Date().toLocaleTimeString()]
+        ],
+        headStyles: { fillColor: [34, 197, 94], textColor: [255, 255, 255] },
+        styles: { fontSize: 10 }
+      });
+      
+      // Delivery information
+      let deliveryInfo = {};
+      if (receiptData.delivery_info) {
+        if (typeof receiptData.delivery_info === 'string') {
+          deliveryInfo = JSON.parse(receiptData.delivery_info);
+        } else {
+          deliveryInfo = receiptData.delivery_info;
+        }
+      }
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 10,
+        head: [['Delivery Information', 'Details']],
+        body: [
+          ['Full Name', deliveryInfo.fullName || 'N/A'],
+          ['Phone', deliveryInfo.phone || 'N/A'],
+          ['Address', deliveryInfo.address || 'N/A'],
+          ['Special Instructions', deliveryInfo.specialInstructions || 'None']
+        ],
+        headStyles: { fillColor: [34, 197, 94], textColor: [255, 255, 255] },
+        styles: { fontSize: 10 }
+      });
+      
+      // Order items table
+      const orderItems = cartItems.map(item => [
+        item.name,
+        `${item.quantity} ${item.unit}`,
+        `GH₵ ${item.price.toFixed(2)}`,
+        `GH₵ ${(item.price * item.quantity).toFixed(2)}`
+      ]);
+      
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 10,
+        head: [['Item', 'Quantity', 'Unit Price', 'Total']],
+        body: orderItems,
+        headStyles: { fillColor: [34, 197, 94], textColor: [255, 255, 255] },
+        styles: { fontSize: 10 }
+      });
+      
+      // Add subtotal row
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 5,
+        body: [['', '', 'Subtotal:', `GH₵ ${subtotal.toFixed(2)}`]],
+        styles: { fontSize: 10, fontStyle: 'bold' }
+      });
+      
+      // Footer
+      const pageHeight = doc.internal.pageSize.height;
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text('Thank you for choosing AgroFresh GH!', 105, pageHeight - 20, { align: 'center' });
+      doc.text('For support, contact: support@agrofreshgh.com', 105, pageHeight - 15, { align: 'center' });
+      doc.text('www.agrofreshgh.com', 105, pageHeight - 10, { align: 'center' });
+      
+      doc.save(`agrofresh-receipt-${receiptData.id}.pdf`);
+    };
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+        <Card className="max-w-lg w-full bg-card/40 backdrop-blur-sm border-border/50">
+          <CardHeader>
+            <CardTitle>Order Receipt</CardTitle>
+            <CardDescription>Thank you for your purchase!</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-4">
+              <strong>Order ID:</strong> {receiptData.id}<br />
+              <strong>Buyer:</strong> {receiptData.buyer_id}<br />
+              <strong>Farmer:</strong> {receiptData.farmer_id}<br />
+              <strong>Crop:</strong> {receiptData.crop_id}<br />
+              <strong>Quantity:</strong> {receiptData.quantity}<br />
+              <strong>Status:</strong> {receiptData.status}
+            </div>
+            <Button onClick={handleDownloadPDF} className="mb-2">Download PDF Receipt</Button>
+            <Button onClick={() => navigate(`/delivery-tracking/${receiptData.id}`)} className="mb-2">Track Delivery</Button>
+            {showTracking && trackingInfo && (
+              <div className="mt-4 p-3 bg-muted rounded">
+                <strong>Tracking Status:</strong> {trackingInfo.status}<br />
+                <strong>Last Updated:</strong> {new Date(trackingInfo.lastUpdated).toLocaleString()}<br />
+                <ul className="mt-2 text-sm">
+                  {trackingInfo.history.map((h: any, i: number) => (
+                    <li key={i}>{h.status} - {new Date(h.timestamp).toLocaleString()}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -189,15 +337,6 @@ const Checkout = () => {
                     <div className="flex justify-between text-sm sm:text-base">
                       <span>Subtotal</span>
                       <span>GH₵ {subtotal.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm sm:text-base">
-                      <span>Delivery Fee</span>
-                      <span>GH₵ {deliveryFee.toFixed(2)}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between font-bold text-base sm:text-lg">
-                      <span>Total</span>
-                      <span>GH₵ {total.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
@@ -275,7 +414,7 @@ const Checkout = () => {
                     onClick={handleProceedToPayment} 
                     className="w-full h-11"
                   >
-                    Proceed to Payment - GH₵ {total.toFixed(2)}
+                    Proceed to Payment - GH₵ {subtotal.toFixed(2)}
                   </Button>
                 </div>
               </CardContent>
@@ -288,7 +427,7 @@ const Checkout = () => {
         <PaymentModal
           isOpen={showPaymentModal}
           onClose={() => setShowPaymentModal(false)}
-          amount={total}
+          amount={subtotal}
           orderId={orderId}
           deliveryInfo={deliveryInfo}
           onPaymentSuccess={handlePaymentSuccess}

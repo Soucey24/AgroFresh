@@ -21,6 +21,7 @@ import FarmerOrders from "./pages/FarmerOrders";
 import Settings from "./pages/admin/Settings";
 import OrderConfirmation from "./pages/OrderConfirmation";
 import Profile from "./pages/Profile";
+import DeliveryTracking from './pages/DeliveryTracking';
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => (
           <Route path="/farmer-orders" element={<FarmerOrders />} />
           <Route path="/order-confirmation" element={<OrderConfirmation />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/delivery-tracking/:orderId" element={<DeliveryTracking />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
