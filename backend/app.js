@@ -16,6 +16,7 @@ import usersRoutes from './routes/users.js';
 import payoutsRoutes from './routes/payouts.js';
 import paymentsRoutes from './routes/payments.js';
 import adminRoutes from './routes/admin.js';
+import webhooksRouter from './routes/webhooks.js';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const MySQLStore = require('express-mysql-session')(session);
@@ -90,6 +91,18 @@ app.use('/api/users', usersRoutes);
 app.use('/api/payouts', payoutsRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/webhooks', webhooksRouter);
+
+// Add /api/logout route
+app.post('/api/logout', (req, res) => {
+  req.session.destroy(err => {
+    if (err) {
+      return res.status(500).json({ message: 'Logout failed' });
+    }
+    res.clearCookie('connect.sid');
+    res.json({ message: 'Logged out successfully' });
+  });
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

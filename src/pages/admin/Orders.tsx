@@ -5,7 +5,26 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { getAdminOrders, getOrderStats } from "../../api";
+import { getAdminOrders, getOrderStats, getOrderTracking } from "../../api";
+
+function DeliveryStatusCell({ order }) {
+  const [status, setStatus] = useState(order.delivery_status);
+  const [trackingUrl, setTrackingUrl] = useState(order.tracking_url);
+  const refreshStatus = async () => {
+    const tracking = await getOrderTracking(order.id);
+    setStatus(tracking.status);
+    setTrackingUrl(tracking.tracking_url);
+  };
+  return (
+    <span>
+      <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${status === 'Delivered' ? 'bg-green-100 text-green-800' : status === 'In Transit' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'}`}>{status || 'N/A'}</span>
+      {trackingUrl && (
+        <a href={trackingUrl} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 underline">Track</a>
+      )}
+      <button onClick={refreshStatus} className="ml-2 text-blue-600 underline">Refresh</button>
+    </span>
+  );
+}
 
 const Orders = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -181,6 +200,8 @@ const Orders = () => {
                       <th className="px-4 py-2 text-left">Quantity</th>
                       <th className="px-4 py-2 text-left">Status</th>
                       <th className="px-4 py-2 text-left">Date</th>
+                      <th className="px-4 py-2 text-left">Delivery Method</th>
+                      <th className="px-4 py-2 text-left">Delivery Address</th>
                       <th className="px-4 py-2 text-left">Actions</th>
                     </tr>
                   </thead>
@@ -213,14 +234,23 @@ const Orders = () => {
                         </td>
                         <td className="px-4 py-2">{new Date(order.created_at).toLocaleString()}</td>
                         <td className="px-4 py-2">
-                          <div className="flex space-x-2">
-                            <Button variant="ghost" size="sm" onClick={() => alert('View order details coming soon!')}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => alert('Update order status coming soon!')}>
-                              <CheckCircle className="h-4 w-4" />
-                            </Button>
-                          </div>
+                          {(() => {
+                            let info = order.delivery_info;
+                            if (typeof info === 'string') info = JSON.parse(info);
+                            if (info?.deliveryMethod === 'vdl') return 'VDL Fulfilment';
+                            if (info?.deliveryMethod === 'sendstack') return 'Sendstack';
+                            return 'N/A';
+                          })()}
+                        </td>
+                        <td className="px-4 py-2">
+                          {(() => {
+                            let info = order.delivery_info;
+                            if (typeof info === 'string') info = JSON.parse(info);
+                            return info?.address || 'N/A';
+                          })()}
+                        </td>
+                        <td className="px-4 py-2">
+                          <DeliveryStatusCell order={order} />
                         </td>
                       </tr>
                     ))}

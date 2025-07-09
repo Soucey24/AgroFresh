@@ -1,9 +1,28 @@
 import { useEffect, useState } from "react";
-import { listOrders, getCrop, getUser, updateOrder, getProfile } from "../api";
+import { listOrders, getCrop, getUser, updateOrder, getProfile, getOrderTracking } from "../api";
 import Navigation from "@/components/Navigation";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+
+function DeliveryStatusCard({ order }) {
+  const [status, setStatus] = useState(order.delivery_status);
+  const [trackingUrl, setTrackingUrl] = useState(order.tracking_url);
+  const refreshStatus = async () => {
+    const tracking = await getOrderTracking(order.id);
+    setStatus(tracking.status);
+    setTrackingUrl(tracking.tracking_url);
+  };
+  return (
+    <div>
+      <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${status === 'Delivered' ? 'bg-green-100 text-green-800' : status === 'In Transit' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'}`}>{status || 'N/A'}</span>
+      {trackingUrl && (
+        <a href={trackingUrl} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 underline">Track</a>
+      )}
+      <button onClick={refreshStatus} className="ml-2 text-blue-600 underline">Refresh</button>
+    </div>
+  );
+}
 
 const FarmerOrders = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -180,6 +199,27 @@ const FarmerOrders = () => {
                   <div className="text-sm">
                     <span className="font-medium">Buyer:</span> {buyerDetails[order.buyer_id]?.name || `ID ${order.buyer_id}`}
                   </div>
+                  <div className="text-sm">
+                    <span className="font-medium">Delivery Method:</span> {
+                      (() => {
+                        let info = order.delivery_info;
+                        if (typeof info === 'string') info = JSON.parse(info);
+                        if (info?.deliveryMethod === 'vdl') return 'VDL Fulfilment';
+                        if (info?.deliveryMethod === 'sendstack') return 'Sendstack';
+                        return 'N/A';
+                      })()
+                    }
+                  </div>
+                  <DeliveryStatusCard order={order} />
+                  <div className="text-sm">
+                    <span className="font-medium">Delivery Address:</span> {
+                      (() => {
+                        let info = order.delivery_info;
+                        if (typeof info === 'string') info = JSON.parse(info);
+                        return info?.address || 'N/A';
+                      })()
+                    }
+                  </div>
 
                   {/* Status Update */}
                   <div className="space-y-2">
@@ -228,6 +268,8 @@ const FarmerOrders = () => {
                     <th className="px-4 py-3 text-left text-sm font-medium">Quantity</th>
                     <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
                     <th className="px-4 py-3 text-left text-sm font-medium">Date</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">Delivery Method</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">Tracking</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -292,6 +334,20 @@ const FarmerOrders = () => {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm">{new Date(order.created_at).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm">{
+                        (() => {
+                          let info = order.delivery_info;
+                          if (typeof info === 'string') info = JSON.parse(info);
+                          if (info?.deliveryMethod === 'vdl') return 'VDL Fulfilment';
+                          if (info?.deliveryMethod === 'sendstack') return 'Sendstack';
+                          return 'N/A';
+                        })()
+                      }</td>
+                      <td className="px-4 py-3 text-sm">{
+                        order.tracking_url ? (
+                          <a href={order.tracking_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Track</a>
+                        ) : 'N/A'
+                      }</td>
                     </tr>
                   ))}
                 </tbody>

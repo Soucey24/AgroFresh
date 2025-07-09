@@ -20,7 +20,7 @@ export const listOrders = async (req, res) => {
 };
 
 export const createOrder = async (req, res) => {
-  const { crop_id, quantity, delivery_info } = req.body;
+  let { crop_id, quantity, delivery_info, deliveryMethod, tracking_number, tracking_url, delivery_status } = req.body;
   const buyer_id = req.session.user?.id;
   if (!crop_id || !quantity || !buyer_id) {
     return res.status(400).json({ error: 'Missing required fields' });
@@ -30,19 +30,30 @@ export const createOrder = async (req, res) => {
     const [crops] = await db.query('SELECT * FROM crops WHERE id = ?', [crop_id]);
     if (crops.length === 0) return res.status(404).json({ error: 'Crop not found' });
     const farmer_id = crops[0].farmer_id;
-    
+    // Ensure delivery_info is an object and includes deliveryMethod
+    let infoObj = {};
+    if (typeof delivery_info === 'string') {
+      try { infoObj = JSON.parse(delivery_info); } catch { infoObj = {}; }
+    } else if (typeof delivery_info === 'object' && delivery_info !== null) {
+      infoObj = { ...delivery_info };
+    }
+    if (deliveryMethod && !infoObj.deliveryMethod) {
+      infoObj.deliveryMethod = deliveryMethod;
+    }
     const [result] = await db.query(
-      'INSERT INTO orders (buyer_id, farmer_id, crop_id, quantity, delivery_info) VALUES (?, ?, ?, ?, ?)',
-      [buyer_id, farmer_id, crop_id, quantity, delivery_info ? JSON.stringify(delivery_info) : null]
+      'INSERT INTO orders (buyer_id, farmer_id, crop_id, quantity, delivery_info, tracking_number, tracking_url, delivery_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [buyer_id, farmer_id, crop_id, quantity, JSON.stringify(infoObj), tracking_number || null, tracking_url || null, delivery_status || null]
     );
-    
     res.status(201).json({ 
       id: result.insertId, 
       buyer_id, 
       farmer_id, 
       crop_id, 
       quantity, 
-      delivery_info,
+      delivery_info: infoObj,
+      tracking_number,
+      tracking_url,
+      delivery_status,
       status: 'pending' 
     });
   } catch (err) {
@@ -120,17 +131,48 @@ export const salesReport = async (req, res) => {
   }
 };
 
+// Endpoint to update tracking info for an order
+export const updateOrderTracking = async (req, res) => {
+  const { tracking_number, tracking_url, delivery_status } = req.body;
+  try {
+    const [orders] = await db.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
+    if (orders.length === 0) return res.status(404).json({ error: 'Order not found' });
+    await db.query('UPDATE orders SET tracking_number=?, tracking_url=?, delivery_status=? WHERE id=?', [tracking_number, tracking_url, delivery_status, req.params.id]);
+    res.json({ message: 'Tracking info updated' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update tracking info' });
+  }
+};
+
 export const getOrderTracking = async (req, res) => {
-  // Mock tracking info
-  const tracking = {
-    orderId: req.params.id,
-    status: 'In Transit',
-    lastUpdated: new Date().toISOString(),
-    history: [
-      { status: 'Order Placed', timestamp: new Date(Date.now() - 86400000).toISOString() },
-      { status: 'Dispatched', timestamp: new Date(Date.now() - 43200000).toISOString() },
-      { status: 'In Transit', timestamp: new Date(Date.now() - 3600000).toISOString() }
-    ]
-  };
-  res.json(tracking);
+  try {
+    const [orders] = await db.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
+    if (orders.length === 0) return res.status(404).json({ error: 'Order not found' });
+    const order = orders[0];
+    if (order.tracking_url || order.tracking_number || order.delivery_status) {
+      res.json({
+        orderId: order.id,
+        tracking_number: order.tracking_number,
+        tracking_url: order.tracking_url,
+        status: order.delivery_status,
+        lastUpdated: order.updated_at || order.created_at,
+        history: [], // Always return a history array for frontend safety
+      });
+    } else {
+      // fallback to mock
+      const tracking = {
+        orderId: req.params.id,
+        status: 'In Transit',
+        lastUpdated: new Date().toISOString(),
+        history: [
+          { status: 'Order Placed', timestamp: new Date(Date.now() - 86400000).toISOString() },
+          { status: 'Dispatched', timestamp: new Date(Date.now() - 43200000).toISOString() },
+          { status: 'In Transit', timestamp: new Date(Date.now() - 3600000).toISOString() }
+        ]
+      };
+      res.json(tracking);
+    }
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch tracking info' });
+  }
 }; 

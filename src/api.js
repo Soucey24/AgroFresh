@@ -118,6 +118,23 @@ export async function listOrders() {
   return res.json();
 }
 
+export async function updateOrderTracking(id, tracking) {
+  const res = await fetch(`http://localhost:4000/api/orders/${id}/tracking`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(tracking),
+  });
+  return res.json();
+}
+
+export async function getOrderTracking(id) {
+  const res = await fetch(`http://localhost:4000/api/orders/${id}/tracking`, {
+    credentials: 'include'
+  });
+  return res.json();
+}
+
 // Admin User Management APIs
 export async function listUsers() {
   const res = await fetch('http://localhost:4000/api/users', { credentials: 'include' });
