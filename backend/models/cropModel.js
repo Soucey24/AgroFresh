@@ -8,6 +8,7 @@ export async function createCropsTable() {
       description TEXT,
       price DECIMAL(10,2) NOT NULL,
       quantity INT NOT NULL,
+      unit VARCHAR(20) DEFAULT 'kg',
       expiry_date DATE,
       farmer_id INT NOT NULL,
       image VARCHAR(255),

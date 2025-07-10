@@ -5,6 +5,9 @@ import Navigation from "@/components/Navigation";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 function DeliveryStatusCard({ order }) {
   const [status, setStatus] = useState(order.delivery_status);
@@ -26,6 +29,7 @@ function DeliveryStatusCard({ order }) {
 }
 
 const FarmerOrders = () => {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<any[]>([]);
   const [cropDetails, setCropDetails] = useState<{[key: number]: any}>({});
   const [buyerDetails, setBuyerDetails] = useState<{[key: number]: any}>({});
@@ -103,7 +107,18 @@ const FarmerOrders = () => {
         <Navigation />
         <div className="container mx-auto px-4 py-4 sm:py-8">
           <div className="bg-card/40 backdrop-blur-sm rounded-lg p-4 sm:p-6 mb-4 sm:mb-8">
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Orders for My Crops</h1>
+            <div className="flex items-center gap-4 mb-2">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => navigate(-1)}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Orders for My Crops</h1>
+            </div>
             <p className="text-sm sm:text-base text-muted-foreground">View all orders placed for your crops</p>
           </div>
           

@@ -20,6 +20,7 @@ interface Crop {
   name: string;
   category: string;
   quantity: number;
+  unit: string;
   price: number;
   expiryDate: string;
   image: string;
@@ -62,6 +63,7 @@ const Farmers = () => {
     name: "",
     category: "Vegetables",
     quantity: 0,
+    unit: "kg",
     price: 0,
     expiryDate: "",
     image: "",
@@ -117,6 +119,7 @@ const Farmers = () => {
     formData.append('description', newCrop.category);
     formData.append('price', String(newCrop.price));
     formData.append('quantity', String(newCrop.quantity));
+    formData.append('unit', newCrop.unit);
     if (newCrop.expiryDate) {
       const date = new Date(newCrop.expiryDate);
       const yyyy = date.getFullYear();
@@ -130,7 +133,7 @@ const Farmers = () => {
     const result = await createCrop(formData);
     if (!result.error) {
       setCrops([...crops, result]);
-      setNewCrop({ name: '', category: 'Vegetables', quantity: 0, price: 0, expiryDate: '', image: '' });
+      setNewCrop({ name: '', category: 'Vegetables', quantity: 0, unit: 'kg', price: 0, expiryDate: '', image: '' });
       setImageFile(null);
       setIsDialogOpen(false);
     }
@@ -139,34 +142,63 @@ const Farmers = () => {
   const handleUpdateCrop = async () => {
     if (!editCrop) return;
     
-    const formData = new FormData();
-    formData.append('name', editCrop.name);
-    formData.append('description', editCrop.category);
-    formData.append('price', String(editCrop.price));
-    formData.append('quantity', String(editCrop.quantity));
-    if (editCrop.expiryDate) {
-      const date = new Date(editCrop.expiryDate);
-      const yyyy = date.getFullYear();
-      const mm = String(date.getMonth() + 1).padStart(2, '0');
-      const dd = String(date.getDate()).padStart(2, '0');
-      formData.append('expiry_date', `${yyyy}-${mm}-${dd}`);
-    }
-    if (editImageFile) {
-      formData.append('image', editImageFile);
-    }
-    
-    const result = await updateCrop(editCrop.id, formData);
-    if (!result.error) {
-      setCrops(crops.map(crop => crop.id === editCrop.id ? { ...crop, ...editCrop } : crop));
-      setEditCrop(null);
-      setEditImageFile(null);
+    try {
+      const formData = new FormData();
+      formData.append('name', editCrop.name);
+      formData.append('description', editCrop.category);
+      formData.append('price', String(editCrop.price));
+      formData.append('quantity', String(editCrop.quantity));
+      formData.append('unit', editCrop.unit);
+      if (editCrop.expiryDate) {
+        const date = new Date(editCrop.expiryDate);
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        formData.append('expiry_date', `${yyyy}-${mm}-${dd}`);
+      }
+      if (editImageFile) {
+        formData.append('image', editImageFile);
+      }
+      
+      console.log('Updating crop with data:', {
+        id: editCrop.id,
+        name: editCrop.name,
+        category: editCrop.category,
+        price: editCrop.price,
+        quantity: editCrop.quantity,
+        unit: editCrop.unit,
+        expiryDate: editCrop.expiryDate
+      });
+      
+      const result = await updateCrop(editCrop.id, formData);
+      if (!result.error) {
+        setCrops(crops.map(crop => crop.id === editCrop.id ? { ...crop, ...editCrop } : crop));
+        setEditCrop(null);
+        setEditImageFile(null);
+        alert('Crop updated successfully!');
+      } else {
+        alert('Error updating crop: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Error updating crop:', error);
+      alert('Error updating crop: ' + error.message);
     }
   };
 
   const handleDeleteCrop = async (id: number) => {
-    const result = await deleteCrop(id);
-    if (!result.error) {
-      setCrops(crops.filter(crop => crop.id !== id));
+    if (confirm('Are you sure you want to delete this crop?')) {
+      try {
+        const result = await deleteCrop(id);
+        if (!result.error) {
+          setCrops(crops.filter(crop => crop.id !== id));
+          alert('Crop deleted successfully!');
+        } else {
+          alert('Error deleting crop: ' + result.error);
+        }
+      } catch (error) {
+        console.error('Error deleting crop:', error);
+        alert('Error deleting crop: ' + error.message);
+      }
     }
   };
 
@@ -228,7 +260,24 @@ const Farmers = () => {
                       <Label htmlFor="quantity" className="text-sm font-medium sm:text-right">
                         Quantity
                       </Label>
-                      <Input type="number" id="quantity" name="quantity" value={String(newCrop.quantity)} onChange={handleInputChange} className="sm:col-span-3" />
+                      <div className="sm:col-span-3 flex gap-2">
+                        <Input type="number" id="quantity" name="quantity" value={String(newCrop.quantity)} onChange={handleInputChange} className="flex-1" />
+                        <Select onValueChange={(value) => setNewCrop(prev => ({ ...prev, unit: value }))} value={newCrop.unit}>
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="kg">kg</SelectItem>
+                            <SelectItem value="g">g</SelectItem>
+                            <SelectItem value="lb">lb</SelectItem>
+                            <SelectItem value="oz">oz</SelectItem>
+                            <SelectItem value="pieces">pieces</SelectItem>
+                            <SelectItem value="bunches">bunches</SelectItem>
+                            <SelectItem value="bags">bags</SelectItem>
+                            <SelectItem value="crates">crates</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
                       <Label htmlFor="price" className="text-sm font-medium sm:text-right">
@@ -278,7 +327,48 @@ const Farmers = () => {
                 <CardDescription className="text-xs sm:text-sm">Total quantity of all crops</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-xl sm:text-2xl font-bold">{crops.reduce((acc, crop) => acc + crop.quantity, 0)}</div>
+                <div className="text-xl sm:text-2xl font-bold">
+                  {(() => {
+                    const totalQuantity = crops.reduce((acc, crop) => acc + crop.quantity, 0);
+                    // Group by units
+                    const unitGroups = crops.reduce((acc, crop) => {
+                      const unit = crop.unit || 'kg';
+                      acc[unit] = (acc[unit] || 0) + crop.quantity;
+                      return acc;
+                    }, {} as Record<string, number>);
+                    
+                    const unitEntries = Object.entries(unitGroups);
+                    if (unitEntries.length === 1) {
+                      // All same unit
+                      const [unit, total] = unitEntries[0];
+                      return `${total.toLocaleString()} ${unit}`;
+                    } else if (unitEntries.length > 1) {
+                      // Mixed units - show total count
+                      return `${totalQuantity.toLocaleString()} items`;
+                    } else {
+                      return '0 items';
+                    }
+                  })()}
+                </div>
+                {(() => {
+                  const unitGroups = crops.reduce((acc, crop) => {
+                    const unit = crop.unit || 'kg';
+                    acc[unit] = (acc[unit] || 0) + crop.quantity;
+                    return acc;
+                  }, {} as Record<string, number>);
+                  
+                  const unitEntries = Object.entries(unitGroups);
+                  if (unitEntries.length > 1) {
+                    return (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {unitEntries.map(([unit, total]) => (
+                          <div key={unit}>{total.toLocaleString()} {unit}</div>
+                        ))}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </CardContent>
             </Card>
             <Card className="bg-card/40 backdrop-blur-sm border-border/50">
@@ -291,7 +381,10 @@ const Farmers = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-xl sm:text-2xl font-bold">
-                  {crops.length > 0 ? (crops.reduce((acc, crop) => acc + crop.price, 0) / crops.length).toFixed(2) : "0.00"}
+                  {crops.length > 0 
+                    ? `GH₵${(crops.reduce((acc, crop) => acc + crop.price, 0) / crops.length).toFixed(2)}`
+                    : "GH₵0.00"
+                  }
                 </div>
               </CardContent>
             </Card>
@@ -377,7 +470,7 @@ const Farmers = () => {
                         </div>
                         <div className="text-xs text-muted-foreground space-y-1">
                           <div>Category: {crop.category}</div>
-                          <div>Quantity: {crop.quantity}</div>
+                          <div>Quantity: {crop.quantity} {crop.unit || 'kg'}</div>
                           <div>Price: GH₵{crop.price}</div>
                           <div>Expires: {crop.expiryDate}</div>
                         </div>
@@ -423,7 +516,7 @@ const Farmers = () => {
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-foreground">{crop.name}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-muted-foreground">{crop.category}</td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-muted-foreground">{crop.quantity}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-muted-foreground">{crop.quantity} {crop.unit || 'kg'}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-muted-foreground">GH₵{crop.price}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-muted-foreground">{crop.expiryDate}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-right">
@@ -456,7 +549,7 @@ const Farmers = () => {
             <div className="space-y-2 text-sm">
               <p><strong>Name:</strong> {viewCrop.name}</p>
               <p><strong>Category:</strong> {viewCrop.category}</p>
-              <p><strong>Quantity:</strong> {viewCrop.quantity}</p>
+              <p><strong>Quantity:</strong> {viewCrop.quantity} {viewCrop.unit || 'kg'}</p>
               <p><strong>Price:</strong> GH₵{viewCrop.price}</p>
               <p><strong>Expiry Date:</strong> {viewCrop.expiryDate}</p>
               {viewCrop.image && (
@@ -514,14 +607,31 @@ const Farmers = () => {
                 <Label htmlFor="edit-quantity" className="text-sm font-medium sm:text-right">
                   Quantity
                 </Label>
-                <Input 
-                  type="number" 
-                  id="edit-quantity" 
-                  name="quantity" 
-                  value={String(editCrop.quantity)} 
-                  onChange={handleEditInputChange} 
-                  className="sm:col-span-3" 
-                />
+                <div className="sm:col-span-3 flex gap-2">
+                  <Input 
+                    type="number" 
+                    id="edit-quantity" 
+                    name="quantity" 
+                    value={String(editCrop.quantity)} 
+                    onChange={handleEditInputChange} 
+                    className="flex-1" 
+                  />
+                  <Select onValueChange={(value) => setEditCrop(prev => prev ? { ...prev, unit: value } : null)} value={editCrop.unit}>
+                    <SelectTrigger className="w-24">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="kg">kg</SelectItem>
+                      <SelectItem value="g">g</SelectItem>
+                      <SelectItem value="lb">lb</SelectItem>
+                      <SelectItem value="oz">oz</SelectItem>
+                      <SelectItem value="pieces">pieces</SelectItem>
+                      <SelectItem value="bunches">bunches</SelectItem>
+                      <SelectItem value="bags">bags</SelectItem>
+                      <SelectItem value="crates">crates</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
                 <Label htmlFor="edit-price" className="text-sm font-medium sm:text-right">

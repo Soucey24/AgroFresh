@@ -24,10 +24,11 @@ export const listCrops = async (req, res) => {
     const transformedCrops = crops.map(crop => ({
       id: crop.id,
       name: crop.name,
+      category: crop.description, // Map description to category
       description: crop.description,
       price: parseFloat(crop.price),
       quantity: crop.quantity,
-      unit: 'kg', // Default unit
+      unit: crop.unit || 'kg',
       expiryDate: crop.expiry_date,
       farmer: crop.farmer_name,
       location: crop.farmer_location,
@@ -48,7 +49,7 @@ export const createCrop = async (req, res) => {
   console.log('REQ.FILE:', req.file);
   console.log('REQ.SESSION:', req.session);
   console.log('REQ.SESSION.USER:', req.session.user);
-  const { name, description, price, quantity, expiry_date } = req.body;
+  const { name, description, price, quantity, unit, expiry_date } = req.body;
   const farmer_id = req.session.user?.id;
   let image = null;
   if (req.file) {
@@ -61,10 +62,10 @@ export const createCrop = async (req, res) => {
     return res.status(400).json({ error: 'Missing required fields' });
   }
   try {
-    console.log('Inserting crop with:', { name, description, price, quantity, expiry_date, farmer_id, image });
+    console.log('Inserting crop with:', { name, description, price, quantity, unit, expiry_date, farmer_id, image });
     const [result] = await db.query(
-      'INSERT INTO crops (name, description, price, quantity, expiry_date, farmer_id, image) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [name, description, price, quantity, expiry_date, farmer_id, image]
+      'INSERT INTO crops (name, description, price, quantity, unit, expiry_date, farmer_id, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [name, description, price, quantity, unit || 'kg', expiry_date, farmer_id, image]
     );
     console.log('Crop inserted with ID:', result.insertId);
     
@@ -80,10 +81,11 @@ export const createCrop = async (req, res) => {
     const transformedCrop = {
       id: crop.id,
       name: crop.name,
+      category: crop.description, // Map description to category
       description: crop.description,
       price: parseFloat(crop.price),
       quantity: crop.quantity,
-      unit: 'kg', // Default unit
+      unit: crop.unit || 'kg',
       expiryDate: crop.expiry_date,
       farmer: crop.farmer_name,
       location: crop.farmer_location,
@@ -113,10 +115,11 @@ export const getCrop = async (req, res) => {
     const transformedCrop = {
       id: crop.id,
       name: crop.name,
+      category: crop.description, // Map description to category
       description: crop.description,
       price: parseFloat(crop.price),
       quantity: crop.quantity,
-      unit: 'kg', // Default unit
+      unit: crop.unit || 'kg',
       expiryDate: crop.expiry_date,
       farmer: crop.farmer_name,
       location: crop.farmer_location,
@@ -132,20 +135,88 @@ export const getCrop = async (req, res) => {
 };
 
 export const updateCrop = async (req, res) => {
-  const { name, description, price, quantity, expiry_date, image } = req.body;
+  console.log('--- UPDATE CROP ATTEMPT ---');
+  console.log('REQ.BODY:', req.body);
+  console.log('REQ.FILE:', req.file);
+  console.log('REQ.PARAMS:', req.params);
+  
+  const { name, description, price, quantity, unit, expiry_date } = req.body;
   const farmer_id = req.session.user?.id;
+  
+  let image = null;
+  if (req.file) {
+    image = `/uploads/${req.file.filename}`;
+  } else if (req.body.image) {
+    image = req.body.image;
+  }
+  
   try {
     // Only allow farmer to update their own crop
     const [crops] = await db.query('SELECT * FROM crops WHERE id = ?', [req.params.id]);
     if (crops.length === 0) return res.status(404).json({ error: 'Crop not found' });
     if (crops[0].farmer_id !== farmer_id) return res.status(403).json({ error: 'Forbidden' });
-    await db.query(
-      'UPDATE crops SET name=?, description=?, price=?, quantity=?, expiry_date=?, image=? WHERE id=?',
-      [name, description, price, quantity, expiry_date, image, req.params.id]
-    );
-    res.json({ message: 'Crop updated' });
+    
+    // Check if unit column exists, if not, don't update it
+    let updateQuery, updateParams;
+    
+    try {
+      // Try to update with unit column
+      updateQuery = 'UPDATE crops SET name=?, description=?, price=?, quantity=?, unit=?, expiry_date=? WHERE id=?';
+      updateParams = [name, description, price, quantity, unit || 'kg', expiry_date, req.params.id];
+      
+      // If image is provided, add it to the update
+      if (image) {
+        updateQuery = 'UPDATE crops SET name=?, description=?, price=?, quantity=?, unit=?, expiry_date=?, image=? WHERE id=?';
+        updateParams = [name, description, price, quantity, unit || 'kg', expiry_date, image, req.params.id];
+      }
+      
+      await db.query(updateQuery, updateParams);
+    } catch (err) {
+      // If unit column doesn't exist, update without it
+      if (err.code === 'ER_BAD_FIELD_ERROR' && err.message.includes('unit')) {
+        console.log('Unit column not found, updating without unit');
+        updateQuery = 'UPDATE crops SET name=?, description=?, price=?, quantity=?, expiry_date=? WHERE id=?';
+        updateParams = [name, description, price, quantity, expiry_date, req.params.id];
+        
+        if (image) {
+          updateQuery = 'UPDATE crops SET name=?, description=?, price=?, quantity=?, expiry_date=?, image=? WHERE id=?';
+          updateParams = [name, description, price, quantity, expiry_date, image, req.params.id];
+        }
+        
+        await db.query(updateQuery, updateParams);
+      } else {
+        throw err;
+      }
+    }
+    
+    // Get the updated crop
+    const [updatedCrops] = await db.query(`
+      SELECT c.*, u.name as farmer_name, u.location as farmer_location 
+      FROM crops c 
+      JOIN users u ON c.farmer_id = u.id 
+      WHERE c.id = ?
+    `, [req.params.id]);
+    
+    const crop = updatedCrops[0];
+    const transformedCrop = {
+      id: crop.id,
+      name: crop.name,
+      category: crop.description, // Map description to category
+      description: crop.description,
+      price: parseFloat(crop.price),
+      quantity: crop.quantity,
+      unit: crop.unit || 'kg',
+      expiryDate: crop.expiry_date,
+      farmer: crop.farmer_name,
+      location: crop.farmer_location,
+      harvestDate: crop.created_at,
+      image: crop.image
+    };
+    
+    res.json(transformedCrop);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update crop' });
+    console.error('UPDATE CROP ERROR:', err);
+    res.status(500).json({ error: 'Failed to update crop', details: err.message });
   }
 };
 

@@ -5,8 +5,12 @@ import Navigation from "@/components/Navigation";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const BuyerOrders = () => {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<any[]>([]);
   const [cropDetails, setCropDetails] = useState<{[key: number]: any}>({});
   const [farmerDetails, setFarmerDetails] = useState<{[key: number]: any}>({});
@@ -53,7 +57,18 @@ const BuyerOrders = () => {
         <Navigation />
         <div className="container mx-auto px-4 py-8">
           <div className="bg-card/40 backdrop-blur-sm rounded-lg p-6 mb-8">
-            <h1 className="text-3xl font-bold text-foreground mb-2">My Orders</h1>
+            <div className="flex items-center gap-4 mb-2">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => navigate(-1)}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+              <h1 className="text-3xl font-bold text-foreground">My Orders</h1>
+            </div>
             <p className="text-muted-foreground">View your recent and past orders</p>
           </div>
           <div className="mb-4 flex items-center gap-4">

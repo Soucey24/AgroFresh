@@ -30,7 +30,15 @@ export const createOrder = async (req, res) => {
     // Get crop and farmer
     const [crops] = await db.query('SELECT * FROM crops WHERE id = ?', [crop_id]);
     if (crops.length === 0) return res.status(404).json({ error: 'Crop not found' });
-    const farmer_id = crops[0].farmer_id;
+    
+    const crop = crops[0];
+    const farmer_id = crop.farmer_id;
+    
+    // Check if enough quantity is available
+    if (crop.quantity < quantity) {
+      return res.status(400).json({ error: 'Insufficient quantity available' });
+    }
+    
     // Ensure delivery_info is an object and includes deliveryMethod
     let infoObj = {};
     if (typeof delivery_info === 'string') {
@@ -41,22 +49,41 @@ export const createOrder = async (req, res) => {
     if (deliveryMethod && !infoObj.deliveryMethod) {
       infoObj.deliveryMethod = deliveryMethod;
     }
-    const [result] = await db.query(
-      'INSERT INTO orders (buyer_id, farmer_id, crop_id, quantity, delivery_info, tracking_number, tracking_url, delivery_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [buyer_id, farmer_id, crop_id, quantity, JSON.stringify(infoObj), tracking_number || null, tracking_url || null, delivery_status || null]
-    );
-    res.status(201).json({ 
-      id: result.insertId, 
-      buyer_id, 
-      farmer_id, 
-      crop_id, 
-      quantity, 
-      delivery_info: infoObj,
-      tracking_number,
-      tracking_url,
-      delivery_status,
-      status: 'pending' 
-    });
+    
+    // Start transaction
+    await db.query('START TRANSACTION');
+    
+    try {
+      // Create the order
+      const [result] = await db.query(
+        'INSERT INTO orders (buyer_id, farmer_id, crop_id, quantity, delivery_info, tracking_number, tracking_url, delivery_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [buyer_id, farmer_id, crop_id, quantity, JSON.stringify(infoObj), tracking_number || null, tracking_url || null, delivery_status || null]
+      );
+      
+      // Update crop quantity
+      const newQuantity = crop.quantity - quantity;
+      await db.query('UPDATE crops SET quantity = ? WHERE id = ?', [newQuantity, crop_id]);
+      
+      // Commit transaction
+      await db.query('COMMIT');
+      
+      res.status(201).json({ 
+        id: result.insertId, 
+        buyer_id, 
+        farmer_id, 
+        crop_id, 
+        quantity, 
+        delivery_info: infoObj,
+        tracking_number,
+        tracking_url,
+        delivery_status,
+        status: 'pending' 
+      });
+    } catch (err) {
+      // Rollback on error
+      await db.query('ROLLBACK');
+      throw err;
+    }
   } catch (err) {
     console.error('Create order error:', err);
     res.status(500).json({ error: 'Failed to create order' });
@@ -95,8 +122,36 @@ export const updateOrder = async (req, res) => {
     ) {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    await db.query('UPDATE orders SET status=?, quantity=? WHERE id=?', [status || orders[0].status, quantity || orders[0].quantity, req.params.id]);
-    res.json({ message: 'Order updated' });
+    
+    const order = orders[0];
+    const oldStatus = order.status;
+    const newStatus = status || oldStatus;
+    
+    // Start transaction
+    await db.query('START TRANSACTION');
+    
+    try {
+      // Update order status
+      await db.query('UPDATE orders SET status=?, quantity=? WHERE id=?', [newStatus, quantity || order.quantity, req.params.id]);
+      
+      // If order is cancelled, restore crop quantity
+      if (oldStatus !== 'cancelled' && newStatus === 'cancelled') {
+        await db.query('UPDATE crops SET quantity = quantity + ? WHERE id = ?', [order.quantity, order.crop_id]);
+      }
+      // If order was cancelled and is now active again, reduce crop quantity
+      else if (oldStatus === 'cancelled' && newStatus !== 'cancelled') {
+        await db.query('UPDATE crops SET quantity = quantity - ? WHERE id = ?', [order.quantity, order.crop_id]);
+      }
+      
+      // Commit transaction
+      await db.query('COMMIT');
+      
+      res.json({ message: 'Order updated' });
+    } catch (err) {
+      // Rollback on error
+      await db.query('ROLLBACK');
+      throw err;
+    }
   } catch (err) {
     res.status(500).json({ error: 'Failed to update order' });
   }
@@ -110,8 +165,30 @@ export const deleteOrder = async (req, res) => {
     if (req.session.user.role !== 'admin') {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    await db.query('DELETE FROM orders WHERE id = ?', [req.params.id]);
-    res.json({ message: 'Order deleted' });
+    
+    const order = orders[0];
+    
+    // Start transaction
+    await db.query('START TRANSACTION');
+    
+    try {
+      // If order is not cancelled, restore crop quantity
+      if (order.status !== 'cancelled') {
+        await db.query('UPDATE crops SET quantity = quantity + ? WHERE id = ?', [order.quantity, order.crop_id]);
+      }
+      
+      // Delete the order
+      await db.query('DELETE FROM orders WHERE id = ?', [req.params.id]);
+      
+      // Commit transaction
+      await db.query('COMMIT');
+      
+      res.json({ message: 'Order deleted' });
+    } catch (err) {
+      // Rollback on error
+      await db.query('ROLLBACK');
+      throw err;
+    }
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete order' });
   }
