@@ -9,6 +9,7 @@ import Navigation from "@/components/Navigation";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
 import { listCrops } from "../api";
 import { useNavigate } from "react-router-dom";
+import { getImageUrl } from "../utils/imageUtils";
 
 interface Crop {
   id: string;
@@ -152,7 +153,7 @@ const Buyers = () => {
                   <CardContent className="space-y-3">
                     {crop.image ? (
                       <img
-                        src={crop.image.startsWith('http') ? crop.image : `http://localhost:4000${crop.image}`}
+                        src={getImageUrl(crop.image)}
                         alt={crop.name}
                         className="w-full h-32 sm:h-40 object-cover rounded"
                         onError={e => (e.currentTarget.style.display = 'none')}

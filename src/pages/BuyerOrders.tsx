@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listOrders, getCrop, getUser, getProfile } from "../api";
+import { getImageUrl } from "../utils/imageUtils";
 import Navigation from "@/components/Navigation";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -87,7 +88,7 @@ const BuyerOrders = () => {
                   <td className="px-4 py-2 flex items-center gap-2">
                     {cropDetails[order.crop_id]?.image ? (
                       <img 
-                        src={cropDetails[order.crop_id].image.startsWith('http') ? cropDetails[order.crop_id].image : `http://localhost:4000${cropDetails[order.crop_id].image}`} 
+                        src={getImageUrl(cropDetails[order.crop_id].image)} 
                         alt={cropDetails[order.crop_id]?.name} 
                         className="w-8 h-8 rounded-full object-cover"
                         onError={e => (e.currentTarget.style.display = 'none')}

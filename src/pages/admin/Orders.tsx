@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { getAdminOrders, getOrderStats, getOrderTracking } from "../../api";
+import { getImageUrl } from "../../utils/imageUtils";
 
 function DeliveryStatusCell({ order }) {
   const [status, setStatus] = useState(order.delivery_status);
@@ -212,7 +213,7 @@ const Orders = () => {
                         <td className="px-4 py-2 flex items-center gap-2">
                           {order.crop_image ? (
                             <img
-                              src={order.crop_image.startsWith('http') ? order.crop_image : `http://localhost:4000${order.crop_image}`}
+                              src={getImageUrl(order.crop_image)}
                               alt={order.crop_name}
                               className="w-8 h-8 rounded-full object-cover"
                               onError={e => (e.currentTarget.style.display = 'none')}

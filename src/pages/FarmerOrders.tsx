@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listOrders, getCrop, getUser, updateOrder, getProfile, getOrderTracking } from "../api";
+import { getImageUrl } from "../utils/imageUtils";
 import Navigation from "@/components/Navigation";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -174,7 +175,7 @@ const FarmerOrders = () => {
                   <div className="flex items-center gap-3">
                     {cropDetails[order.crop_id]?.image ? (
                       <img
-                        src={cropDetails[order.crop_id].image.startsWith('http') ? cropDetails[order.crop_id].image : `http://localhost:4000${cropDetails[order.crop_id].image}`}
+                        src={getImageUrl(cropDetails[order.crop_id].image)}
                         alt={cropDetails[order.crop_id]?.name}
                         className="w-12 h-12 rounded-lg object-cover"
                         onError={e => (e.currentTarget.style.display = 'none')}
@@ -279,7 +280,7 @@ const FarmerOrders = () => {
                         <div className="flex items-center gap-3">
                           {cropDetails[order.crop_id]?.image ? (
                             <img
-                              src={cropDetails[order.crop_id].image.startsWith('http') ? cropDetails[order.crop_id].image : `http://localhost:4000${cropDetails[order.crop_id].image}`}
+                              src={getImageUrl(cropDetails[order.crop_id].image)}
                               alt={cropDetails[order.crop_id]?.name}
                               className="w-10 h-10 rounded-lg object-cover"
                               onError={e => (e.currentTarget.style.display = 'none')}

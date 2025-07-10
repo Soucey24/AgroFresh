@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { getAdminCrops, getCropStats } from "../../api";
+import { getImageUrl } from "../../utils/imageUtils";
 
 const Crops = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -152,7 +153,7 @@ const Crops = () => {
                       <div className="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center">
                         {crop.image ? (
                           <img
-                            src={crop.image.startsWith('http') ? crop.image : `http://localhost:4000${crop.image}`}
+                            src={getImageUrl(crop.image)}
                             alt={crop.name}
                             className="w-full h-full object-cover rounded-lg"
                             onError={e => (e.currentTarget.style.display = 'none')}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getProfile, updateProfile, changePassword } from "../api";
+import { getImageUrl } from "../utils/imageUtils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -27,7 +28,7 @@ const Profile = () => {
         bio: profile.bio || "",
         email: profile.email || ""
       });
-      setAvatarPreview(profile.avatar ? (profile.avatar.startsWith('http') ? profile.avatar : `http://localhost:4000${profile.avatar}`) : null);
+      setAvatarPreview(profile.avatar ? getImageUrl(profile.avatar) : null);
       setPendingEmail(profile.pending_email || "");
     });
   }, []);

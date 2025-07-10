@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import Navigation from "@/components/Navigation";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
 import { listCrops, createCrop, deleteCrop, updateCrop } from "../api";
+import { getImageUrl } from "../utils/imageUtils";
+import ImageDebugger from "../components/ImageDebugger";
 
 interface Crop {
   id: number;
@@ -345,14 +347,14 @@ const Farmers = () => {
                   <CardContent className="p-4">
                     <div className="flex items-start space-x-3">
                       <div className="h-12 w-12 rounded-full overflow-hidden flex-shrink-0">
-                        {crop.image ? (
-                          <img
-                            src={crop.image.startsWith('http') ? crop.image : `http://localhost:4000${crop.image}`}
-                            alt={crop.name}
-                            className="object-cover w-full h-full"
-                            onError={e => (e.currentTarget.style.display = 'none')}
-                          />
-                        ) : (
+                                                  {crop.image ? (
+                            <img
+                              src={getImageUrl(crop.image)}
+                              alt={crop.name}
+                              className="object-cover w-full h-full"
+                              onError={e => (e.currentTarget.style.display = 'none')}
+                            />
+                          ) : (
                           <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground text-xs">
                             No Image
                           </div>
@@ -404,10 +406,10 @@ const Farmers = () => {
                   {crops.map((crop) => (
                     <tr key={crop.id} className="hover:bg-muted/50">
                       <td className="px-4 py-2 whitespace-nowrap">
-                        <div className="h-12 w-12 rounded-lg overflow-hidden">
+                                                <div className="h-12 w-12 rounded-lg overflow-hidden">
                           {crop.image ? (
                             <img
-                              src={crop.image.startsWith('http') ? crop.image : `http://localhost:4000${crop.image}`}
+                              src={getImageUrl(crop.image)}
                               alt={crop.name}
                               className="object-cover w-full h-full"
                               onError={e => (e.currentTarget.style.display = 'none')}
@@ -460,7 +462,7 @@ const Farmers = () => {
               {viewCrop.image && (
                 <div>
                   <strong>Image:</strong>
-                  <img src={viewCrop.image.startsWith('http') ? viewCrop.image : `http://localhost:4000${viewCrop.image}`} alt={viewCrop.name} className="w-full h-32 object-cover rounded mt-2" />
+                  <img src={getImageUrl(viewCrop.image)} alt={viewCrop.name} className="w-full h-32 object-cover rounded mt-2" />
                 </div>
               )}
             </div>
