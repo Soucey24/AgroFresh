@@ -5,10 +5,10 @@ const router = express.Router();
 
 router.get('/', requireAuth, listOrders);
 router.post('/', requireAuth, createOrder);
+router.get('/sales-report', requireAuth, requireRole('farmer'), salesReport);
 router.get('/:id', requireAuth, getOrder);
 router.put('/:id', requireAuth, updateOrder);
 router.delete('/:id', requireAuth, requireRole('admin'), deleteOrder);
-router.get('/sales-report', requireAuth, requireRole('farmer'), salesReport);
 router.get('/:id/tracking', requireAuth, getOrderTracking);
 router.put('/:id/tracking', requireAuth, updateOrderTracking);
 router.post('/delivery', requireAuth, createDelivery);

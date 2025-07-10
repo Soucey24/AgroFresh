@@ -233,3 +233,21 @@ export const deleteCrop = async (req, res) => {
     res.status(500).json({ error: 'Failed to delete crop' });
   }
 }; 
+
+export const bulkUpdateAvailability = async (req, res) => {
+  try {
+    const { cropIds, available } = req.body;
+    if (!Array.isArray(cropIds) || typeof available !== 'boolean') {
+      return res.status(400).json({ error: 'Invalid input' });
+    }
+    const placeholders = cropIds.map(() => '?').join(',');
+    await db.query(
+      `UPDATE crops SET available = ? WHERE id IN (${placeholders})`,
+      [available, ...cropIds]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Bulk update availability error:', err);
+    res.status(500).json({ error: 'Failed to update availability' });
+  }
+}; 

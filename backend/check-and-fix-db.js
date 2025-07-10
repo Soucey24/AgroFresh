@@ -19,6 +19,13 @@ async function checkAndFixDatabase() {
       console.log('✅ Unit column already exists');
     }
     
+    // Check if 'available' column exists in crops
+    const [availableCol] = await db.query("SHOW COLUMNS FROM crops LIKE 'available'");
+    if (availableCol.length === 0) {
+      await db.query('ALTER TABLE crops ADD COLUMN available BOOLEAN DEFAULT TRUE');
+      console.log('✅ Added available column to crops table');
+    }
+    
     // Check if there are any crops without category/description
     const [cropsWithoutCategory] = await db.query('SELECT COUNT(*) as count FROM crops WHERE description IS NULL OR description = ""');
     console.log(`ℹ️  Found ${cropsWithoutCategory[0].count} crops without category/description`);

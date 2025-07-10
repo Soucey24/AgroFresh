@@ -1,22 +1,22 @@
 export async function getUser(id) {
-  const res = await fetch(`http://localhost:4000/api/users/${id}`, { credentials: 'include' });
+  const res = await fetch(`/api/users/${id}`, { credentials: 'include' });
   return res.json();
 }
 
 export async function getProfile() {
-  const res = await fetch('http://localhost:4000/api/users/profile/me', { credentials: 'include' });
+  const res = await fetch('/api/users/profile/me', { credentials: 'include' });
   return res.json();
 }
 
 export async function logout() {
-  await fetch('http://localhost:4000/api/logout', {
+  await fetch('/api/logout', {
     method: 'POST',
     credentials: 'include',
   });
 }
 
 export async function login(email, password, role) {
-  const res = await fetch('http://localhost:4000/api/auth/login', {
+  const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -26,7 +26,7 @@ export async function login(email, password, role) {
 }
 
 export async function register({ name, email, password, userType, location }) {
-  const res = await fetch('http://localhost:4000/api/auth/register', {
+  const res = await fetch('/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -37,12 +37,12 @@ export async function register({ name, email, password, userType, location }) {
 
 // Crop APIs
 export async function listCrops() {
-  const res = await fetch('http://localhost:4000/api/crops', { credentials: 'include' });
+  const res = await fetch('/api/crops', { credentials: 'include' });
   return res.json();
 }
 
 export async function createCrop(crop) {
-  const res = await fetch('http://localhost:4000/api/crops', {
+  const res = await fetch('/api/crops', {
     method: 'POST',
     credentials: 'include',
     body: crop,
@@ -51,7 +51,7 @@ export async function createCrop(crop) {
 }
 
 export async function deleteCrop(id) {
-  const res = await fetch(`http://localhost:4000/api/crops/${id}`, {
+  const res = await fetch(`/api/crops/${id}`, {
     method: 'DELETE',
     credentials: 'include',
   });
@@ -60,7 +60,7 @@ export async function deleteCrop(id) {
 
 export async function updateCrop(id, crop) {
   const isFormData = crop instanceof FormData;
-  const res = await fetch(`http://localhost:4000/api/crops/${id}`, {
+  const res = await fetch(`/api/crops/${id}`, {
     method: 'PUT',
     headers: isFormData ? {} : { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -70,18 +70,18 @@ export async function updateCrop(id, crop) {
 }
 
 export async function getCrops() {
-  const res = await fetch('http://localhost:4000/api/crops', { credentials: 'include' });
+  const res = await fetch('/api/crops', { credentials: 'include' });
   return res.json();
 }
 
 export async function getCrop(id) {
-  const res = await fetch(`http://localhost:4000/api/crops/${id}`, { credentials: 'include' });
+  const res = await fetch(`/api/crops/${id}`, { credentials: 'include' });
   return res.json();
 }
 
 // Order APIs
 export async function createOrder(order) {
-  const res = await fetch('http://localhost:4000/api/orders', {
+  const res = await fetch('/api/orders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -91,7 +91,7 @@ export async function createOrder(order) {
 }
 
 export async function updateOrder(id, order) {
-  const res = await fetch(`http://localhost:4000/api/orders/${id}`, {
+  const res = await fetch(`/api/orders/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -101,7 +101,7 @@ export async function updateOrder(id, order) {
 }
 
 export async function deleteOrder(id) {
-  const res = await fetch(`http://localhost:4000/api/orders/${id}`, {
+  const res = await fetch(`/api/orders/${id}`, {
     method: 'DELETE',
     credentials: 'include',
   });
@@ -109,17 +109,17 @@ export async function deleteOrder(id) {
 }
 
 export async function getOrders() {
-  const res = await fetch('http://localhost:4000/api/orders', { credentials: 'include' });
+  const res = await fetch('/api/orders', { credentials: 'include' });
   return res.json();
 }
 
 export async function listOrders() {
-  const res = await fetch('http://localhost:4000/api/orders', { credentials: 'include' });
+  const res = await fetch('/api/orders', { credentials: 'include' });
   return res.json();
 }
 
 export async function updateOrderTracking(id, tracking) {
-  const res = await fetch(`http://localhost:4000/api/orders/${id}/tracking`, {
+  const res = await fetch(`/api/orders/${id}/tracking`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -129,7 +129,7 @@ export async function updateOrderTracking(id, tracking) {
 }
 
 export async function getOrderTracking(id) {
-  const res = await fetch(`http://localhost:4000/api/orders/${id}/tracking`, {
+  const res = await fetch(`/api/orders/${id}/tracking`, {
     credentials: 'include'
   });
   return res.json();
@@ -137,12 +137,12 @@ export async function getOrderTracking(id) {
 
 // Admin User Management APIs
 export async function listUsers() {
-  const res = await fetch('http://localhost:4000/api/users', { credentials: 'include' });
+  const res = await fetch('/api/users', { credentials: 'include' });
   return res.json();
 }
 
 export async function createUser(user) {
-  const res = await fetch('http://localhost:4000/api/users', {
+  const res = await fetch('/api/users', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -153,7 +153,7 @@ export async function createUser(user) {
 
 export async function updateUser(id, user) {
   const isFormData = user instanceof FormData;
-  const res = await fetch(`http://localhost:4000/api/users/${id}`, {
+  const res = await fetch(`/api/users/${id}`, {
     method: 'PUT',
     headers: isFormData ? {} : { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -163,7 +163,7 @@ export async function updateUser(id, user) {
 }
 
 export async function deleteUser(id) {
-  const res = await fetch(`http://localhost:4000/api/users/${id}`, {
+  const res = await fetch(`/api/users/${id}`, {
     method: 'DELETE',
     credentials: 'include',
   });
@@ -171,12 +171,12 @@ export async function deleteUser(id) {
 }
 
 export async function getSalesReport() {
-  const res = await fetch('http://localhost:4000/api/orders/sales-report', { credentials: 'include' });
+  const res = await fetch('/api/orders/sales-report', { credentials: 'include' });
   return res.json();
 }
 
 export async function requestPayout({ order_id, amount }) {
-  const res = await fetch('http://localhost:4000/api/payouts', {
+  const res = await fetch('/api/payouts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -186,7 +186,7 @@ export async function requestPayout({ order_id, amount }) {
 }
 
 export async function changePassword(currentPassword, newPassword) {
-  const res = await fetch('http://localhost:4000/api/users/change-password', {
+  const res = await fetch('/api/users/change-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -197,7 +197,7 @@ export async function changePassword(currentPassword, newPassword) {
 
 export async function updateProfile(userData) {
   const isFormData = userData instanceof FormData;
-  const res = await fetch('http://localhost:4000/api/users/profile/update', {
+  const res = await fetch('/api/users/profile/update', {
     method: 'PUT',
     headers: isFormData ? {} : { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -207,7 +207,7 @@ export async function updateProfile(userData) {
 }
 
 export async function createPayment(paymentData) {
-  const res = await fetch('http://localhost:4000/api/payments', {
+  const res = await fetch('/api/payments', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -217,14 +217,14 @@ export async function createPayment(paymentData) {
 }
 
 export async function getPaymentStatus(paymentId) {
-  const res = await fetch(`http://localhost:4000/api/payments/${paymentId}/status`, {
+  const res = await fetch(`/api/payments/${paymentId}/status`, {
     credentials: 'include',
   });
   return res.json();
 }
 
 export async function simulatePaymentCompletion(paymentId, status = 'completed') {
-  const res = await fetch('http://localhost:4000/api/payments/simulate', {
+  const res = await fetch('/api/payments/simulate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -237,14 +237,14 @@ export async function getPaymentHistory(page = 1, limit = 10, status = null) {
   const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
   if (status) params.append('status', status);
   
-  const res = await fetch(`http://localhost:4000/api/payments/history?${params}`, {
+  const res = await fetch(`/api/payments/history?${params}`, {
     credentials: 'include',
   });
   return res.json();
 }
 
 export async function cancelPayment(paymentId) {
-  const res = await fetch(`http://localhost:4000/api/payments/${paymentId}/cancel`, {
+  const res = await fetch(`/api/payments/${paymentId}/cancel`, {
     method: 'POST',
     credentials: 'include',
   });
@@ -253,14 +253,14 @@ export async function cancelPayment(paymentId) {
 
 // Admin Dashboard APIs
 export async function getDashboardStats() {
-  const res = await fetch('http://localhost:4000/api/admin/dashboard/stats', {
+  const res = await fetch('/api/admin/dashboard/stats', {
     credentials: 'include',
   });
   return res.json();
 }
 
 export async function getRecentActivity() {
-  const res = await fetch('http://localhost:4000/api/admin/dashboard/activity', {
+  const res = await fetch('/api/admin/dashboard/activity', {
     credentials: 'include',
   });
   return res.json();
@@ -268,7 +268,7 @@ export async function getRecentActivity() {
 
 // Admin Payment APIs
 export async function getPaymentStats() {
-  const res = await fetch('http://localhost:4000/api/admin/payments/stats', {
+  const res = await fetch('/api/admin/payments/stats', {
     credentials: 'include',
   });
   return res.json();
@@ -277,7 +277,7 @@ export async function getPaymentStats() {
 export async function getAdminPayments(page = 1, limit = 100) {
   const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
   
-  const res = await fetch(`http://localhost:4000/api/admin/payments?${params}`, {
+  const res = await fetch(`/api/admin/payments?${params}`, {
     credentials: 'include',
   });
   return res.json();
@@ -285,14 +285,14 @@ export async function getAdminPayments(page = 1, limit = 100) {
 
 // Admin Order APIs
 export async function getAdminOrders() {
-  const res = await fetch('http://localhost:4000/api/admin/orders', {
+  const res = await fetch('/api/admin/orders', {
     credentials: 'include',
   });
   return res.json();
 }
 
 export async function getOrderStats() {
-  const res = await fetch('http://localhost:4000/api/admin/orders/stats', {
+  const res = await fetch('/api/admin/orders/stats', {
     credentials: 'include',
   });
   return res.json();
@@ -300,14 +300,14 @@ export async function getOrderStats() {
 
 // Admin Crop APIs
 export async function getAdminCrops() {
-  const res = await fetch('http://localhost:4000/api/admin/crops', {
+  const res = await fetch('/api/admin/crops', {
     credentials: 'include',
   });
   return res.json();
 }
 
 export async function getCropStats() {
-  const res = await fetch('http://localhost:4000/api/admin/crops/stats', {
+  const res = await fetch('/api/admin/crops/stats', {
     credentials: 'include',
   });
   return res.json();
@@ -315,18 +315,28 @@ export async function getCropStats() {
 
 // Admin Settings APIs
 export async function getAdminSettings() {
-  const res = await fetch('http://localhost:4000/api/admin/settings', {
+  const res = await fetch('/api/admin/settings', {
     credentials: 'include',
   });
   return res.json();
 }
 
 export async function updateAdminSettings(settings) {
-  const res = await fetch('http://localhost:4000/api/admin/settings', {
+  const res = await fetch('/api/admin/settings', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify(settings),
+  });
+  return res.json();
+} 
+
+export async function bulkUpdateCropAvailability(cropIds, available) {
+  const res = await fetch('/api/crops/bulk-update-availability', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ cropIds, available }),
   });
   return res.json();
 } 

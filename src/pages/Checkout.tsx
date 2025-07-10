@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { ShoppingCart, MapPin, Phone, User } from "lucide-react";
+import { ShoppingCart, MapPin, Phone, User, ArrowLeft } from "lucide-react";
 import PaymentModal from "@/components/PaymentModal";
 import Navigation from "@/components/Navigation";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
@@ -371,8 +371,19 @@ const Checkout = () => {
         <Navigation />
         
         <div className="container mx-auto px-4 py-4 sm:py-8">
+          <div className="flex items-center gap-4 mb-4">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => navigate(-1)}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Checkout</h1>
+          </div>
           <div className="bg-card/40 backdrop-blur-sm rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Checkout</h1>
             <p className="text-sm sm:text-base text-muted-foreground">Review your order and complete payment</p>
           </div>
 

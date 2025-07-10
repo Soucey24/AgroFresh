@@ -10,6 +10,7 @@ export async function createCropsTable() {
       quantity INT NOT NULL,
       unit VARCHAR(20) DEFAULT 'kg',
       expiry_date DATE,
+      available BOOLEAN DEFAULT TRUE,
       farmer_id INT NOT NULL,
       image VARCHAR(255),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -200,7 +200,10 @@ export const salesReport = async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
     const [orders] = await db.query(
-      "SELECT * FROM orders WHERE farmer_id = ? AND (status = 'completed' OR status = 'paid')",
+      `SELECT o.*, c.price, c.unit, c.name as crop_name
+       FROM orders o
+       JOIN crops c ON o.crop_id = c.id
+       WHERE o.farmer_id = ? AND (o.status = 'completed' OR o.status = 'paid')`,
       [req.session.user.id]
     );
     res.json(orders);

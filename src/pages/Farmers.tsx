@@ -11,9 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import Navigation from "@/components/Navigation";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
-import { listCrops, createCrop, deleteCrop, updateCrop } from "../api";
+import { listCrops, createCrop, deleteCrop, updateCrop, bulkUpdateCropAvailability } from "../api";
 import { getImageUrl } from "../utils/imageUtils";
-import ImageDebugger from "../components/ImageDebugger";
+
 
 interface Crop {
   id: number;
@@ -35,6 +35,7 @@ const initialCrops: Crop[] = [
     price: 2.50,
     expiryDate: "2024-08-15",
     image: "https://images.unsplash.com/photo-1560807605-ba5a6bb7c24a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8dG9tYXRvfGVufDB8fDB8fHww&auto=format&fit=crop&w=500&q=60",
+    unit: ""
   },
   {
     id: 2,
@@ -44,6 +45,7 @@ const initialCrops: Crop[] = [
     price: 1.80,
     expiryDate: "2024-08-20",
     image: "https://images.unsplash.com/photo-1598148502549-5609c14c8652?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8Y2Fycm90fGVufDB8fDB8fHww&auto=format&fit=crop&w=500&q=60",
+    unit: ""
   },
   {
     id: 3,
@@ -53,8 +55,295 @@ const initialCrops: Crop[] = [
     price: 0.90,
     expiryDate: "2024-08-10",
     image: "https://images.unsplash.com/photo-1587132172749-727532918f0d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8YmFuYW5hfGVufDB8fDB8fHww&auto=format&fit=crop&w=500&q=60",
+    unit: ""
   },
 ];
+
+function SalesReportModal({ open, onClose }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [orders, setOrders] = useState([]);
+  const [summary, setSummary] = useState({ totalSales: 0, totalRevenue: 0 });
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    setError("");
+    fetch("/api/orders/sales-report", { credentials: "include" })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setOrders(data);
+          const totalSales = data.length;
+          const totalRevenue = data.reduce((acc, o) => acc + (o.price * o.quantity), 0);
+          setSummary({ totalSales, totalRevenue });
+        } else {
+          setError(data.error || "Failed to fetch sales report");
+        }
+      })
+      .catch(err => setError("Failed to fetch sales report"))
+      .finally(() => setLoading(false));
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Sales Report</DialogTitle>
+          <DialogDescription>View your sales report below.</DialogDescription>
+        </DialogHeader>
+        <div className="py-4">
+          {loading && <div className="text-center">Loading...</div>}
+          {error && <div className="text-center text-destructive">{error}</div>}
+          {!loading && !error && (
+            <>
+              <div className="mb-4 flex flex-wrap gap-4 justify-between">
+                <div><strong>Total Orders:</strong> {summary.totalSales}</div>
+                <div><strong>Total Revenue:</strong> GH₵ {summary.totalRevenue.toFixed(2)}</div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs sm:text-sm">
+                  <thead>
+                    <tr>
+                      <th className="px-2 py-1">Date</th>
+                      <th className="px-2 py-1">Crop</th>
+                      <th className="px-2 py-1">Quantity</th>
+                      <th className="px-2 py-1">Unit</th>
+                      <th className="px-2 py-1">Price</th>
+                      <th className="px-2 py-1">Buyer</th>
+                      <th className="px-2 py-1">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map(order => (
+                      <tr key={order.id}>
+                        <td className="px-2 py-1">{new Date(order.created_at).toLocaleDateString()}</td>
+                        <td className="px-2 py-1">{order.crop_name || order.crop_id}</td>
+                        <td className="px-2 py-1">{order.quantity}</td>
+                        <td className="px-2 py-1">{order.unit || "kg"}</td>
+                        <td className="px-2 py-1">GH₵ {order.price}</td>
+                        <td className="px-2 py-1">{order.buyer_name || order.buyer_id}</td>
+                        <td className="px-2 py-1">{order.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+        <Button variant="outline" onClick={onClose} className="w-full mt-4">Close</Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RequestPaymentModal({ open, onClose }) {
+  const [loading, setLoading] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [selected, setSelected] = useState([]);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    fetch('/api/orders/sales-report', { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => {
+        // Filter for eligible orders (e.g., completed, not paid out)
+        setOrders(data.filter(o => o.status === 'completed' && !o.paid_out));
+      })
+      .catch(() => setError('Failed to fetch orders'))
+      .finally(() => setLoading(false));
+  }, [open]);
+
+  const handleRequest = async () => {
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      for (const orderId of selected) {
+        const order = orders.find(o => o.id === orderId);
+        if (!order) continue;
+        const res = await fetch('/api/payouts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ order_id: orderId, amount: order.price * order.quantity }),
+        });
+        const result = await res.json();
+        if (result.error) {
+          setError(result.error);
+          setLoading(false);
+          return;
+        }
+      }
+      setSuccess('Payout(s) requested successfully!');
+    } catch {
+      setError('Failed to request payout');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Request Payment</DialogTitle>
+          <DialogDescription>Select completed orders to request payout.</DialogDescription>
+        </DialogHeader>
+        <div className="py-4">
+          {loading && <div>Loading...</div>}
+          {error && <div className="text-destructive">{error}</div>}
+          {success && <div className="text-green-600">{success}</div>}
+          {!loading && !error && (
+            <table className="min-w-full text-xs sm:text-sm">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Order ID</th>
+                  <th>Crop</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map(order => (
+                  <tr key={order.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(order.id)}
+                        onChange={e => {
+                          setSelected(sel =>
+                            e.target.checked
+                              ? [...sel, order.id]
+                              : sel.filter(id => id !== order.id)
+                          );
+                        }}
+                      />
+                    </td>
+                    <td>{order.id}</td>
+                    <td>{order.crop_name || order.crop_id}</td>
+                    <td>GH₵ {order.price * order.quantity}</td>
+                    <td>{order.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <Button
+          onClick={handleRequest}
+          disabled={loading || selected.length === 0}
+          className="w-full mt-4"
+        >
+          Request Payment
+        </Button>
+        <Button variant="outline" onClick={onClose} className="w-full mt-2">
+          Close
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function BulkUpdateAvailabilityModal({ open, onClose, crops, onUpdated }) {
+  const [selected, setSelected] = useState([]);
+  const [available, setAvailable] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    if (!open) {
+      setSelected([]);
+      setAvailable(true);
+      setError('');
+      setSuccess('');
+    }
+  }, [open]);
+
+  const handleSubmit = async () => {
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      const result = await bulkUpdateCropAvailability(selected, available);
+      if (result.error) setError(result.error);
+      else {
+        setSuccess('Availability updated!');
+        onUpdated && onUpdated();
+      }
+    } catch (e) {
+      setError('Failed to update availability');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Update Availability</DialogTitle>
+          <DialogDescription>Select crops and set their availability in bulk.</DialogDescription>
+        </DialogHeader>
+        <div className="py-4">
+          {error && <div className="text-destructive mb-2">{error}</div>}
+          {success && <div className="text-green-600 mb-2">{success}</div>}
+          <div className="mb-4">
+            <label className="font-medium mr-2">Set as:</label>
+            <select value={available ? 'available' : 'unavailable'} onChange={e => setAvailable(e.target.value === 'available')} className="border rounded px-2 py-1">
+              <option value="available">Available</option>
+              <option value="unavailable">Unavailable</option>
+            </select>
+          </div>
+          <div className="overflow-x-auto max-h-48 mb-4">
+            <table className="min-w-full text-xs sm:text-sm">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Name</th>
+                  <th>Category</th>
+                  <th>Current</th>
+                </tr>
+              </thead>
+              <tbody>
+                {crops.map(crop => (
+                  <tr key={crop.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(crop.id)}
+                        onChange={e => {
+                          setSelected(sel =>
+                            e.target.checked
+                              ? [...sel, crop.id]
+                              : sel.filter(id => id !== crop.id)
+                          );
+                        }}
+                      />
+                    </td>
+                    <td>{crop.name}</td>
+                    <td>{crop.category}</td>
+                    <td>{crop.available ? 'Available' : 'Unavailable'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <Button onClick={handleSubmit} disabled={loading || selected.length === 0} className="w-full mt-2">
+          {loading ? 'Updating...' : 'Update Availability'}
+        </Button>
+        <Button variant="outline" onClick={onClose} className="w-full mt-2">Close</Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 const Farmers = () => {
   const [crops, setCrops] = useState<Crop[]>([]);
@@ -72,6 +361,9 @@ const Farmers = () => {
   const [editCrop, setEditCrop] = useState<Crop | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [showSalesReport, setShowSalesReport] = useState(false);
+  const [showRequestPayment, setShowRequestPayment] = useState(false);
+  const [showUpdateAvailability, setShowUpdateAvailability] = useState(false);
 
   useEffect(() => {
     listCrops().then(data => {
@@ -220,14 +512,14 @@ const Farmers = () => {
                 <DialogTrigger asChild>
                   <Button variant="default" className="w-full sm:w-auto">
                     <Plus className="h-4 w-4 mr-2" />
-                    Add New Crop
+                    Add New Product
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Add New Crop</DialogTitle>
+                    <DialogTitle>Add New Product</DialogTitle>
                     <DialogDescription>
-                      Add a new crop to your inventory.
+                      Add a new product to your inventory.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
@@ -414,15 +706,15 @@ const Farmers = () => {
           <div className="bg-card/40 backdrop-blur-sm rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
             <h2 className="text-base sm:text-lg font-semibold mb-4 text-foreground">Quick Actions</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-              <Button variant="secondary" className="flex items-center space-x-2 h-12">
+              <Button variant="secondary" className="flex items-center space-x-2 h-12" onClick={() => setShowSalesReport(true)}>
                 <TrendingUp className="h-4 w-4" />
                 <span className="text-sm">View Sales Report</span>
               </Button>
-              <Button variant="secondary" className="flex items-center space-x-2 h-12">
+              <Button variant="secondary" className="flex items-center space-x-2 h-12" onClick={() => setShowRequestPayment(true)}>
                 <DollarSign className="h-4 w-4" />
                 <span className="text-sm">Request Payment</span>
               </Button>
-              <Button variant="secondary" className="flex items-center space-x-2 h-12">
+              <Button variant="secondary" className="flex items-center space-x-2 h-12" onClick={() => setShowUpdateAvailability(true)}>
                 <Calendar className="h-4 w-4" />
                 <span className="text-sm">Update Availability</span>
               </Button>
@@ -683,6 +975,26 @@ const Farmers = () => {
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {showSalesReport && (
+        <SalesReportModal open={showSalesReport} onClose={() => setShowSalesReport(false)} />
+      )}
+
+      {showRequestPayment && (
+        <RequestPaymentModal open={showRequestPayment} onClose={() => setShowRequestPayment(false)} />
+      )}
+
+      {showUpdateAvailability && (
+        <BulkUpdateAvailabilityModal
+          open={showUpdateAvailability}
+          onClose={() => setShowUpdateAvailability(false)}
+          crops={crops}
+          onUpdated={() => {
+            listCrops().then(data => { if (Array.isArray(data)) setCrops(data); });
+            setShowUpdateAvailability(false);
+          }}
+        />
       )}
     </div>
   );
