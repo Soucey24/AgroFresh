@@ -237,7 +237,6 @@ const Orders = () => {
                           {(() => {
                             let info = order.delivery_info;
                             if (typeof info === 'string') info = JSON.parse(info);
-                            if (info?.deliveryMethod === 'vdl') return 'VDL Fulfilment';
                             if (info?.deliveryMethod === 'sendstack') return 'Sendstack';
                             return 'N/A';
                           })()}

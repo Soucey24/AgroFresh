@@ -1,4 +1,5 @@
 import { db } from '../app.js';
+import deliveryService from '../services/deliveryService.js';
 
 export const listOrders = async (req, res) => {
   try {
@@ -137,42 +138,40 @@ export const updateOrderTracking = async (req, res) => {
   try {
     const [orders] = await db.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
     if (orders.length === 0) return res.status(404).json({ error: 'Order not found' });
-    await db.query('UPDATE orders SET tracking_number=?, tracking_url=?, delivery_status=? WHERE id=?', [tracking_number, tracking_url, delivery_status, req.params.id]);
+    await deliveryService.updateOrderTracking(req.params.id, { tracking_number, tracking_url, delivery_status });
     res.json({ message: 'Tracking info updated' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update tracking info' });
   }
 };
 
+export const createDelivery = async (req, res) => {
+  try {
+    const { deliveryInfo, cartItems, orderId } = req.body;
+    
+    if (!deliveryInfo || !orderId) {
+      return res.status(400).json({ error: 'Missing required delivery information' });
+    }
+
+    const result = await deliveryService.createSendstackDelivery({
+      deliveryInfo,
+      cartItems: cartItems || [],
+      orderId
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error('Error creating delivery:', err);
+    res.status(500).json({ error: 'Failed to create delivery' });
+  }
+};
+
 export const getOrderTracking = async (req, res) => {
   try {
-    const [orders] = await db.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
-    if (orders.length === 0) return res.status(404).json({ error: 'Order not found' });
-    const order = orders[0];
-    if (order.tracking_url || order.tracking_number || order.delivery_status) {
-      res.json({
-        orderId: order.id,
-        tracking_number: order.tracking_number,
-        tracking_url: order.tracking_url,
-        status: order.delivery_status,
-        lastUpdated: order.updated_at || order.created_at,
-        history: [], // Always return a history array for frontend safety
-      });
-    } else {
-      // fallback to mock
-      const tracking = {
-        orderId: req.params.id,
-        status: 'In Transit',
-        lastUpdated: new Date().toISOString(),
-        history: [
-          { status: 'Order Placed', timestamp: new Date(Date.now() - 86400000).toISOString() },
-          { status: 'Dispatched', timestamp: new Date(Date.now() - 43200000).toISOString() },
-          { status: 'In Transit', timestamp: new Date(Date.now() - 3600000).toISOString() }
-        ]
-      };
-      res.json(tracking);
-    }
+    const trackingInfo = await deliveryService.getOrderTracking(req.params.id);
+    res.json(trackingInfo);
   } catch (err) {
+    console.error('Error fetching tracking info:', err);
     res.status(500).json({ error: 'Failed to fetch tracking info' });
   }
 }; 

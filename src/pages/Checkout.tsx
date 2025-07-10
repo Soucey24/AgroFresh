@@ -29,7 +29,7 @@ interface DeliveryInfo {
   phone: string;
   address: string;
   specialInstructions: string;
-  deliveryMethod: "vdl" | "sendstack" | "";
+  deliveryMethod: "sendstack" | "";
 }
 
 // Extend jsPDF type to include lastAutoTable
@@ -56,7 +56,7 @@ const Checkout = () => {
   const [receiptData, setReceiptData] = useState(null);
   const [trackingInfo, setTrackingInfo] = useState(null);
   const [showTracking, setShowTracking] = useState(false);
-  const [deliveryMethod, setDeliveryMethod] = useState<"vdl" | "sendstack" | "">("");
+  const [deliveryMethod, setDeliveryMethod] = useState<"sendstack" | "">("");
 
   useEffect(() => {
     const storedCart = localStorage.getItem('cart');
@@ -119,10 +119,27 @@ const Checkout = () => {
 
       // Integrate with selected delivery method and save tracking info
       const primaryOrderId = createdOrders[0].id;
-      if (deliveryMethod === "vdl") {
-        await createVDLDelivery({ deliveryInfo, cartItems, orderId: primaryOrderId });
-      } else if (deliveryMethod === "sendstack") {
-        await createSendstackDelivery({ deliveryInfo, cartItems, orderId: primaryOrderId });
+      if (deliveryMethod === "sendstack") {
+        try {
+          const deliveryResult = await fetch('/api/orders/delivery', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              deliveryInfo,
+              cartItems,
+              orderId: primaryOrderId
+            }),
+          });
+          
+          if (!deliveryResult.ok) {
+            console.warn('Delivery creation failed, but order was created successfully');
+          }
+        } catch (error) {
+          console.error('Error creating delivery:', error);
+          // Order was created successfully, delivery can be handled later
+        }
       }
       // Save tracking info to the first order (or all orders if needed)
       // Use the first order ID for payment (or create a combined order)
@@ -248,7 +265,7 @@ const Checkout = () => {
           ['Phone', deliveryInfo.phone || 'N/A'],
           ['Address', deliveryInfo.address || 'N/A'],
           ['Special Instructions', deliveryInfo.specialInstructions || 'None'],
-          ['Delivery Method', deliveryInfo.deliveryMethod === 'vdl' ? 'VDL Fulfilment' : deliveryInfo.deliveryMethod === 'sendstack' ? 'Sendstack' : 'N/A']
+          ['Delivery Method', deliveryInfo.deliveryMethod === 'sendstack' ? 'Sendstack' : 'N/A']
         ],
         headStyles: { fillColor: [34, 197, 94], textColor: [255, 255, 255] },
         styles: { fontSize: 10 }
@@ -315,7 +332,6 @@ const Checkout = () => {
               <strong>Delivery Method:</strong> {
                 (() => {
                   const info = receiptData.delivery_info && (typeof receiptData.delivery_info === 'string' ? JSON.parse(receiptData.delivery_info) : receiptData.delivery_info);
-                  if (info?.deliveryMethod === 'vdl') return 'VDL Fulfilment';
                   if (info?.deliveryMethod === 'sendstack') return 'Sendstack';
                   return 'N/A';
                 })()
@@ -475,16 +491,6 @@ const Checkout = () => {
                       <input
                         type="radio"
                         name="deliveryMethod"
-                        value="vdl"
-                        checked={deliveryMethod === "vdl"}
-                        onChange={() => setDeliveryMethod("vdl")}
-                      />
-                      VDL Fulfilment (Same/Next Day, Door-to-Door)
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="deliveryMethod"
                         value="sendstack"
                         checked={deliveryMethod === "sendstack"}
                         onChange={() => setDeliveryMethod("sendstack")}
@@ -520,125 +526,6 @@ const Checkout = () => {
   );
 };
 
-// Placeholder functions for delivery API integration
-async function createVDLDelivery({ deliveryInfo, cartItems, orderId }: { deliveryInfo: any, cartItems: any[], orderId: number }) {
-  // TODO: Replace with real VDL API call
-  // Example:
-  // const res = await fetch('https://api.vdlfulfilment.com/orders', { ... })
-  // const data = await res.json();
-  // const trackingUrl = data.tracking_url;
-  // await updateOrderTracking(orderId, { tracking_number: data.tracking_number, tracking_url: trackingUrl, delivery_status: data.status });
-  // For now, use mock:
-  await updateOrderTracking(orderId, {
-    tracking_number: 'VDL123456',
-    tracking_url: 'https://vdlfulfilment.com/track/VDL123456',
-    delivery_status: 'Order Placed',
-  });
-}
-
-async function createSendstackDelivery({ deliveryInfo, cartItems, orderId }: { deliveryInfo: any, cartItems: any[], orderId: number }) {
-  // Replace with your real Sendstack app_id and app_secret
-  const SENDSTACK_APP_ID = '3067054'; // TODO: Replace with your Sendstack app_id
-  const SENDSTACK_APP_SECRET = 'CPGXSH7QYK6EEV19'; // TODO: Replace with your Sendstack app_secret
-
-  const payload = {
-    orderType: "PROCESSING",
-    pickup: {
-      address: "Accra, Ghana", // TODO: Replace with your actual business address
-      pickupName: "AgroFresh Ghana Market",
-      pickupNumber: "0243404515"
-    },
-    drops: [
-      {
-        address: deliveryInfo.address,
-        recipientName: deliveryInfo.fullName,
-        recipientNumber: deliveryInfo.phone,
-        note: deliveryInfo.specialInstructions || ""
-      }
-    ]
-  };
-
-  try {
-    console.log('Attempting Sendstack API call with payload:', payload);
-    
-    const res = await fetch('https://api.sendstack.africa/api/v1/deliveries', {
-      method: 'POST',
-      headers: {
-        'app_id': SENDSTACK_APP_ID,
-        'app_secret': SENDSTACK_APP_SECRET,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await res.json();
-    console.log('Sendstack API response:', data);
-
-    // Check if API call was successful
-    if (data.status === true && data.data && data.data.drops && data.data.drops[0]) {
-      // Success - extract tracking info from the response
-      const drop = data.data.drops[0];
-      let trackingUrl = drop.trackingUrl;
-      const trackingNumber = drop.trackingId;
-      const deliveryStatus = drop.status;
-
-      // If Sendstack doesn't provide a tracking URL, create one
-      if (!trackingUrl && trackingNumber) {
-        trackingUrl = `https://app.sendstack.africa/tracking?trackingId=${trackingNumber}`;
-      }
-
-      console.log('Saving tracking info:', {
-        tracking_number: trackingNumber,
-        tracking_url: trackingUrl,
-        delivery_status: deliveryStatus,
-      });
-
-      await updateOrderTracking(orderId, {
-        tracking_number: trackingNumber,
-        tracking_url: trackingUrl,
-        delivery_status: deliveryStatus,
-      });
-    } else {
-      // API call failed or returned error
-      console.warn('Sendstack API failed:', data.message);
-      throw new Error(`Sendstack API Error: ${data.message}`);
-    }
-  } catch (err) {
-    console.error('Error with Sendstack delivery:', err);
-    
-    // Fallback: Create a mock delivery with proper tracking info
-    console.log('Using fallback mock delivery for Sendstack');
-    const timestamp = Date.now();
-    const mockTrackingNumber = `SS${timestamp}`;
-    
-    // Create multiple tracking URL options for fallback
-    const mockTrackingUrls = [
-      `https://app.sendstack.africa/tracking?trackingId=${mockTrackingNumber}`,
-      `https://sendstack.africa/track/${mockTrackingNumber}`,
-      `https://AgroFresh.sendstack.me/track/${mockTrackingNumber}`
-    ];
-    
-    // Use the first URL as primary, others as fallbacks
-    const mockTrackingUrl = mockTrackingUrls[0];
-    
-    console.log('Fallback tracking info:', {
-      tracking_number: mockTrackingNumber,
-      tracking_url: mockTrackingUrl,
-      delivery_status: 'Order Placed',
-    });
-    
-    await updateOrderTracking(orderId, {
-      tracking_number: mockTrackingNumber,
-      tracking_url: mockTrackingUrl,
-      delivery_status: 'Order Placed',
-    });
-    
-    // You might want to show a user-friendly message here
-    // toast.error('Sendstack delivery booking failed, but your order was placed successfully.');
-  }
-  
-  // NOTE: Set your webhook URL in Sendstack dashboard to:
-  // https://AgroFresh.sendstack.me/api/webhooks/sendstack
-}
+// Delivery is now handled by the backend service
 
 export default Checkout;

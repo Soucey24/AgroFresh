@@ -4,6 +4,7 @@ import mysql from 'mysql2/promise';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js';
 import { createUsersTable } from './models/userModel.js';
 import { createCropsTable } from './models/cropModel.js';
@@ -20,6 +21,9 @@ import webhooksRouter from './routes/webhooks.js';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const MySQLStore = require('express-mysql-session')(session);
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -41,7 +45,7 @@ export const db = mysql.createPool({
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:8080'],
+  origin: [process.env.FRONTEND_URL || 'http://localhost:3000', 'http://localhost:8080'],
   credentials: true
 }));
 app.use(express.json());
