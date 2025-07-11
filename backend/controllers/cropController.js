@@ -221,12 +221,15 @@ export const updateCrop = async (req, res) => {
 };
 
 export const deleteCrop = async (req, res) => {
-  const farmer_id = req.session.user?.id;
+  const user = req.session.user;
+  console.log('Delete crop request by user:', user, 'for crop id:', req.params.id);
   try {
-    // Only allow farmer to delete their own crop
     const [crops] = await db.query('SELECT * FROM crops WHERE id = ?', [req.params.id]);
     if (crops.length === 0) return res.status(404).json({ error: 'Crop not found' });
-    if (crops[0].farmer_id !== farmer_id) return res.status(403).json({ error: 'Forbidden' });
+    // Allow admin to delete any crop, farmer can only delete their own
+    if (user.role === 'farmer' && crops[0].farmer_id !== user.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     await db.query('DELETE FROM crops WHERE id = ?', [req.params.id]);
     res.json({ message: 'Crop deleted' });
   } catch (err) {

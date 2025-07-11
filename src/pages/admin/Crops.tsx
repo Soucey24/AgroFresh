@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { getAdminCrops, getCropStats } from "../../api";
+import { getAdminCrops, getCropStats, deleteCrop } from "../../api";
 import { getImageUrl } from "../../utils/imageUtils";
 
 const Crops = () => {
@@ -67,6 +67,21 @@ const Crops = () => {
     if (expiresIn === "Expired") return "text-destructive";
     if (expiresIn.includes("1 day") || expiresIn.includes("0 days")) return "text-accent";
     return "text-muted-foreground";
+  };
+
+  const handleDelete = async (cropId: number) => {
+    if (!window.confirm('Are you sure you want to delete this crop?')) return;
+    try {
+      const res = await deleteCrop(cropId);
+      if (!res.error) {
+        setCrops((prev) => prev.filter((c) => c.id !== cropId));
+        alert('Crop deleted successfully!');
+      } else {
+        alert(res.error || 'Failed to delete crop.');
+      }
+    } catch (err) {
+      alert('Failed to delete crop.');
+    }
   };
 
   if (loading) {
@@ -201,7 +216,7 @@ const Crops = () => {
                         <Button variant="ghost" size="sm" onClick={() => alert('Edit crop coming soon!')}>
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => alert('Delete crop coming soon!')}>
+                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(crop.id)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>

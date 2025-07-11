@@ -9,6 +9,6 @@ router.post('/', requireAuth, requireRole('farmer'), upload.single('image'), cre
 router.post('/bulk-update-availability', bulkUpdateAvailability);
 router.get('/:id', getCrop);
 router.put('/:id', requireAuth, requireRole('farmer'), upload.single('image'), updateCrop);
-router.delete('/:id', requireAuth, requireRole('farmer'), deleteCrop);
+router.delete('/:id', requireAuth, requireRole(['admin', 'farmer']), deleteCrop);
 
 export default router; 
