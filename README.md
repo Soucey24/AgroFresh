@@ -1,10 +1,84 @@
-# Welcome to your Lovable project
+# AgroFresh Ghana Market
 
-## Project info
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**URL**: https://lovable.dev/projects/d5ef4a0f-e801-4992-b7ef-8e25e4b770a3
+A modern e-commerce platform connecting farmers directly with buyers in Ghana, providing a seamless marketplace for agricultural products.
 
-## How can I edit this code?
+## 🌟 Features
+
+- **Farmer Profiles**: Farmers can create profiles and list their products
+- **Product Catalog**: Browse and search for fresh agricultural products
+- **Secure Payments**: Integrated payment processing
+- **Order Management**: Track orders from placement to delivery
+- **User Reviews**: Rate and review products and sellers
+
+## 📦 Prerequisites
+
+- Node.js (v14 or later)
+- npm (v6 or later)
+- MySQL (v5.7 or later)
+
+## 🚀 Getting Started
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/agrofresh-ghana-market.git
+   cd agrofresh-ghana-market
+   ```
+
+2. **Install dependencies**
+   ```bash
+   # Install backend dependencies
+   cd backend
+   npm install
+   
+   # Install frontend dependencies
+   cd ../frontend
+   npm install
+   ```
+
+3. **Set up environment variables**
+   Create a `.env` file in the backend directory with the following:
+   ```
+   DB_HOST=localhost
+   DB_USER=your_username
+   DB_PASS=your_password
+   DB_NAME=agrofresh
+   JWT_SECRET=your_jwt_secret
+   ```
+
+4. **Start the development servers**
+   ```bash
+   # Start backend server
+   cd backend
+   npm run dev
+   
+   # In a new terminal, start frontend
+   cd frontend
+   npm start
+   ```
+
+## 📚 Documentation
+
+For detailed documentation, architecture diagrams, and API references, please see our [Documentation](./DOCUMENTATION.md).
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 👥 Contributing
+
+Contributions are welcome! Please read our [Contribution Guidelines](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+## 📞 Contact
+
+For any questions or feedback, please contact us at [email@example.com](mailto:email@example.com)
+
+---
+
+<div align="center">
+  Made with ❤️ for Ghanaian farmers and buyers
+</div>
 
 There are several ways of editing your application.
 
