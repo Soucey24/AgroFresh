@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1000" height="800" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background -->
+    <rect width="100%" height="100%" fill="#ffffff"/>
+    
+    <!-- Title -->
+    <text x="500" y="30" font-family="Arial" font-size="24" text-anchor="middle" font-weight="bold">AgroFresh - Entity Relationship Diagram</text>
+    
+    <!-- USERS Table -->
+    <rect x="100" y="60" width="250" height="200" rx="5" fill="#d9ead3" stroke="#6aa84f" stroke-width="2"/>
+    <rect x="100" y="60" width="250" height="30" rx="5" fill="#6aa84f" stroke="#274e13" stroke-width="2"/>
+    <text x="225" y="80" font-family="Arial" font-weight="bold" fill="#ffffff">USERS</text>
+    
+    <text x="110" y="110" font-family="Courier New" font-size="14">id <tspan font-weight="bold">INT PK</tspan></text>
+    <text x="110" y="130" font-family="Courier New" font-size="14">name <tspan font-style="italic">VARCHAR(100)</tspan></text>
+    <text x="110" y="150" font-family="Courier New" font-size="14">email <tspan font-style="italic">VARCHAR(100)</tspan></text>
+    <text x="110" y="170" font-family="Courier New" font-size="14">password_hash <tspan font-style="italic">VARCHAR(255)</tspan></text>
+    <text x="110" y="190" font-family="Courier New" font-size="14">role <tspan font-style="italic">ENUM</tspan></text>
+    <text x="110" y="210" font-family="Courier New" font-size="14">phone <tspan font-style="italic">VARCHAR(20)</tspan></text>
+    <text x="110" y="230" font-family="Courier New" font-size="14">location <tspan font-style="italic">VARCHAR(100)</tspan></text>
+    
+    <!-- PRODUCTS Table -->
+    <rect x="450" y="60" width="300" height="240" rx="5" fill="#c9daf8" stroke="#3c78d8" stroke-width="2"/>
+    <rect x="450" y="60" width="300" height="30" rx="5" fill="#3c78d8" stroke="#1c4587" stroke-width="2"/>
+    <text x="600" y="80" font-family="Arial" font-weight="bold" fill="#ffffff">PRODUCTS</text>
+    
+    <text x="460" y="110" font-family="Courier New" font-size="14">id <tspan font-weight="bold">INT PK</tspan></text>
+    <text x="460" y="130" font-family="Courier New" font-size="14">user_id <tspan font-weight="bold">INT FK</tspan></text>
+    <text x="460" y="150" font-family="Courier New" font-size="14">name <tspan font-style="italic">VARCHAR(100)</tspan></text>
+    <text x="460" y="170" font-family="Courier New" font-size="14">description <tspan font-style="italic">TEXT</tspan></text>
+    <text x="460" y="190" font-family="Courier New" font-size="14">price <tspan font-style="italic">DECIMAL(10,2)</tspan></text>
+    <text x="460" y="210" font-family="Courier New" font-size="14">quantity <tspan font-style="italic">INT</tspan></text>
+    <text x="460" y="230" font-family="Courier New" font-size="14">unit <tspan font-style="italic">VARCHAR(20)</tspan></text>
+    <text x="460" y="250" font-family="Courier New" font-size="14">category <tspan font-style="italic">VARCHAR(50)</tspan></text>
+    <text x="460" y="270" font-family="Courier New" font-size="14">image_url <tspan font-style="italic">VARCHAR(255)</tspan></text>
+    
+    <!-- ORDERS Table -->
+    <rect x="100" y="320" width="300" height="200" rx="5" fill="#fce5cd" stroke="#e69138" stroke-width="2"/>
+    <rect x="100" y="320" width="300" height="30" rx="5" fill="#e69138" stroke="#b45f06" stroke-width="2"/>
+    <text x="250" y="340" font-family="Arial" font-weight="bold" fill="#ffffff">ORDERS</text>
+    
+    <text x="110" y="370" font-family="Courier New" font-size="14">id <tspan font-weight="bold">INT PK</tspan></text>
+    <text x="110" y="390" font-family="Courier New" font-size="14">user_id <tspan font-weight="bold">INT FK</tspan></text>
+    <text x="110" y="410" font-family="Courier New" font-size="14">status <tspan font-style="italic">VARCHAR(20)</tspan></text>
+    <text x="110" y="430" font-family="Courier New" font-size="14">total_amount <tspan font-style="italic">DECIMAL(10,2)</tspan></text>
+    <text x="110" y="450" font-family="Courier New" font-size="14">shipping_address <tspan font-style="italic">TEXT</tspan></text>
+    <text x="110" y="470" font-family="Courier New" font-size="14">created_at <tspan font-style="italic">TIMESTAMP</tspan></text>
+    <text x="110" y="490" font-family="Courier New" font-size="14">updated_at <tspan font-style="italic">TIMESTAMP</tspan></text>
+    
+    <!-- ORDER_ITEMS Table -->
+    <rect x="500" y="370" width="300" height="200" rx="5" fill="#f4cccc" stroke="#cc0000" stroke-width="2"/>
+    <rect x="500" y="370" width="300" height="30" rx="5" fill="#cc0000" stroke="#990000" stroke-width="2"/>
+    <text x="650" y="390" font-family="Arial" font-weight="bold" fill="#ffffff">ORDER_ITEMS</text>
+    
+    <text x="510" y="420" font-family="Courier New" font-size="14">id <tspan font-weight="bold">INT PK</tspan></text>
+    <text x="510" y="440" font-family="Courier New" font-size="14">order_id <tspan font-weight="bold">INT FK</tspan></text>
+    <text x="510" y="460" font-family="Courier New" font-size="14">product_id <tspan font-weight="bold">INT FK</tspan></text>
+    <text x="510" y="480" font-family="Courier New" font-size="14">quantity <tspan font-style="italic">INT</tspan></text>
+    <text x="510" y="500" font-family="Courier New" font-size="14">price <tspan font-style="italic">DECIMAL(10,2)</tspan></text>
+    <text x="510" y="520" font-family="Courier New" font-size="14">created_at <tspan font-style="italic">TIMESTAMP</tspan></text>
+    
+    <!-- PAYMENTS Table -->
+    <rect x="100" y="580" width="350" height="180" rx="5" fill="#d5a6bd" stroke="#741b47" stroke-width="2"/>
+    <rect x="100" y="580" width="350" height="30" rx="5" fill="#741b47" stroke="#4c1130" stroke-width="2"/>
+    <text x="275" y="600" font-family="Arial" font-weight="bold" fill="#ffffff">PAYMENTS</text>
+    
+    <text x="110" y="630" font-family="Courier New" font-size="14">id <tspan font-weight="bold">INT PK</tspan></text>
+    <text x="110" y="650" font-family="Courier New" font-size="14">order_id <tspan font-weight="bold">INT FK</tspan></text>
+    <text x="110" y="670" font-family="Courier New" font-size="14">amount <tspan font-style="italic">DECIMAL(10,2)</tspan></text>
+    <text x="110" y="690" font-family="Courier New" font-size="14">payment_method <tspan font-style="italic">VARCHAR(50)</tspan></text>
+    <text x="110" y="710" font-family="Courier New" font-size="14">status <tspan font-style="italic">VARCHAR(20)</tspan></text>
+    <text x="110" y="730" font-family="Courier New" font-size="14">transaction_id <tspan font-style="italic">VARCHAR(255)</tspan></text>
+    
+    <!-- Relationships -->
+    <!-- USERS to PRODUCTS -->
+    <path d="M 350 260 Q 400 280 450 260" fill="none" stroke="#000000" stroke-width="2" marker-end="url(#one-to-many)"/>
+    <text x="400" y="280" font-family="Arial" font-size="12" text-anchor="middle">1</text>
+    <text x="400" y="295" font-family="Arial" font-size="12" text-anchor="middle">many</text>
+    
+    <!-- USERS to ORDERS -->
+    <path d="M 200 320 Q 200 300 225 300 Q 250 300 250 320" fill="none" stroke="#000000" stroke-width="2" marker-end="url(#one-to-many)"/>
+    <text x="200" y="310" font-family="Arial" font-size="12" text-anchor="middle">1</text>
+    <text x="225" y="305" font-family="Arial" font-size="12" text-anchor="middle">many</text>
+    
+    <!-- ORDERS to ORDER_ITEMS -->
+    <path d="M 400 420 Q 450 420 500 420" fill="none" stroke="#000000" stroke-width="2" marker-end="url(#one-to-many)"/>
+    <text x="450" y="430" font-family="Arial" font-size="12" text-anchor="middle">1</text>
+    <text x="450" y="445" font-family="Arial" font-size="12" text-anchor="middle">many</text>
+    
+    <!-- PRODUCTS to ORDER_ITEMS -->
+    <path d="M 650 300 Q 700 350 650 400" fill="none" stroke="#000000" stroke-width="2" marker-end="url(#one-to-many)"/>
+    <text x="670" y="350" font-family="Arial" font-size="12" text-anchor="middle">1</text>
+    <text x="690" y="365" font-family="Arial" font-size="12" text-anchor="middle">many</text>
+    
+    <!-- ORDERS to PAYMENTS -->
+    <path d="M 250 520 Q 250 550 275 580" fill="none" stroke="#000000" stroke-width="2" marker-end="url(#one-to-one)"/>
+    <text x="260" y="550" font-family="Arial" font-size="12" text-anchor="middle">1</text>
+    <text x="260" y="565" font-family="Arial" font-size="12" text-anchor="middle">1</text>
+    
+    <!-- Arrowhead markers -->
+    <defs>
+        <marker id="one-to-many" markerWidth="12" markerHeight="12" refX="12" refY="6" orient="auto">
+            <path d="M0,0 L12,6 L0,12 Z" fill="#000000"/>
+            <line x1="0" y1="0" x2="0" y2="12" stroke="#000000" stroke-width="2"/>
+        </marker>
+        <marker id="one-to-one" markerWidth="12" markerHeight="12" refX="12" refY="6" orient="auto">
+            <path d="M0,0 L12,6 L0,12 Z" fill="#000000"/>
+        </marker>
+    </defs>
+    
+    <!-- Legend -->
+    <rect x="600" y="600" width="350" height="150" rx="5" fill="#f3f3f3" stroke="#cccccc" stroke-width="1"/>
+    <text x="775" y="620" font-family="Arial" font-weight="bold" text-anchor="middle">Legend</text>
+    
+    <line x1="620" y1="640" x2="650" y2="640" stroke="#000000" stroke-width="2" marker-end="url(#one-to-many)"/>
+    <text x="670" y="645" font-family="Arial" font-size="12">One-to-Many</text>
+    
+    <line x1="620" y1="670" x2="650" y2="670" stroke="#000000" stroke-width="2" marker-end="url(#one-to-one)"/>
+    <text x="670" y="675" font-family="Arial" font-size="12">One-to-One</text>
+    
+    <rect x="620" y="690" width="20" height="20" fill="#d9ead3" stroke="#6aa84f" stroke-width="1"/>
+    <text x="650" y="705" font-family="Arial" font-size="12">Users Table</text>
+    
+    <rect x="620" y="720" width="20" height="20" fill="#c9daf8" stroke="#3c78d8" stroke-width="1"/>
+    <text x="650" y="735" font-family="Arial" font-size="12">Products Table</text>
+</svg>

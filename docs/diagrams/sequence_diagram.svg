@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1000" height="700" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background -->
+    <rect width="100%" height="100%" fill="#ffffff"/>
+    
+    <!-- Title -->
+    <text x="500" y="30" font-family="Arial" font-size="24" text-anchor="middle" font-weight="bold">AgroFresh - Order Placement Sequence Diagram</text>
+    
+    <!-- Participants -->
+    <rect x="50" y="70" width="150" height="40" rx="5" fill="#c9daf8" stroke="#3c78d8" stroke-width="2"/>
+    <text x="125" y="97" font-family="Arial" text-anchor="middle" font-weight="bold">User</text>
+    
+    <rect x="250" y="70" width="150" height="40" rx="5" fill="#d9ead3" stroke="#6aa84f" stroke-width="2"/>
+    <text x="325" y="97" font-family="Arial" text-anchor="middle" font-weight="bold">Frontend</text>
+    
+    <rect x="450" y="70" width="150" height="40" rx="5" fill="#fce5cd" stroke="#e69138" stroke-width="2"/>
+    <text x="525" y="97" font-family="Arial" text-anchor="middle" font-weight="bold">Backend</text>
+    
+    <rect x="650" y="70" width="150" height="40" rx="5" fill="#f4cccc" stroke="#cc0000" stroke-width="2"/>
+    <text x="725" y="97" font-family="Arial" text-anchor="middle" font-weight="bold">Database</text>
+    
+    <rect x="850" y="70" width="150" height="40" rx="5" fill="#d5a6bd" stroke="#741b47" stroke-width="2"/>
+    <text x="925" y="97" font-family="Arial" text-anchor="middle" font-weight="bold">Payment Gateway</text>
+    
+    <!-- Lifelines -->
+    <line x1="125" y1="110" x2="125" y2="650" stroke="#666666" stroke-width="2" stroke-dasharray="5,5"/>
+    <line x1="325" y1="110" x2="325" y2="650" stroke="#666666" stroke-width="2" stroke-dasharray="5,5"/>
+    <line x1="525" y1="110" x2="525" y2="650" stroke="#666666" stroke-width="2" stroke-dasharray="5,5"/>
+    <line x1="725" y1="110" x2="725" y2="650" stroke="#666666" stroke-width="2" stroke-dasharray="5,5"/>
+    <line x1="925" y1="110" x2="925" y2="650" stroke="#666666" stroke-width="2" stroke-dasharray="5,5"/>
+    
+    <!-- Messages -->
+    <!-- Browse Products -->
+    <line x1="125" y1="140" x2="325" y2="160" stroke="#3c78d8" stroke-width="2" marker-end="url(#arrowhead)"/>
+    <rect x="150" y="100" width="350" height="30" rx="5" fill="#e6e6e6" stroke="#999999" stroke-width="1"/>
+    <text x="325" y="120" font-family="Arial" text-anchor="middle" font-size="12">1. Browse available crops</text>
+    
+    <line x1="325" y1="190" x2="525" y2="210" stroke="#6aa84f" stroke-width="2" marker-end="url(#arrowhead)"/>
+    <rect x="350" y="150" width="350" height="30" rx="5" fill="#e6e6e6" stroke="#999999" stroke-width="1"/>
+    <text x="525" y="170" font-family="Arial" text-anchor="middle" font-size="12">2. GET /api/products</text>
+    
+    <line x1="525" y1="240" x2="725" y2="260" stroke="#e69138" stroke-width="2" marker-end="url(#arrowhead)"/>
+    <rect x="550" y="200" width="350" height="30" rx="5" fill="#e6e6e6" stroke="#999999" stroke-width="1"/>
+    <text x="725" y="220" font-family="Arial" text-anchor="middle" font-size="12">3. Query products table</text>
+    
+    <line x1="725" y1="290" x2="525" y2="310" stroke="#e69138" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrowhead)"/>
+    <rect x="550" y="250" width="350" height="30" rx="5" fill="#e6e6e6" stroke="#999999" stroke-width="1"/>
+    <text x="725" y="270" font-family="Arial" text-anchor="middle" font-size="12">4. Return product data</text>
+    
+    <line x1="525" y1="340" x2="325" y2="360" stroke="#6aa84f" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrowhead)"/>
+    <rect x="350" y="300" width="350" height="30" rx="5" fill="#e6e6e6" stroke="#999999" stroke-width="1"/>
+    <text x="525" y="320" font-family="Arial" text-anchor="middle" font-size="12">5. Return product list</text>
+    
+    <line x1="325" y1="390" x2="125" y2="410" stroke="#3c78d8" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrowhead)"/>
+    <rect x="150" y="350" width="350" height="30" rx="5" fill="#e6e6e6" stroke="#999999" stroke-width="1"/>
+    <text x="325" y="370" font-family="Arial" text-anchor="middle" font-size="12">6. Display products</text>
+    
+    <!-- Place Order -->
+    <line x1="125" y1="440" x2="325" y2="460" stroke="#3c78d8" stroke-width="2" marker-end="url(#arrowhead)"/>
+    <rect x="150" y="400" width="350" height="30" rx="5" fill="#e6e6e6" stroke="#999999" stroke-width="1"/>
+    <text x="325" y="420" font-family="Arial" text-anchor="middle" font-size="12">7. Select crop and place order</text>
+    
+    <line x1="325" y1="490" x2="525" y2="510" stroke="#6aa84f" stroke-width="2" marker-end="url(#arrowhead)"/>
+    <rect x="350" y="450" width="350" height="30" rx="5" fill="#e6e6e6" stroke="#999999" stroke-width="1"/>
+    <text x="525" y="470" font-family="Arial" text-anchor="middle" font-size="12">8. POST /api/orders</text>
+    
+    <line x1="525" y1="540" x2="725" y2="560" stroke="#e69138" stroke-width="2" marker-end="url(#arrowhead)"/>
+    <rect x="550" y="500" width="350" height="30" rx="5" fill="#e6e6e6" stroke="#999999" stroke-width="1"/>
+    <text x="725" y="520" font-family="Arial" text-anchor="middle" font-size="12">9. Create order record</text>
+    
+    <line x1="725" y1="590" x2="525" y2="610" stroke="#e69138" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrowhead)"/>
+    <rect x="550" y="550" width="350" height="30" rx="5" fill="#e6e6e6" stroke="#999999" stroke-width="1"/>
+    <text x="725" y="570" font-family="Arial" text-anchor="middle" font-size="12">10. Order created</text>
+    
+    <!-- Arrowhead marker definition -->
+    <defs>
+        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#666666"/>
+        </marker>
+    </defs>
+</svg>

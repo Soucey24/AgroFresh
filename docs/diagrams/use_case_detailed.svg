@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1000" height="700" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background -->
+    <rect width="100%" height="100%" fill="#ffffff"/>
+    
+    <!-- Title -->
+    <text x="500" y="40" font-family="Arial" font-size="24" text-anchor="middle" font-weight="bold" fill="#000000">AgroFresh Ghana Market - Use Case Diagram</text>
+    
+    <!-- System Boundary -->
+    <rect x="50" y="80" width="900" height="580" rx="10" fill="#f9f9f9" stroke="#666666" stroke-width="2" stroke-dasharray="5,5"/>
+    <text x="500" y="70" font-family="Arial" font-size="16" text-anchor="middle" font-weight="bold" fill="#000000">AgroFresh System</text>
+    
+    <!-- Actors -->
+    <!-- Buyer -->
+    <circle cx="150" cy="200" r="15" fill="#ffffff" stroke="#000000" stroke-width="2"/>
+    <line x1="150" y1="215" x2="150" y2="260" stroke="#000000" stroke-width="2"/>
+    <line x1="150" y1="235" x2="120" y2="220" stroke="#000000" stroke-width="2"/>
+    <line x1="150" y1="235" x2="180" y2="220" stroke="#000000" stroke-width="2"/>
+    <line x1="150" y1="260" x2="120" y2="310" stroke="#000000" stroke-width="2"/>
+    <line x1="150" y1="260" x2="180" y2="310" stroke="#000000" stroke-width="2"/>
+    <text x="150" y="350" font-family="Arial" text-anchor="middle" font-weight="bold">Buyer</text>
+    
+    <!-- Farmer -->
+    <circle cx="150" y="400" r="15" fill="#ffffff" stroke="#000000" stroke-width="2"/>
+    <line x1="150" y1="415" x2="150" y2="460" stroke="#000000" stroke-width="2"/>
+    <line x1="150" y1="435" x2="120" y2="420" stroke="#000000" stroke-width="2"/>
+    <line x1="150" y1="435" x2="180" y2="420" stroke="#000000" stroke-width="2"/>
+    <line x1="150" y1="460" x2="120" y2="510" stroke="#000000" stroke-width="2"/>
+    <line x1="150" y1="460" x2="180" y2="510" stroke="#000000" stroke-width="2"/>
+    <text x="150" y="550" font-family="Arial" text-anchor="middle" font-weight="bold">Farmer</text>
+    
+    <!-- Admin -->
+    <circle cx="850" cy="200" r="15" fill="#ffffff" stroke="#000000" stroke-width="2"/>
+    <line x1="850" y1="215" x2="850" y2="260" stroke="#000000" stroke-width="2"/>
+    <line x1="850" y1="235" x2="820" y2="220" stroke="#000000" stroke-width="2"/>
+    <line x1="850" y1="235" x2="880" y2="220" stroke="#000000" stroke-width="2"/>
+    <line x1="850" y1="260" x2="820" y2="310" stroke="#000000" stroke-width="2"/>
+    <line x1="850" y1="260" x2="880" y2="310" stroke="#000000" stroke-width="2"/>
+    <text x="850" y="350" font-family="Arial" text-anchor="middle" font-weight="bold">Admin</text>
+    
+    <!-- Use Cases -->
+    <!-- Buyer Use Cases -->
+    <ellipse cx="350" cy="150" rx="120" ry="60" fill="#e6f3ff" stroke="#0066cc" stroke-width="2"/>
+    <text x="350" y="155" font-family="Arial" text-anchor="middle" font-weight="bold">Browse Products</text>
+    <text x="350" y="175" font-family="Arial" text-anchor="middle">View product catalog and details</text>
+    
+    <ellipse cx="650" cy="150" rx="120" ry="60" fill="#e6f3ff" stroke="#0066cc" stroke-width="2"/>
+    <text x="650" y="155" font-family="Arial" text-anchor="middle" font-weight="bold">Place Order</text>
+    <text x="650" y="175" font-family="Arial" text-anchor="middle">Add items to cart and checkout</text>
+    
+    <ellipse cx="500" cy="250" rx="120" ry="60" fill="#e6f3ff" stroke="#0066cc" stroke-width="2"/>
+    <text x="500" y="255" font-family="Arial" text-anchor="middle" font-weight="bold">Make Payment</text>
+    <text x="500" y="275" font-family="Arial" text-anchor="middle">Complete payment process</text>
+    
+    <ellipse cx="350" cy="350" rx="120" ry="60" fill="#e6f3ff" stroke="#0066cc" stroke-width="2"/>
+    <text x="350" y="355" font-family="Arial" text-anchor="middle" font-weight="bold">Track Order</text>
+    <text x="350" y="375" font-family="Arial" text-anchor="middle">View order status</text>
+    
+    <!-- Farmer Use Cases -->
+    <ellipse cx="500" cy="450" rx="120" ry="60" fill="#e6ffe6" stroke="#009900" stroke-width="2"/>
+    <text x="500" y="455" font-family="Arial" text-anchor="middle" font-weight="bold">Add Products</text>
+    <text x="500" y="475" font-family="Arial" text-anchor="middle">List new products for sale</text>
+    
+    <ellipse cx="650" cy="350" rx="120" ry="60" fill="#e6ffe6" stroke="#009900" stroke-width="2"/>
+    <text x="650" y="355" font-family="Arial" text-anchor="middle" font-weight="bold">Manage Inventory</text>
+    <text x="650" y="375" font-family="Arial" text-anchor="middle">Update product quantities</text>
+    
+    <!-- Admin Use Cases -->
+    <ellipse cx="650" cy="550" rx="120" ry="60" fill="#ffe6e6" stroke="#cc0000" stroke-width="2"/>
+    <text x="650" y="555" font-family="Arial" text-anchor="middle" font-weight="bold">Manage Users</text>
+    <text x="650" y="575" font-family="Arial" text-anchor="middle">Add/remove system users</text>
+    
+    <ellipse cx="350" cy="550" rx="120" ry="60" fill="#ffe6e6" stroke="#cc0000" stroke-width="2"/>
+    <text x="350" y="555" font-family="Arial" text-anchor="middle" font-weight="bold">View Reports</text>
+    <text x="350" y="575" font-family="Arial" text-anchor="middle">Generate system reports</text>
+    
+    <!-- Relationships -->
+    <!-- Buyer Relationships -->
+    <line x1="165" y1="200" x2="230" y2="150" stroke="#000000" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="350" y1="210" x2="500" y2="210" stroke="#000000" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="470" y1="150" x2="530" y2="150" stroke="#000000" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="500" y1="310" x2="350" y2="390" stroke="#000000" stroke-width="2" marker-end="url(#arrow)"/>
+    
+    <!-- Farmer Relationships -->
+    <line x1="165" y1="400" x2="380" y2="450" stroke="#000000" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="500" y1="510" x2="650" y2="510" stroke="#000000" stroke-width="2" marker-end="url(#arrow)"/>
+    
+    <!-- Admin Relationships -->
+    <line x1="835" y1="200" x2="730" y2="550" stroke="#000000" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="730" y1="200" x2="470" y2="550" stroke="#000000" stroke-width="2" marker-end="url(#arrow)"/>
+    
+    <!-- Include Relationships -->
+    <path d="M 650 190 Q 700 220 650 250" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="5,2"/>
+    <text x="700" y="230" font-family="Arial" font-size="12">«include»</text>
+    
+    <path d="M 400 150 Q 450 180 400 210" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="5,2"/>
+    <text x="450" y="190" font-family="Arial" font-size="12">«include»</text>
+    
+    <!-- Legend -->
+    <rect x="50" y="580" width="900" height="70" rx="5" fill="#f0f0f0" stroke="#cccccc" stroke-width="1"/>
+    <text x="500" y="600" font-family="Arial" font-weight="bold" text-anchor="middle">Legend</text>
+    
+    <circle cx="100" y="620" r="10" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+    <text x="120" y="625" font-family="Arial" font-size="12">Actor</text>
+    
+    <ellipse cx="220" cy="620" rx="40" ry="20" fill="#e6f3ff" stroke="#0066cc" stroke-width="1"/>
+    <text x="270" y="625" font-family="Arial" font-size="12">Use Case</text>
+    
+    <line x1="350" y1="620" x2="380" y2="620" stroke="#000000" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="400" y="625" font-family="Arial" font-size="12">Association</text>
+    
+    <path d="M 480 620 Q 500 640 520 620" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="5,2"/>
+    <text x="540" y="625" font-family="Arial" font-size="12">«include»</text>
+    
+    <rect x="620" y="600" width="100" height="40" rx="5" fill="#f9f9f9" stroke="#666666" stroke-width="1" stroke-dasharray="5,3"/>
+    <text x="740" y="625" font-family="Arial" font-size="12">System Boundary</text>
+    
+    <!-- Arrow marker definition -->
+    <defs>
+        <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#000000"/>
+        </marker>
+    </defs>
+</svg>
