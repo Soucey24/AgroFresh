@@ -1,257 +1,364 @@
-import { db } from '../app.js';
+import { supabase } from '../app.js';
 import deliveryService from '../services/deliveryService.js';
 
+const ORDER_STATUSES = new Set([
+	'pending',
+	'confirmed',
+	'preparing',
+	'ready',
+	'shipped',
+	'delivered',
+	'completed',
+	'paid',
+	'cancelled'
+]);
+
+const handleError = (res, status, message, details) => {
+	if (details) {
+		console.error(message, details);
+	}
+	res.status(status).json({ error: message });
+};
+
+const canAccessOrder = (user, order) => {
+	if (!user || !order) return false;
+	if (user.role === 'admin' || user.role === 'vendor') return true;
+	return user.id === order.buyer_id || user.id === order.farmer_id;
+};
+
 export const listOrders = async (req, res) => {
-  try {
-    let query = 'SELECT * FROM orders';
-    let params = [];
-    // Only show relevant orders for buyer/farmer
-    if (req.session.user.role === 'buyer') {
-      query += ' WHERE buyer_id = ?';
-      params = [req.session.user.id];
-    } else if (req.session.user.role === 'farmer') {
-      query += ' WHERE farmer_id = ?';
-      params = [req.session.user.id];
-    }
-    const [orders] = await db.query(query, params);
-    res.json(orders);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch orders' });
-  }
+	try {
+		const user = req.session.user;
+		let query = supabase
+			.from('orders')
+			.select('*, crop:crops(id, name, price, unit, image), buyer:users!orders_buyer_id_fkey(id, name), farmer:users!orders_farmer_id_fkey(id, name)')
+			.order('created_at', { ascending: false });
+
+		if (user.role === 'buyer') {
+			query = query.eq('buyer_id', user.id);
+		}
+		if (user.role === 'farmer') {
+			query = query.eq('farmer_id', user.id);
+		}
+
+		const { data, error } = await query;
+		if (error) throw error;
+
+		res.json(data || []);
+	} catch (err) {
+		handleError(res, 500, 'Failed to fetch orders', err.message);
+	}
 };
 
 export const createOrder = async (req, res) => {
-  let { crop_id, quantity, delivery_info, deliveryMethod, tracking_number, tracking_url, delivery_status } = req.body;
-  const buyer_id = req.session.user?.id;
-  if (!crop_id || !quantity || !buyer_id) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-  try {
-    // Get crop and farmer
-    const [crops] = await db.query('SELECT * FROM crops WHERE id = ?', [crop_id]);
-    if (crops.length === 0) return res.status(404).json({ error: 'Crop not found' });
-    
-    const crop = crops[0];
-    const farmer_id = crop.farmer_id;
-    
-    // Check if enough quantity is available
-    if (crop.quantity < quantity) {
-      return res.status(400).json({ error: 'Insufficient quantity available' });
-    }
-    
-    // Ensure delivery_info is an object and includes deliveryMethod
-    let infoObj = {};
-    if (typeof delivery_info === 'string') {
-      try { infoObj = JSON.parse(delivery_info); } catch { infoObj = {}; }
-    } else if (typeof delivery_info === 'object' && delivery_info !== null) {
-      infoObj = { ...delivery_info };
-    }
-    if (deliveryMethod && !infoObj.deliveryMethod) {
-      infoObj.deliveryMethod = deliveryMethod;
-    }
-    
-    // Start transaction
-    await db.query('START TRANSACTION');
-    
-    try {
-      // Create the order
-      const [result] = await db.query(
-        'INSERT INTO orders (buyer_id, farmer_id, crop_id, quantity, delivery_info, tracking_number, tracking_url, delivery_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [buyer_id, farmer_id, crop_id, quantity, JSON.stringify(infoObj), tracking_number || null, tracking_url || null, delivery_status || null]
-      );
-      
-      // Update crop quantity
-      const newQuantity = crop.quantity - quantity;
-      await db.query('UPDATE crops SET quantity = ? WHERE id = ?', [newQuantity, crop_id]);
-      
-      // Commit transaction
-      await db.query('COMMIT');
-      
-      res.status(201).json({ 
-        id: result.insertId, 
-        buyer_id, 
-        farmer_id, 
-        crop_id, 
-        quantity, 
-        delivery_info: infoObj,
-        tracking_number,
-        tracking_url,
-        delivery_status,
-        status: 'pending' 
-      });
-    } catch (err) {
-      // Rollback on error
-      await db.query('ROLLBACK');
-      throw err;
-    }
-  } catch (err) {
-    console.error('Create order error:', err);
-    res.status(500).json({ error: 'Failed to create order' });
-  }
+	try {
+		const { crop_id, quantity, delivery_info, deliveryMethod, delivery_address } = req.body;
+		const buyer_id = req.session.user?.id;
+
+		if (!crop_id || !quantity || !buyer_id) {
+			return handleError(res, 400, 'Missing required fields: crop_id and quantity');
+		}
+
+		const qty = Number(quantity);
+		if (!Number.isInteger(qty) || qty <= 0) {
+			return handleError(res, 400, 'Quantity must be a positive integer');
+		}
+
+		const { data: crop, error: cropError } = await supabase
+			.from('crops')
+			.select('id, farmer_id, quantity, available')
+			.eq('id', crop_id)
+			.single();
+
+		if (cropError?.code === 'PGRST116') {
+			return handleError(res, 404, 'Crop not found');
+		}
+		if (cropError) throw cropError;
+		if (!crop.available || crop.quantity < qty) {
+			return handleError(res, 400, `Only ${crop.quantity} items available`);
+		}
+
+		let parsedDeliveryInfo = null;
+		if (delivery_info) {
+			parsedDeliveryInfo = typeof delivery_info === 'string' ? JSON.parse(delivery_info) : delivery_info;
+		}
+		if (!parsedDeliveryInfo && deliveryMethod) {
+			parsedDeliveryInfo = { deliveryMethod };
+		}
+
+		const { data: order, error: orderError } = await supabase
+			.from('orders')
+			.insert([
+				{
+					buyer_id,
+					farmer_id: crop.farmer_id,
+					crop_id,
+					quantity: qty,
+					delivery_info: parsedDeliveryInfo,
+					delivery_address: delivery_address || null,
+					status: 'pending'
+				}
+			])
+			.select()
+			.single();
+
+		if (orderError) throw orderError;
+
+		const remaining = crop.quantity - qty;
+		const { error: cropUpdateError } = await supabase
+			.from('crops')
+			.update({
+				quantity: remaining,
+				available: remaining > 0
+			})
+			.eq('id', crop.id);
+
+		if (cropUpdateError) throw cropUpdateError;
+
+		res.status(201).json(order);
+	} catch (err) {
+		handleError(res, 500, 'Failed to create order', err.message);
+	}
 };
 
 export const getOrder = async (req, res) => {
-  try {
-    const [orders] = await db.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
-    if (orders.length === 0) return res.status(404).json({ error: 'Order not found' });
-    const order = orders[0];
-    // Only allow buyer, farmer, or admin to view
-    if (
-      req.session.user.role !== 'admin' &&
-      req.session.user.id !== order.buyer_id &&
-      req.session.user.id !== order.farmer_id
-    ) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-    res.json(order);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch order' });
-  }
+	try {
+		const orderId = Number(req.params.id);
+		const { data: order, error } = await supabase
+			.from('orders')
+			.select('*, crop:crops(*), buyer:users!orders_buyer_id_fkey(id, name, email), farmer:users!orders_farmer_id_fkey(id, name, email)')
+			.eq('id', orderId)
+			.single();
+
+		if (error?.code === 'PGRST116') {
+			return handleError(res, 404, 'Order not found');
+		}
+		if (error) throw error;
+
+		if (!canAccessOrder(req.session.user, order)) {
+			return handleError(res, 403, 'Not authorized to view this order');
+		}
+
+		res.json(order);
+	} catch (err) {
+		handleError(res, 500, 'Failed to fetch order', err.message);
+	}
 };
 
 export const updateOrder = async (req, res) => {
-  const { status, quantity } = req.body;
-  try {
-    const [orders] = await db.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
-    if (orders.length === 0) return res.status(404).json({ error: 'Order not found' });
-    // Only buyer, farmer, or admin can update
-    if (
-      req.session.user.role !== 'admin' &&
-      req.session.user.id !== orders[0].buyer_id &&
-      req.session.user.id !== orders[0].farmer_id
-    ) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-    
-    const order = orders[0];
-    const oldStatus = order.status;
-    const newStatus = status || oldStatus;
-    
-    // Start transaction
-    await db.query('START TRANSACTION');
-    
-    try {
-      // Update order status
-      await db.query('UPDATE orders SET status=?, quantity=? WHERE id=?', [newStatus, quantity || order.quantity, req.params.id]);
-      
-      // If order is cancelled, restore crop quantity
-      if (oldStatus !== 'cancelled' && newStatus === 'cancelled') {
-        await db.query('UPDATE crops SET quantity = quantity + ? WHERE id = ?', [order.quantity, order.crop_id]);
-      }
-      // If order was cancelled and is now active again, reduce crop quantity
-      else if (oldStatus === 'cancelled' && newStatus !== 'cancelled') {
-        await db.query('UPDATE crops SET quantity = quantity - ? WHERE id = ?', [order.quantity, order.crop_id]);
-      }
-      
-      // Commit transaction
-      await db.query('COMMIT');
-      
-      res.json({ message: 'Order updated' });
-    } catch (err) {
-      // Rollback on error
-      await db.query('ROLLBACK');
-      throw err;
-    }
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update order' });
-  }
+	try {
+		const user = req.session.user;
+		const orderId = Number(req.params.id);
+		const { status, quantity, delivery_status, tracking_number, tracking_url } = req.body;
+
+		const { data: order, error: fetchError } = await supabase
+			.from('orders')
+			.select('*')
+			.eq('id', orderId)
+			.single();
+
+		if (fetchError?.code === 'PGRST116') {
+			return handleError(res, 404, 'Order not found');
+		}
+		if (fetchError) throw fetchError;
+
+		if (!canAccessOrder(user, order)) {
+			return handleError(res, 403, 'Not authorized to update this order');
+		}
+
+		const updatePayload = {};
+		if (status !== undefined) {
+			if (!ORDER_STATUSES.has(status)) {
+				return handleError(res, 400, 'Invalid order status');
+			}
+			updatePayload.status = status;
+		}
+
+		if (quantity !== undefined) {
+			const nextQty = Number(quantity);
+			if (!Number.isInteger(nextQty) || nextQty <= 0) {
+				return handleError(res, 400, 'Quantity must be a positive integer');
+			}
+			updatePayload.quantity = nextQty;
+		}
+
+		if (delivery_status !== undefined) updatePayload.delivery_status = delivery_status;
+		if (tracking_number !== undefined) updatePayload.tracking_number = tracking_number;
+		if (tracking_url !== undefined) updatePayload.tracking_url = tracking_url;
+		updatePayload.updated_at = new Date().toISOString();
+
+		if (Object.keys(updatePayload).length === 1) {
+			return handleError(res, 400, 'No valid fields provided to update');
+		}
+
+		const { data: updatedOrder, error: updateError } = await supabase
+			.from('orders')
+			.update(updatePayload)
+			.eq('id', orderId)
+			.select()
+			.single();
+
+		if (updateError) throw updateError;
+
+		if (order.status !== 'cancelled' && updatePayload.status === 'cancelled') {
+			const { data: crop } = await supabase
+				.from('crops')
+				.select('quantity')
+				.eq('id', order.crop_id)
+				.single();
+
+			if (crop) {
+				await supabase
+					.from('crops')
+					.update({ quantity: Number(crop.quantity) + Number(order.quantity), available: true })
+					.eq('id', order.crop_id);
+			}
+		}
+
+		res.json(updatedOrder);
+	} catch (err) {
+		handleError(res, 500, 'Failed to update order', err.message);
+	}
 };
 
 export const deleteOrder = async (req, res) => {
-  try {
-    const [orders] = await db.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
-    if (orders.length === 0) return res.status(404).json({ error: 'Order not found' });
-    // Only admin can delete any order
-    if (req.session.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-    
-    const order = orders[0];
-    
-    // Start transaction
-    await db.query('START TRANSACTION');
-    
-    try {
-      // If order is not cancelled, restore crop quantity
-      if (order.status !== 'cancelled') {
-        await db.query('UPDATE crops SET quantity = quantity + ? WHERE id = ?', [order.quantity, order.crop_id]);
-      }
-      
-      // Delete the order
-      await db.query('DELETE FROM orders WHERE id = ?', [req.params.id]);
-      
-      // Commit transaction
-      await db.query('COMMIT');
-      
-      res.json({ message: 'Order deleted' });
-    } catch (err) {
-      // Rollback on error
-      await db.query('ROLLBACK');
-      throw err;
-    }
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to delete order' });
-  }
+	try {
+		const user = req.session.user;
+		const orderId = Number(req.params.id);
+
+		const { data: order, error: fetchError } = await supabase
+			.from('orders')
+			.select('*')
+			.eq('id', orderId)
+			.single();
+
+		if (fetchError?.code === 'PGRST116') {
+			return handleError(res, 404, 'Order not found');
+		}
+		if (fetchError) throw fetchError;
+
+		if (user.role !== 'admin' && user.id !== order.buyer_id) {
+			return handleError(res, 403, 'Not authorized to delete this order');
+		}
+
+		const { error } = await supabase.from('orders').delete().eq('id', orderId);
+		if (error) throw error;
+
+		res.json({ message: 'Order deleted successfully' });
+	} catch (err) {
+		handleError(res, 500, 'Failed to delete order', err.message);
+	}
 };
 
 export const salesReport = async (req, res) => {
-  try {
-    if (!req.session.user || req.session.user.role !== 'farmer') {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-    const [orders] = await db.query(
-      `SELECT o.*, c.price, c.unit, c.name as crop_name
-       FROM orders o
-       JOIN crops c ON o.crop_id = c.id
-       WHERE o.farmer_id = ? AND (o.status = 'completed' OR o.status = 'paid')`,
-      [req.session.user.id]
-    );
-    res.json(orders);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch sales report' });
-  }
-};
+	try {
+		const farmerId = req.session.user?.id;
+		const { data: rows, error } = await supabase
+			.from('orders')
+			.select('id, quantity, status, created_at, crop:crops(name, price)')
+			.eq('farmer_id', farmerId)
+			.order('created_at', { ascending: false });
 
-// Endpoint to update tracking info for an order
-export const updateOrderTracking = async (req, res) => {
-  const { tracking_number, tracking_url, delivery_status } = req.body;
-  try {
-    const [orders] = await db.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
-    if (orders.length === 0) return res.status(404).json({ error: 'Order not found' });
-    await deliveryService.updateOrderTracking(req.params.id, { tracking_number, tracking_url, delivery_status });
-    res.json({ message: 'Tracking info updated' });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update tracking info' });
-  }
-};
+		if (error) throw error;
 
-export const createDelivery = async (req, res) => {
-  try {
-    const { deliveryInfo, cartItems, orderId } = req.body;
-    
-    if (!deliveryInfo || !orderId) {
-      return res.status(400).json({ error: 'Missing required delivery information' });
-    }
+		const report = (rows || []).map((row) => ({
+			orderId: row.id,
+			cropName: row.crop?.name || 'Unknown',
+			quantity: row.quantity,
+			status: row.status,
+			createdAt: row.created_at,
+			total: Number(row.quantity) * Number(row.crop?.price || 0)
+		}));
 
-    const result = await deliveryService.createSendstackDelivery({
-      deliveryInfo,
-      cartItems: cartItems || [],
-      orderId
-    });
+		const totalSales = report
+			.filter((item) => ['paid', 'completed'].includes(item.status))
+			.reduce((sum, item) => sum + item.total, 0);
 
-    res.json(result);
-  } catch (err) {
-    console.error('Error creating delivery:', err);
-    res.status(500).json({ error: 'Failed to create delivery' });
-  }
+		res.json({ totalSales, report });
+	} catch (err) {
+		handleError(res, 500, 'Failed to generate sales report', err.message);
+	}
 };
 
 export const getOrderTracking = async (req, res) => {
-  try {
-    const trackingInfo = await deliveryService.getOrderTracking(req.params.id);
-    res.json(trackingInfo);
-  } catch (err) {
-    console.error('Error fetching tracking info:', err);
-    res.status(500).json({ error: 'Failed to fetch tracking info' });
-  }
-}; 
+	try {
+		const orderId = Number(req.params.id);
+		const { data: order, error } = await supabase
+			.from('orders')
+			.select('id, buyer_id, farmer_id')
+			.eq('id', orderId)
+			.single();
+
+		if (error?.code === 'PGRST116') {
+			return handleError(res, 404, 'Order not found');
+		}
+		if (error) throw error;
+
+		if (!canAccessOrder(req.session.user, order)) {
+			return handleError(res, 403, 'Not authorized to view tracking');
+		}
+
+		const data = await deliveryService.getOrderTracking(orderId);
+		res.json(data);
+	} catch (err) {
+		handleError(res, 500, 'Failed to fetch tracking data', err.message);
+	}
+};
+
+export const updateOrderTracking = async (req, res) => {
+	try {
+		const orderId = Number(req.params.id);
+		const user = req.session.user;
+
+		if (!['admin', 'vendor', 'farmer'].includes(user.role)) {
+			return handleError(res, 403, 'Not authorized to update tracking');
+		}
+
+		const trackingInfo = {
+			tracking_number: req.body.tracking_number || null,
+			tracking_url: req.body.tracking_url || null,
+			delivery_status: req.body.status || req.body.delivery_status || null
+		};
+
+		const data = await deliveryService.updateOrderTracking(orderId, trackingInfo);
+		res.json({ message: 'Tracking updated', order: data });
+	} catch (err) {
+		handleError(res, 500, 'Failed to update tracking', err.message);
+	}
+};
+
+export const createDelivery = async (req, res) => {
+	try {
+		const { orderId, order_id, deliveryInfo, cartItems } = req.body;
+		const selectedOrderId = Number(orderId || order_id);
+
+		if (!selectedOrderId || !deliveryInfo) {
+			return handleError(res, 400, 'orderId and deliveryInfo are required');
+		}
+
+		const { data: order, error } = await supabase
+			.from('orders')
+			.select('id, buyer_id, farmer_id')
+			.eq('id', selectedOrderId)
+			.single();
+
+		if (error?.code === 'PGRST116') {
+			return handleError(res, 404, 'Order not found');
+		}
+		if (error) throw error;
+
+		if (!canAccessOrder(req.session.user, order)) {
+			return handleError(res, 403, 'Not authorized to create delivery for this order');
+		}
+
+		const result = await deliveryService.createSendstackDelivery({
+			orderId: selectedOrderId,
+			deliveryInfo,
+			cartItems: cartItems || []
+		});
+
+		res.status(201).json(result);
+	} catch (err) {
+		handleError(res, 500, 'Failed to create delivery', err.message);
+	}
+};

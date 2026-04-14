@@ -1,287 +1,318 @@
-import { db } from '../app.js';
 import crypto from 'crypto';
+import { supabase } from '../app.js';
 
-// Generate unique reference ID for payments
-const generateReferenceId = () => {
-  return `AGRO-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+const allowedMethods = new Set(['mtn-momo', 'vodafone-cash', 'airteltigo-money', 'card', 'bank-transfer']);
+const terminalStatuses = new Set(['completed', 'failed', 'cancelled', 'refunded']);
+
+const handleError = (res, status, message, details) => {
+	if (details) {
+		console.error(message, details);
+	}
+	res.status(status).json({ error: message });
 };
 
-// Generate session ID for payment sessions
-const generateSessionId = () => {
-  return crypto.randomBytes(32).toString('hex');
-};
+const generateReferenceId = () => `AGRO-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+const generateSessionId = () => crypto.randomBytes(24).toString('hex');
 
-// Create a new payment
 export const createPayment = async (req, res) => {
-  try {
-    const { order_id, amount, payment_method, phone_number, delivery_info } = req.body;
-    const buyer_id = req.session.user?.id;
+	try {
+		const { order_id, amount, payment_method, phone_number } = req.body;
+		const buyer_id = req.session.user?.id;
 
-    if (!order_id || !amount || !payment_method || !buyer_id) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
+		if (!order_id || !amount || !payment_method || !buyer_id) {
+			return handleError(res, 400, 'Missing required fields: order_id, amount, payment_method');
+		}
+		if (!allowedMethods.has(payment_method)) {
+			return handleError(res, 400, 'Unsupported payment method');
+		}
 
-    // Get order details
-    const [orders] = await db.query('SELECT * FROM orders WHERE id = ? AND buyer_id = ?', [order_id, buyer_id]);
-    if (orders.length === 0) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
+		const numericAmount = Number(amount);
+		if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+			return handleError(res, 400, 'Amount must be a positive number');
+		}
 
-    const order = orders[0];
-    const farmer_id = order.farmer_id;
+		const { data: order, error: orderError } = await supabase
+			.from('orders')
+			.select('id, buyer_id, farmer_id, status')
+			.eq('id', order_id)
+			.eq('buyer_id', buyer_id)
+			.single();
 
-    // Create payment record
-    const reference_id = generateReferenceId();
-    const [paymentResult] = await db.query(
-      `INSERT INTO payments (order_id, buyer_id, farmer_id, amount, payment_method, phone_number, reference_id, metadata) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [order_id, buyer_id, farmer_id, amount, payment_method, phone_number || null, reference_id, JSON.stringify({ delivery_info })]
-    );
+		if (orderError?.code === 'PGRST116') {
+			return handleError(res, 404, 'Order not found');
+		}
+		if (orderError) throw orderError;
+		if (['paid', 'completed', 'cancelled'].includes(order.status)) {
+			return handleError(res, 400, `Order cannot be paid in '${order.status}' state`);
+		}
 
-    const payment_id = paymentResult.insertId;
+		const reference_id = generateReferenceId();
+		const { data: payment, error: paymentError } = await supabase
+			.from('payments')
+			.insert([
+				{
+					order_id,
+					buyer_id,
+					farmer_id: order.farmer_id,
+					amount: numericAmount,
+					payment_method,
+					phone_number: phone_number || null,
+					reference_id,
+					status: 'processing'
+				}
+			])
+			.select()
+			.single();
 
-    // Create payment session
-    const session_id = generateSessionId();
-    const expires_at = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
-    await db.query(
-      `INSERT INTO payment_sessions (session_id, payment_id, buyer_id, amount, payment_method, expires_at) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [session_id, payment_id, buyer_id, amount, payment_method, expires_at]
-    );
+		if (paymentError) throw paymentError;
 
-    res.status(201).json({
-      payment_id,
-      session_id,
-      reference_id,
-      status: 'processing',
-      message: 'Payment initiated successfully'
-    });
+		const session_id = generateSessionId();
+		const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+		const { error: sessionError } = await supabase.from('payment_sessions').insert([
+			{
+				session_id,
+				payment_id: payment.id,
+				buyer_id,
+				amount: numericAmount,
+				payment_method,
+				status: 'active',
+				expires_at: expiresAt
+			}
+		]);
 
-  } catch (err) {
-    console.error('Payment creation error:', err);
-    res.status(500).json({ error: 'Failed to create payment' });
-  }
+		if (sessionError) throw sessionError;
+
+		res.status(201).json({
+			payment_id: payment.id,
+			order_id,
+			reference_id,
+			session_id,
+			amount: numericAmount,
+			status: payment.status
+		});
+	} catch (err) {
+		handleError(res, 500, 'Failed to create payment', err.message);
+	}
 };
 
-// Get payment status
 export const getPaymentStatus = async (req, res) => {
-  try {
-    const { payment_id } = req.params;
-    const user_id = req.session.user?.id;
+	try {
+		const paymentId = Number(req.params.payment_id);
+		const user = req.session.user;
 
-    const [payments] = await db.query(
-      `SELECT p.*, ps.session_id, ps.status as session_status 
-       FROM payments p 
-       LEFT JOIN payment_sessions ps ON p.id = ps.payment_id 
-       WHERE p.id = ? AND (p.buyer_id = ? OR p.farmer_id = ?)`,
-      [payment_id, user_id, user_id]
-    );
+		const { data: payment, error } = await supabase
+			.from('payments')
+			.select('*')
+			.eq('id', paymentId)
+			.single();
 
-    if (payments.length === 0) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
+		if (error?.code === 'PGRST116') {
+			return handleError(res, 404, 'Payment not found');
+		}
+		if (error) throw error;
 
-    const payment = payments[0];
-    res.json({
-      payment_id: payment.id,
-      order_id: payment.order_id,
-      amount: parseFloat(payment.amount) || 0,
-      payment_method: payment.payment_method,
-      status: payment.status,
-      reference_id: payment.reference_id,
-      created_at: payment.created_at,
-      completed_at: payment.completed_at
-    });
+		if (![payment.buyer_id, payment.farmer_id].includes(user.id) && !['admin', 'vendor'].includes(user.role)) {
+			return handleError(res, 403, 'Not authorized to view this payment');
+		}
 
-  } catch (err) {
-    console.error('Payment status error:', err);
-    res.status(500).json({ error: 'Failed to get payment status' });
-  }
+		res.json({
+			payment_id: payment.id,
+			order_id: payment.order_id,
+			amount: Number(payment.amount),
+			payment_method: payment.payment_method,
+			status: payment.status,
+			reference_id: payment.reference_id,
+			transaction_id: payment.transaction_id,
+			created_at: payment.created_at,
+			completed_at: payment.completed_at
+		});
+	} catch (err) {
+		handleError(res, 500, 'Failed to fetch payment status', err.message);
+	}
 };
 
-// Webhook endpoint for payment providers
-export const paymentWebhook = async (req, res) => {
-  try {
-    const { reference_id, transaction_id, status, message, provider_data } = req.body;
-
-    if (!reference_id || !status) {
-      return res.status(400).json({ error: 'Missing required webhook data' });
-    }
-
-    // Get payment by reference ID
-    const [payments] = await db.query('SELECT * FROM payments WHERE reference_id = ?', [reference_id]);
-    if (payments.length === 0) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    const payment = payments[0];
-
-    // Store webhook data
-    await db.query(
-      `INSERT INTO payment_webhooks (payment_id, webhook_type, payload) VALUES (?, ?, ?)`,
-      [payment.id, 'status_update', JSON.stringify(req.body)]
-    );
-
-    // Update payment status
-    let newStatus = payment.status;
-    let completed_at = null;
-
-    if (status === 'success' || status === 'completed') {
-      newStatus = 'completed';
-      completed_at = new Date();
-      
-      // Update order status to paid
-      await db.query('UPDATE orders SET status = "paid" WHERE id = ?', [payment.order_id]);
-    } else if (status === 'failed' || status === 'error') {
-      newStatus = 'failed';
-    } else if (status === 'cancelled') {
-      newStatus = 'cancelled';
-    }
-
-    await db.query(
-      `UPDATE payments SET status = ?, completed_at = ?, provider_response = JSON_MERGE_PATCH(provider_response, ?) 
-       WHERE id = ?`,
-      [newStatus, completed_at, JSON.stringify({ last_webhook: req.body }), payment.id]
-    );
-
-    // Update payment session status
-    if (newStatus === 'completed' || newStatus === 'failed' || newStatus === 'cancelled') {
-      await db.query(
-        `UPDATE payment_sessions SET status = ? WHERE payment_id = ?`,
-        [newStatus === 'completed' ? 'completed' : 'cancelled', payment.id]
-      );
-    }
-
-    res.json({ success: true, message: 'Webhook processed successfully' });
-
-  } catch (err) {
-    console.error('Webhook processing error:', err);
-    res.status(500).json({ error: 'Failed to process webhook' });
-  }
-};
-
-// Simulate payment completion (for testing)
 export const simulatePaymentCompletion = async (req, res) => {
-  try {
-    const { payment_id, status = 'completed' } = req.body;
+	try {
+		const { payment_id } = req.body;
+		const paymentId = Number(payment_id);
+		if (!paymentId) return handleError(res, 400, 'payment_id is required');
 
-    if (!payment_id) {
-      return res.status(400).json({ error: 'Payment ID required' });
-    }
+		const { data: payment, error: fetchError } = await supabase
+			.from('payments')
+			.select('id, order_id, status')
+			.eq('id', paymentId)
+			.single();
 
-    const [payments] = await db.query('SELECT * FROM payments WHERE id = ?', [payment_id]);
-    if (payments.length === 0) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
+		if (fetchError?.code === 'PGRST116') return handleError(res, 404, 'Payment not found');
+		if (fetchError) throw fetchError;
+		if (terminalStatuses.has(payment.status)) {
+			return handleError(res, 400, `Payment is already ${payment.status}`);
+		}
 
-    const payment = payments[0];
-    let completed_at = null;
+		const now = new Date().toISOString();
+		const transactionId = `SIM-${Date.now()}`;
 
-    if (status === 'completed') {
-      completed_at = new Date();
-      await db.query('UPDATE orders SET status = "paid" WHERE id = ?', [payment.order_id]);
-    }
+		const { error: updatePaymentError } = await supabase
+			.from('payments')
+			.update({ status: 'completed', completed_at: now, transaction_id: transactionId, updated_at: now })
+			.eq('id', paymentId);
+		if (updatePaymentError) throw updatePaymentError;
 
-    await db.query(
-      `UPDATE payments SET status = ?, completed_at = ? WHERE id = ?`,
-      [status, completed_at, payment_id]
-    );
+		const { error: updateOrderError } = await supabase
+			.from('orders')
+			.update({ status: 'paid', updated_at: now })
+			.eq('id', payment.order_id);
+		if (updateOrderError) throw updateOrderError;
 
-    res.json({ 
-      success: true, 
-      message: `Payment ${status} successfully`,
-      payment_id,
-      status,
-      completed_at
-    });
+		const { error: updateSessionError } = await supabase
+			.from('payment_sessions')
+			.update({ status: 'completed', updated_at: now })
+			.eq('payment_id', paymentId)
+			.eq('status', 'active');
+		if (updateSessionError) throw updateSessionError;
 
-  } catch (err) {
-    console.error('Payment simulation error:', err);
-    res.status(500).json({ error: 'Failed to simulate payment' });
-  }
+		res.json({ message: 'Payment marked as completed', payment_id: paymentId, transaction_id: transactionId });
+	} catch (err) {
+		handleError(res, 500, 'Failed to simulate payment completion', err.message);
+	}
 };
 
-// Get payment history for user
+export const paymentWebhook = async (req, res) => {
+	try {
+		const { reference_id, transaction_id, status, provider_data } = req.body;
+		if (!reference_id || !status) {
+			return handleError(res, 400, 'reference_id and status are required');
+		}
+
+		const { data: payment, error: paymentFetchError } = await supabase
+			.from('payments')
+			.select('*')
+			.eq('reference_id', reference_id)
+			.single();
+
+		if (paymentFetchError?.code === 'PGRST116') {
+			return handleError(res, 404, 'Payment not found');
+		}
+		if (paymentFetchError) throw paymentFetchError;
+
+		const normalized = String(status).toLowerCase();
+		let nextStatus = payment.status;
+		if (['success', 'completed'].includes(normalized)) nextStatus = 'completed';
+		if (['failed', 'error'].includes(normalized)) nextStatus = 'failed';
+		if (normalized === 'cancelled') nextStatus = 'cancelled';
+
+		const now = new Date().toISOString();
+
+		const { error: webhookError } = await supabase.from('payment_webhooks').insert([
+			{
+				payment_id: payment.id,
+				webhook_type: 'status_update',
+				payload: req.body,
+				status: 'processed',
+				processed_at: now
+			}
+		]);
+		if (webhookError) throw webhookError;
+
+		const { error: updatePaymentError } = await supabase
+			.from('payments')
+			.update({
+				status: nextStatus,
+				transaction_id: transaction_id || payment.transaction_id,
+				provider_response: provider_data || null,
+				completed_at: nextStatus === 'completed' ? now : payment.completed_at,
+				updated_at: now
+			})
+			.eq('id', payment.id);
+		if (updatePaymentError) throw updatePaymentError;
+
+		if (nextStatus === 'completed') {
+			const { error: orderError } = await supabase
+				.from('orders')
+				.update({ status: 'paid', updated_at: now })
+				.eq('id', payment.order_id);
+			if (orderError) throw orderError;
+		}
+
+		const sessionState = nextStatus === 'completed' ? 'completed' : nextStatus === 'cancelled' ? 'cancelled' : 'expired';
+		const { error: sessionError } = await supabase
+			.from('payment_sessions')
+			.update({ status: sessionState, updated_at: now })
+			.eq('payment_id', payment.id)
+			.eq('status', 'active');
+		if (sessionError) throw sessionError;
+
+		res.json({ success: true, payment_id: payment.id, status: nextStatus });
+	} catch (err) {
+		handleError(res, 500, 'Failed to process payment webhook', err.message);
+	}
+};
+
 export const getPaymentHistory = async (req, res) => {
-  try {
-    const user_id = req.session.user?.id;
-    const { page = 1, limit = 10, status } = req.query;
-    const offset = (page - 1) * limit;
+	try {
+		const user = req.session.user;
+		const { page = 1, limit = 20, status } = req.query;
+		const pageNumber = Math.max(Number(page), 1);
+		const pageSize = Math.min(Math.max(Number(limit), 1), 100);
+		const from = (pageNumber - 1) * pageSize;
+		const to = from + pageSize - 1;
 
-    let whereClause = 'WHERE p.buyer_id = ? OR p.farmer_id = ?';
-    let params = [user_id, user_id];
+		let query = supabase
+			.from('payments')
+			.select('*, order:orders(id, status), buyer:users!payments_buyer_id_fkey(id, name), farmer:users!payments_farmer_id_fkey(id, name)')
+			.order('created_at', { ascending: false })
+			.range(from, to);
 
-    if (status) {
-      whereClause += ' AND p.status = ?';
-      params.push(status);
-    }
+		if (user.role === 'buyer') query = query.eq('buyer_id', user.id);
+		if (user.role === 'farmer') query = query.eq('farmer_id', user.id);
+		if (status) query = query.eq('status', status);
 
-    const [payments] = await db.query(
-      `SELECT p.*, o.status as order_status 
-       FROM payments p 
-       LEFT JOIN orders o ON p.order_id = o.id 
-       ${whereClause} 
-       ORDER BY p.created_at DESC 
-       LIMIT ? OFFSET ?`,
-      [...params, parseInt(limit), offset]
-    );
+		const { data, error } = await query;
+		if (error) throw error;
 
-    const [totalCount] = await db.query(
-      `SELECT COUNT(*) as total FROM payments p ${whereClause}`,
-      params
-    );
-
-    // Convert amount to number for frontend compatibility
-    const processedPayments = payments.map(payment => ({
-      ...payment,
-      amount: parseFloat(payment.amount) || 0
-    }));
-
-    res.json({
-      payments: processedPayments,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total: totalCount[0].total,
-        pages: Math.ceil(totalCount[0].total / limit)
-      }
-    });
-
-  } catch (err) {
-    console.error('Payment history error:', err);
-    res.status(500).json({ error: 'Failed to get payment history' });
-  }
+		res.json({ payments: data || [], page: pageNumber, limit: pageSize });
+	} catch (err) {
+		handleError(res, 500, 'Failed to fetch payment history', err.message);
+	}
 };
 
-// Cancel payment
 export const cancelPayment = async (req, res) => {
-  try {
-    const { payment_id } = req.params;
-    const user_id = req.session.user?.id;
+	try {
+		const paymentId = Number(req.params.payment_id);
+		const user = req.session.user;
 
-    const [payments] = await db.query(
-      'SELECT * FROM payments WHERE id = ? AND buyer_id = ? AND status IN ("pending", "processing")',
-      [payment_id, user_id]
-    );
+		const { data: payment, error: fetchError } = await supabase
+			.from('payments')
+			.select('*')
+			.eq('id', paymentId)
+			.single();
 
-    if (payments.length === 0) {
-      return res.status(404).json({ error: 'Payment not found or cannot be cancelled' });
-    }
+		if (fetchError?.code === 'PGRST116') return handleError(res, 404, 'Payment not found');
+		if (fetchError) throw fetchError;
 
-    await db.query(
-      'UPDATE payments SET status = "cancelled" WHERE id = ?',
-      [payment_id]
-    );
+		if (user.role !== 'admin' && payment.buyer_id !== user.id) {
+			return handleError(res, 403, 'Not authorized to cancel this payment');
+		}
+		if (terminalStatuses.has(payment.status)) {
+			return handleError(res, 400, `Cannot cancel payment in '${payment.status}' state`);
+		}
 
-    await db.query(
-      'UPDATE payment_sessions SET status = "cancelled" WHERE payment_id = ?',
-      [payment_id]
-    );
+		const now = new Date().toISOString();
+		const { error: updateError } = await supabase
+			.from('payments')
+			.update({ status: 'cancelled', updated_at: now })
+			.eq('id', paymentId);
+		if (updateError) throw updateError;
 
-    res.json({ success: true, message: 'Payment cancelled successfully' });
+		const { error: sessionError } = await supabase
+			.from('payment_sessions')
+			.update({ status: 'cancelled', updated_at: now })
+			.eq('payment_id', paymentId)
+			.eq('status', 'active');
+		if (sessionError) throw sessionError;
 
-  } catch (err) {
-    console.error('Payment cancellation error:', err);
-    res.status(500).json({ error: 'Failed to cancel payment' });
-  }
-}; 
+		res.json({ message: 'Payment cancelled successfully', payment_id: paymentId });
+	} catch (err) {
+		handleError(res, 500, 'Failed to cancel payment', err.message);
+	}
+};

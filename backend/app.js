@@ -1,15 +1,13 @@
 import express from 'express';
 import session from 'express-session';
-import mysql from 'mysql2/promise';
+import { createClient } from '@supabase/supabase-js';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import pgSession from 'connect-pg-simple';
+import { Pool } from 'pg';
 import authRoutes from './routes/auth.js';
-import { createUsersTable } from './models/userModel.js';
-import { createCropsTable } from './models/cropModel.js';
-import { createOrdersTable } from './models/orderModel.js';
-import { createPaymentsTable, createPaymentSessionsTable } from './models/paymentModel.js';
 import cropsRoutes from './routes/crops.js';
 import ordersRoutes from './routes/orders.js';
 import uploadRoutes from './routes/upload.js';
@@ -18,80 +16,89 @@ import payoutsRoutes from './routes/payouts.js';
 import paymentsRoutes from './routes/payments.js';
 import adminRoutes from './routes/admin.js';
 import webhooksRouter from './routes/webhooks.js';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const MySQLStore = require('express-mysql-session')(session);
 
-// Load environment variables
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = Number(process.env.PORT) || 4000;
 
-// For ES modules __dirname
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// MySQL connection pool
-export const db = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'Dela',
-  password: process.env.DB_PASS || 'RockZ@1234',
-  database: process.env.DB_NAME || 'agrofresh',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.warn('Supabase credentials are missing. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.');
+}
+
+export const supabase = createClient(supabaseUrl || 'https://invalid.local', supabaseKey || 'invalid-key', {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false
+  }
 });
 
-// Middleware
-app.use(cors({
-  origin: [
-    'https://agrofresh-vg65.vercel.app', // Vercel frontend
-    'http://localhost:3000',            // local dev
-    'http://localhost:8080'             // local dev
-  ],
-  credentials: true
-}));
-app.use(express.json());
-// Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+const poolConfig = process.env.DATABASE_URL
+  ? {
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    }
+  : {
+      host: process.env.PGHOST || '127.0.0.1',
+      port: Number(process.env.PGPORT) || 5432,
+      user: process.env.PGUSER || 'postgres',
+      password: process.env.PGPASSWORD || '',
+      database: process.env.PGDATABASE || 'postgres'
+    };
 
-// Session configuration
+const pool = new Pool(poolConfig);
+const PgSession = pgSession(session);
+
 app.use(session({
-  store: new MySQLStore({
-    host: process.env.DB_HOST || 'localhost',
-    port: 3306,
-    user: process.env.DB_USER || 'Dela',
-    password: process.env.DB_PASS || 'RockZ@1234',
-    database: process.env.DB_NAME || 'agrofresh'
+  store: new PgSession({
+    pool,
+    tableName: 'session',
+    createTableIfMissing: true
   }),
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  secret: process.env.SESSION_SECRET || 'change-this-secret',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false,
+    secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 24 * 60 * 60 * 1000
   }
 }));
 
-// Initialize database tables
-async function initializeDatabase() {
-  try {
-    await createUsersTable();
-    await createCropsTable();
-    await createOrdersTable();
-    await createPaymentsTable();
-    await createPaymentSessionsTable();
-    console.log('Database tables initialized successfully');
-  } catch (error) {
-    console.error('Error initializing database tables:', error);
-  }
-}
+const allowedOrigins = new Set([
+  process.env.FRONTEND_URL,
+  'https://agrofresh.vercel.app',
+  'https://agrofresh-vg65.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:5173'
+]);
 
-initializeDatabase();
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error('CORS blocked for this origin'));
+  },
+  credentials: true
+}));
 
-// Routes
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 app.use('/api/auth', authRoutes);
 app.use('/api/crops', cropsRoutes);
 app.use('/api/orders', ordersRoutes);
@@ -102,17 +109,25 @@ app.use('/api/payments', paymentsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/webhooks', webhooksRouter);
 
-// Add /api/logout route
-app.post('/api/logout', (req, res) => {
-  req.session.destroy(err => {
-    if (err) {
-      return res.status(500).json({ message: 'Logout failed' });
-    }
-    res.clearCookie('connect.sid');
-    res.json({ message: 'Logged out successfully' });
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', environment: process.env.NODE_ENV || 'development' });
+});
+
+app.use((err, _req, res, _next) => {
+  console.error('Unhandled error:', err);
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal Server Error',
+    ...(process.env.NODE_ENV === 'development' && { details: err })
   });
+});
+
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Route not found' });
 });
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-}); 
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+});
+
+export default app;

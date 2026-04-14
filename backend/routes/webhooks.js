@@ -1,5 +1,5 @@
 import express from 'express';
-import { db } from '../app.js';
+import { supabase } from '../app.js';
 import deliveryService from '../services/deliveryService.js';
 const router = express.Router();
 
@@ -14,13 +14,21 @@ router.post('/sendstack', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
-    // Update order status
-    const [result] = await db.query(
-      'UPDATE orders SET delivery_status=? WHERE tracking_number=?',
-      [status, tracking_number]
-    );
-    
-    if (result.affectedRows === 0) {
+    const { data: updatedOrder, error } = await supabase
+      .from('orders')
+      .update({
+        delivery_status: status,
+        updated_at: new Date().toISOString()
+      })
+      .eq('tracking_number', tracking_number)
+      .select('id')
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!updatedOrder) {
       console.warn('No order found with tracking number:', tracking_number);
       return res.status(404).json({ error: 'Order not found' });
     }

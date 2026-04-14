@@ -1,4 +1,4 @@
-import { db } from '../app.js';
+import { supabase } from '../app.js';
 
 class DeliveryService {
   constructor() {
@@ -103,11 +103,24 @@ class DeliveryService {
 
   async updateOrderTracking(orderId, trackingInfo) {
     try {
-      await db.query(
-        'UPDATE orders SET tracking_number=?, tracking_url=?, delivery_status=? WHERE id=?',
-        [trackingInfo.tracking_number, trackingInfo.tracking_url, trackingInfo.delivery_status, orderId]
-      );
+      const { data, error } = await supabase
+        .from('orders')
+        .update({
+          tracking_number: trackingInfo.tracking_number || null,
+          tracking_url: trackingInfo.tracking_url || null,
+          delivery_status: trackingInfo.delivery_status || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId)
+        .select('*')
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
       console.log('Tracking info updated for order:', orderId);
+      return data;
     } catch (err) {
       console.error('Error updating tracking info:', err);
       throw err;
@@ -116,12 +129,19 @@ class DeliveryService {
 
   async getOrderTracking(orderId) {
     try {
-      const [orders] = await db.query('SELECT * FROM orders WHERE id = ?', [orderId]);
-      if (orders.length === 0) {
+      const { data: order, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .single();
+
+      if (error?.code === 'PGRST116') {
         throw new Error('Order not found');
       }
+      if (error) {
+        throw error;
+      }
 
-      const order = orders[0];
       if (order.tracking_url || order.tracking_number || order.delivery_status) {
         return {
           orderId: order.id,

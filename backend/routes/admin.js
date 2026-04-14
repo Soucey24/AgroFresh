@@ -20,9 +20,11 @@ router.use(requireAuth, requireRole('vendor'));
 
 // Dashboard statistics
 router.get('/stats', getDashboardStats);
+router.get('/dashboard/stats', getDashboardStats);
 
 // Recent activity
 router.get('/activity', getRecentActivity);
+router.get('/dashboard/activity', getRecentActivity);
 
 // Crop statistics
 router.get('/crops/stats', getCropStats);

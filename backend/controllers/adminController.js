@@ -1,467 +1,392 @@
-import { db } from '../app.js';
+import { supabase } from '../app.js';
 
-// Get dashboard statistics
-export const getDashboardStats = async (req, res) => {
+const defaultSettings = {
+  platformName: 'AgroFresh GH',
+  platformDescription: 'Connecting farmers and buyers for fresh agricultural products',
+  contactEmail: 'support@agrofreshgh.com',
+  supportPhone: '+233 24 123 4567',
+  timezone: 'Africa/Accra',
+  currency: 'GHS',
+  enablePayments: true,
+  paymentMethods: ['mtn-momo', 'vodafone-cash', 'airteltigo-money', 'card'],
+  transactionFee: 2.5,
+  minimumPayout: 50,
+  emailNotifications: true,
+  smsNotifications: true,
+  pushNotifications: false,
+  requireEmailVerification: true,
+  requirePhoneVerification: false,
+  maxLoginAttempts: 5,
+  sessionTimeout: 24,
+  maintenanceMode: false,
+  debugMode: false,
+  autoBackup: true,
+  backupFrequency: 'daily'
+};
+
+const handleError = (res, status, message, details) => {
+  if (details) {
+    console.error(message, details);
+  }
+  res.status(status).json({ error: message });
+};
+
+const normalizeSettings = (row) => ({
+  platformName: row.platform_name,
+  platformDescription: row.platform_description,
+  contactEmail: row.contact_email,
+  supportPhone: row.support_phone,
+  timezone: row.timezone,
+  currency: row.currency,
+  enablePayments: row.enable_payments,
+  paymentMethods: row.payment_methods || [],
+  transactionFee: Number(row.transaction_fee || 0),
+  minimumPayout: Number(row.minimum_payout || 0),
+  emailNotifications: row.email_notifications,
+  smsNotifications: row.sms_notifications,
+  pushNotifications: row.push_notifications,
+  requireEmailVerification: row.require_email_verification,
+  requirePhoneVerification: row.require_phone_verification,
+  maxLoginAttempts: row.max_login_attempts,
+  sessionTimeout: row.session_timeout,
+  maintenanceMode: row.maintenance_mode,
+  debugMode: row.debug_mode,
+  autoBackup: row.auto_backup,
+  backupFrequency: row.backup_frequency
+});
+
+const sumAmount = (rows) => (rows || []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+export const getDashboardStats = async (_req, res) => {
   try {
-    // Get total users
-    const [userCount] = await db.query('SELECT COUNT(*) as count FROM users');
-    
-    // Get total crops
-    const [cropCount] = await db.query('SELECT COUNT(*) as count FROM crops WHERE created_at > NOW() - INTERVAL 7 DAY');
-    
-    // Get orders today
-    const [orderCount] = await db.query('SELECT COUNT(*) as count FROM orders WHERE DATE(created_at) = CURDATE()');
-    
-    // Get total revenue (from completed payments)
-    const [revenueResult] = await db.query(`
-      SELECT COALESCE(SUM(amount), 0) as total 
-      FROM payments 
-      WHERE status = 'completed'
-    `);
-    
-    // Get percentage changes (simplified - you can make this more sophisticated)
-    const [lastMonthUsers] = await db.query('SELECT COUNT(*) as count FROM users WHERE created_at > NOW() - INTERVAL 30 DAY');
-    const [lastMonthCrops] = await db.query('SELECT COUNT(*) as count FROM crops WHERE created_at > NOW() - INTERVAL 30 DAY');
-    const [lastMonthOrders] = await db.query('SELECT COUNT(*) as count FROM orders WHERE created_at > NOW() - INTERVAL 30 DAY');
-    const [lastMonthRevenue] = await db.query(`
-      SELECT COALESCE(SUM(amount), 0) as total 
-      FROM payments 
-      WHERE status = 'completed' AND created_at > NOW() - INTERVAL 30 DAY
-    `);
-    
-    const stats = {
-      totalUsers: userCount[0].count,
-      activeListings: cropCount[0].count,
-      ordersToday: orderCount[0].count,
-      totalRevenue: parseFloat(revenueResult[0].total),
+    const [
+      { count: totalUsers, error: userErr },
+      { count: activeListings, error: cropErr },
+      { count: ordersToday, error: orderErr },
+      { data: completedPayments, error: revenueErr }
+    ] = await Promise.all([
+      supabase.from('users').select('*', { count: 'exact', head: true }),
+      supabase
+        .from('crops')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+      supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+      supabase.from('payments').select('amount').eq('status', 'completed')
+    ]);
+
+    if (userErr || cropErr || orderErr || revenueErr) {
+      throw new Error(userErr?.message || cropErr?.message || orderErr?.message || revenueErr?.message);
+    }
+
+    res.json({
+      totalUsers: totalUsers || 0,
+      activeListings: activeListings || 0,
+      ordersToday: ordersToday || 0,
+      totalRevenue: sumAmount(completedPayments),
       changes: {
-        users: lastMonthUsers[0].count > 0 ? '+12%' : '+0%',
-        listings: lastMonthCrops[0].count > 0 ? '+8%' : '+0%',
-        orders: lastMonthOrders[0].count > 0 ? '+23%' : '+0%',
-        revenue: lastMonthRevenue[0].total > 0 ? '+15%' : '+0%'
+        users: '+0%',
+        listings: '+0%',
+        orders: '+0%',
+        revenue: '+0%'
       }
-    };
-    
-    res.json(stats);
-  } catch (err) {
-    console.error('Dashboard stats error:', err);
-    res.status(500).json({ error: 'Failed to fetch dashboard statistics' });
-  }
-};
-
-// Get recent activity
-export const getRecentActivity = async (req, res) => {
-  try {
-    const activities = [];
-    
-    // Get recent user registrations
-    const [recentUsers] = await db.query(`
-      SELECT 'user_registration' as type, name, created_at, 'success' as status
-      FROM users 
-      WHERE created_at > NOW() - INTERVAL 24 HOUR
-      ORDER BY created_at DESC 
-      LIMIT 5
-    `);
-    
-    // Get recent crop listings
-    const [recentCrops] = await db.query(`
-      SELECT 'crop_listing' as type, name, created_at, 'success' as status
-      FROM crops 
-      WHERE created_at > NOW() - INTERVAL 24 HOUR
-      ORDER BY created_at DESC 
-      LIMIT 5
-    `);
-    
-    // Get recent orders
-    const [recentOrders] = await db.query(`
-      SELECT 'order_created' as type, CONCAT('Order #', id) as name, created_at, 'success' as status
-      FROM orders 
-      WHERE created_at > NOW() - INTERVAL 24 HOUR
-      ORDER BY created_at DESC 
-      LIMIT 5
-    `);
-    
-    // Get recent payments
-    const [recentPayments] = await db.query(`
-      SELECT 'payment_processed' as type, CONCAT('GH₵', amount) as name, created_at, status
-      FROM payments 
-      WHERE created_at > NOW() - INTERVAL 24 HOUR
-      ORDER BY created_at DESC 
-      LIMIT 5
-    `);
-    
-    // Combine and sort all activities
-    const allActivities = [
-      ...recentUsers.map(u => ({ ...u, action: 'New user registration' })),
-      ...recentCrops.map(c => ({ ...c, action: 'New crop listing' })),
-      ...recentOrders.map(o => ({ ...o, action: 'New order created' })),
-      ...recentPayments.map(p => ({ ...p, action: 'Payment processed' }))
-    ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    .slice(0, 10);
-    
-    res.json(allActivities);
-  } catch (err) {
-    console.error('Recent activity error:', err);
-    res.status(500).json({ error: 'Failed to fetch recent activity' });
-  }
-};
-
-// Get crop statistics
-export const getCropStats = async (req, res) => {
-  try {
-    // Active listings
-    const [activeListings] = await db.query('SELECT COUNT(*) as count FROM crops WHERE created_at > NOW() - INTERVAL 7 DAY');
-    
-    // Expiring soon (within 3 days)
-    const [expiringSoon] = await db.query(`
-      SELECT COUNT(*) as count 
-      FROM crops 
-      WHERE expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)
-    `);
-    
-    // Sold today (crops with completed orders)
-    const [soldToday] = await db.query(`
-      SELECT COUNT(DISTINCT c.id) as count 
-      FROM crops c 
-      JOIN orders o ON c.id = o.crop_id 
-      WHERE o.status = 'completed' AND DATE(o.created_at) = CURDATE()
-    `);
-    
-    // Expired crops
-    const [expiredCrops] = await db.query(`
-      SELECT COUNT(*) as count 
-      FROM crops 
-      WHERE expiry_date < CURDATE()
-    `);
-    
-    res.json({
-      activeListings: activeListings[0].count,
-      expiringSoon: expiringSoon[0].count,
-      soldToday: soldToday[0].count,
-      expired: expiredCrops[0].count
     });
   } catch (err) {
-    console.error('Crop stats error:', err);
-    res.status(500).json({ error: 'Failed to fetch crop statistics' });
+    handleError(res, 500, 'Failed to fetch dashboard statistics', err.message);
   }
 };
 
-// Get order statistics
-export const getOrderStats = async (req, res) => {
+export const getRecentActivity = async (_req, res) => {
   try {
-    // Completed orders
-    const [completed] = await db.query(`
-      SELECT COUNT(*) as count 
-      FROM orders 
-      WHERE status = 'completed'
-    `);
-    
-    // In transit orders
-    const [inTransit] = await db.query(`
-      SELECT COUNT(*) as count 
-      FROM orders 
-      WHERE status IN ('shipped', 'ready')
-    `);
-    
-    // Pending orders
-    const [pending] = await db.query(`
-      SELECT COUNT(*) as count 
-      FROM orders 
-      WHERE status = 'pending'
-    `);
-    
-    // Cancelled orders
-    const [cancelled] = await db.query(`
-      SELECT COUNT(*) as count 
-      FROM orders 
-      WHERE status = 'cancelled'
-    `);
-    
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const [usersRes, cropsRes, ordersRes, paymentsRes] = await Promise.all([
+      supabase.from('users').select('name, created_at').gte('created_at', since).order('created_at', { ascending: false }).limit(5),
+      supabase.from('crops').select('name, created_at').gte('created_at', since).order('created_at', { ascending: false }).limit(5),
+      supabase.from('orders').select('id, created_at').gte('created_at', since).order('created_at', { ascending: false }).limit(5),
+      supabase.from('payments').select('amount, created_at, status').gte('created_at', since).order('created_at', { ascending: false }).limit(5)
+    ]);
+
+    const errors = [usersRes.error, cropsRes.error, ordersRes.error, paymentsRes.error].filter(Boolean);
+    if (errors.length > 0) {
+      throw new Error(errors[0].message);
+    }
+
+    const activities = [
+      ...(usersRes.data || []).map((row) => ({
+        type: 'user_registration',
+        name: row.name,
+        created_at: row.created_at,
+        status: 'success',
+        action: 'New user registration'
+      })),
+      ...(cropsRes.data || []).map((row) => ({
+        type: 'crop_listing',
+        name: row.name,
+        created_at: row.created_at,
+        status: 'success',
+        action: 'New crop listing'
+      })),
+      ...(ordersRes.data || []).map((row) => ({
+        type: 'order_created',
+        name: `Order #${row.id}`,
+        created_at: row.created_at,
+        status: 'success',
+        action: 'New order created'
+      })),
+      ...(paymentsRes.data || []).map((row) => ({
+        type: 'payment_processed',
+        name: `GH₵${Number(row.amount || 0)}`,
+        created_at: row.created_at,
+        status: row.status,
+        action: 'Payment processed'
+      }))
+    ]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, 10);
+
+    res.json(activities);
+  } catch (err) {
+    handleError(res, 500, 'Failed to fetch recent activity', err.message);
+  }
+};
+
+export const getCropStats = async (_req, res) => {
+  try {
+    const now = new Date();
+    const threeDaysAhead = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const today = now.toISOString().slice(0, 10);
+
+    const [activeRes, expiringRes, expiredRes, soldOrdersRes] = await Promise.all([
+      supabase
+        .from('crops')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+      supabase.from('crops').select('*', { count: 'exact', head: true }).gte('expiry_date', today).lte('expiry_date', threeDaysAhead),
+      supabase.from('crops').select('*', { count: 'exact', head: true }).lt('expiry_date', today),
+      supabase
+        .from('orders')
+        .select('crop_id')
+        .eq('status', 'completed')
+        .gte('created_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString())
+    ]);
+
+    const errors = [activeRes.error, expiringRes.error, expiredRes.error, soldOrdersRes.error].filter(Boolean);
+    if (errors.length > 0) {
+      throw new Error(errors[0].message);
+    }
+
+    const soldToday = new Set((soldOrdersRes.data || []).map((row) => row.crop_id)).size;
+
     res.json({
-      completed: completed[0].count,
-      inTransit: inTransit[0].count,
-      pending: pending[0].count,
-      cancelled: cancelled[0].count
+      activeListings: activeRes.count || 0,
+      expiringSoon: expiringRes.count || 0,
+      soldToday,
+      expired: expiredRes.count || 0
     });
   } catch (err) {
-    console.error('Order stats error:', err);
-    res.status(500).json({ error: 'Failed to fetch order statistics' });
+    handleError(res, 500, 'Failed to fetch crop statistics', err.message);
   }
 };
 
-// Get payment statistics
-export const getPaymentStats = async (req, res) => {
+export const getOrderStats = async (_req, res) => {
   try {
-    // Total payments
-    const [totalPayments] = await db.query('SELECT COUNT(*) as count FROM payments');
-    
-    // Completed payments
-    const [completedPayments] = await db.query(`
-      SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
-      FROM payments 
-      WHERE status = 'completed'
-    `);
-    
-    // Pending payments
-    const [pendingPayments] = await db.query(`
-      SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
-      FROM payments 
-      WHERE status IN ('pending', 'processing')
-    `);
-    
-    // Failed payments
-    const [failedPayments] = await db.query(`
-      SELECT COUNT(*) as count
-      FROM payments 
-      WHERE status = 'failed'
-    `);
-    
+    const [completed, inTransit, pending, cancelled] = await Promise.all([
+      supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
+      supabase.from('orders').select('*', { count: 'exact', head: true }).in('status', ['shipped', 'ready']),
+      supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'cancelled')
+    ]);
+
+    const errors = [completed.error, inTransit.error, pending.error, cancelled.error].filter(Boolean);
+    if (errors.length > 0) {
+      throw new Error(errors[0].message);
+    }
+
     res.json({
-      totalPayments: totalPayments[0].count,
+      completed: completed.count || 0,
+      inTransit: inTransit.count || 0,
+      pending: pending.count || 0,
+      cancelled: cancelled.count || 0
+    });
+  } catch (err) {
+    handleError(res, 500, 'Failed to fetch order statistics', err.message);
+  }
+};
+
+export const getPaymentStats = async (_req, res) => {
+  try {
+    const [allRes, completedRes, pendingRes, failedRes] = await Promise.all([
+      supabase.from('payments').select('amount'),
+      supabase.from('payments').select('amount').eq('status', 'completed'),
+      supabase.from('payments').select('amount').in('status', ['pending', 'processing']),
+      supabase.from('payments').select('*', { count: 'exact', head: true }).eq('status', 'failed')
+    ]);
+
+    const errors = [allRes.error, completedRes.error, pendingRes.error, failedRes.error].filter(Boolean);
+    if (errors.length > 0) {
+      throw new Error(errors[0].message);
+    }
+
+    res.json({
+      totalPayments: (allRes.data || []).length,
       completed: {
-        count: completedPayments[0].count,
-        amount: parseFloat(completedPayments[0].total_amount)
+        count: (completedRes.data || []).length,
+        amount: sumAmount(completedRes.data)
       },
       pending: {
-        count: pendingPayments[0].count,
-        amount: parseFloat(pendingPayments[0].total_amount)
+        count: (pendingRes.data || []).length,
+        amount: sumAmount(pendingRes.data)
       },
-      failed: failedPayments[0].count
+      failed: failedRes.count || 0
     });
   } catch (err) {
-    console.error('Payment stats error:', err);
-    res.status(500).json({ error: 'Failed to fetch payment statistics' });
+    handleError(res, 500, 'Failed to fetch payment statistics', err.message);
   }
 };
 
-// Get admin crops with farmer info
-export const getAdminCrops = async (req, res) => {
+export const getAdminCrops = async (_req, res) => {
   try {
-    const [crops] = await db.query(`
-      SELECT 
-        c.*,
-        u.name as farmer_name,
-        u.location as farmer_location,
-        CASE 
-          WHEN c.expiry_date < CURDATE() THEN 'Expired'
-          WHEN c.expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY) THEN 'Expiring Soon'
-          ELSE 'Active'
-        END as status,
-        DATEDIFF(c.expiry_date, CURDATE()) as days_until_expiry
-      FROM crops c
-      JOIN users u ON c.farmer_id = u.id
-      ORDER BY c.created_at DESC
-    `);
-    
-    const transformedCrops = crops.map(crop => ({
-      id: crop.id,
-      name: crop.name,
-      farmer: crop.farmer_name,
-      quantity: `${crop.quantity}kg`,
-      price: `GH₵${crop.price}/kg`,
-      status: crop.status,
-      expiresIn: crop.days_until_expiry < 0 ? 'Expired' : `${crop.days_until_expiry} days`,
-      location: crop.farmer_location,
-      dateAdded: new Date(crop.created_at).toLocaleDateString(),
-      image: crop.image
-    }));
-    
-    res.json(transformedCrops);
+    const { data, error } = await supabase
+      .from('crops')
+      .select('*, farmer:users!crops_farmer_id_fkey(name, location)')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const today = new Date();
+    const inThreeDays = new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+    const transformed = (data || []).map((crop) => {
+      const expiry = crop.expiry_date ? new Date(crop.expiry_date) : null;
+      let status = 'Active';
+      if (expiry && expiry < today) status = 'Expired';
+      if (expiry && expiry >= today && expiry <= inThreeDays) status = 'Expiring Soon';
+      const days = expiry ? Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+      return {
+        id: crop.id,
+        name: crop.name,
+        farmer: crop.farmer?.name || 'Unknown',
+        quantity: `${crop.quantity}kg`,
+        price: `GH₵${Number(crop.price)}/kg`,
+        status,
+        expiresIn: days === null ? 'N/A' : days < 0 ? 'Expired' : `${days} days`,
+        location: crop.farmer?.location || 'Unknown',
+        dateAdded: new Date(crop.created_at).toLocaleDateString(),
+        image: crop.image
+      };
+    });
+
+    res.json(transformed);
   } catch (err) {
-    console.error('Admin crops error:', err);
-    res.status(500).json({ error: 'Failed to fetch crops' });
+    handleError(res, 500, 'Failed to fetch crops', err.message);
   }
 };
 
-// Get admin orders with all details
-export const getAdminOrders = async (req, res) => {
+export const getAdminOrders = async (_req, res) => {
   try {
-    const [orders] = await db.query(`
-      SELECT 
-        o.*,
-        c.name as crop_name,
-        c.image as crop_image,
-        buyer.name as buyer_name,
-        farmer.name as farmer_name
-      FROM orders o
-      JOIN crops c ON o.crop_id = c.id
-      JOIN users buyer ON o.buyer_id = buyer.id
-      JOIN users farmer ON o.farmer_id = farmer.id
-      ORDER BY o.created_at DESC
-    `);
-    
-    res.json(orders);
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*, crop:crops(name, image), buyer:users!orders_buyer_id_fkey(name), farmer:users!orders_farmer_id_fkey(name)')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json(data || []);
   } catch (err) {
-    console.error('Admin orders error:', err);
-    res.status(500).json({ error: 'Failed to fetch orders' });
+    handleError(res, 500, 'Failed to fetch orders', err.message);
   }
 };
 
-// Get admin payments with all details
 export const getAdminPayments = async (req, res) => {
   try {
     const { page = 1, limit = 100 } = req.query;
-    const offset = (page - 1) * limit;
+    const pageNum = Math.max(Number(page), 1);
+    const pageSize = Math.min(Math.max(Number(limit), 1), 500);
+    const from = (pageNum - 1) * pageSize;
+    const to = from + pageSize - 1;
 
-    const [payments] = await db.query(`
-      SELECT 
-        p.*,
-        buyer.name as buyer_name,
-        farmer.name as farmer_name,
-        o.status as order_status
-      FROM payments p
-      JOIN users buyer ON p.buyer_id = buyer.id
-      JOIN users farmer ON p.farmer_id = farmer.id
-      LEFT JOIN orders o ON p.order_id = o.id
-      ORDER BY p.created_at DESC
-      LIMIT ? OFFSET ?
-    `, [parseInt(limit), offset]);
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*, buyer:users!payments_buyer_id_fkey(name), farmer:users!payments_farmer_id_fkey(name), order:orders(status)')
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
-    // Convert amount to number for frontend compatibility
-    const processedPayments = payments.map(payment => ({
+    if (error) throw error;
+
+    const processed = (data || []).map((payment) => ({
       ...payment,
-      amount: parseFloat(payment.amount) || 0
+      amount: Number(payment.amount || 0),
+      buyer_name: payment.buyer?.name,
+      farmer_name: payment.farmer?.name,
+      order_status: payment.order?.status
     }));
 
-    res.json(processedPayments);
+    res.json(processed);
   } catch (err) {
-    console.error('Admin payments error:', err);
-    res.status(500).json({ error: 'Failed to fetch payments' });
+    handleError(res, 500, 'Failed to fetch payments', err.message);
   }
 };
 
-// Get admin settings
-export const getAdminSettings = async (req, res) => {
+export const getAdminSettings = async (_req, res) => {
   try {
-    // Get settings from database
-    const [settings] = await db.query('SELECT * FROM platform_settings WHERE id = 1');
-    
-    if (settings.length === 0) {
-      // Return default settings if none exist
-      const defaultSettings = {
-        platformName: "AgroFresh GH",
-        platformDescription: "Connecting farmers and buyers for fresh agricultural products",
-        contactEmail: "support@agrofreshgh.com",
-        supportPhone: "+233 24 123 4567",
-        timezone: "Africa/Accra",
-        currency: "GHS",
-        enablePayments: true,
-        paymentMethods: ["mtn-momo", "vodafone-cash", "airteltigo-money", "card"],
-        transactionFee: 2.5,
-        minimumPayout: 50,
-        emailNotifications: true,
-        smsNotifications: true,
-        pushNotifications: false,
-        requireEmailVerification: true,
-        requirePhoneVerification: false,
-        maxLoginAttempts: 5,
-        sessionTimeout: 24,
-        maintenanceMode: false,
-        debugMode: false,
-        autoBackup: true,
-        backupFrequency: "daily"
-      };
-      
-      res.json(defaultSettings);
-    } else {
-      // Parse JSON fields
-      const settingsData = settings[0];
-      settingsData.paymentMethods = JSON.parse(settingsData.paymentMethods || '[]');
-      res.json(settingsData);
+    const { data, error } = await supabase.from('platform_settings').select('*').eq('id', 1).maybeSingle();
+
+    if (error) throw error;
+    if (!data) {
+      return res.json(defaultSettings);
     }
+
+    res.json(normalizeSettings(data));
   } catch (err) {
-    console.error('Admin settings error:', err);
-    res.status(500).json({ error: 'Failed to fetch settings' });
+    if (String(err.message || '').includes('platform_settings')) {
+      return res.json(defaultSettings);
+    }
+    handleError(res, 500, 'Failed to fetch settings', err.message);
   }
 };
 
-// Update admin settings
 export const updateAdminSettings = async (req, res) => {
   try {
-    const settings = req.body;
-    
-    // Validate required fields
+    const settings = req.body || {};
     if (!settings.platformName || !settings.contactEmail) {
-      return res.status(400).json({ error: 'Platform name and contact email are required' });
+      return handleError(res, 400, 'Platform name and contact email are required');
     }
-    
-    // Check if settings exist
-    const [existingSettings] = await db.query('SELECT id FROM platform_settings WHERE id = 1');
-    
-    if (existingSettings.length === 0) {
-      // Create new settings
-      await db.query(`
-        INSERT INTO platform_settings (
-          platformName, platformDescription, contactEmail, supportPhone, 
-          timezone, currency, enablePayments, paymentMethods, transactionFee, 
-          minimumPayout, emailNotifications, smsNotifications, pushNotifications,
-          requireEmailVerification, requirePhoneVerification, maxLoginAttempts,
-          sessionTimeout, maintenanceMode, debugMode, autoBackup, backupFrequency
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        settings.platformName,
-        settings.platformDescription,
-        settings.contactEmail,
-        settings.supportPhone,
-        settings.timezone,
-        settings.currency,
-        settings.enablePayments,
-        JSON.stringify(settings.paymentMethods),
-        settings.transactionFee,
-        settings.minimumPayout,
-        settings.emailNotifications,
-        settings.smsNotifications,
-        settings.pushNotifications,
-        settings.requireEmailVerification,
-        settings.requirePhoneVerification,
-        settings.maxLoginAttempts,
-        settings.sessionTimeout,
-        settings.maintenanceMode,
-        settings.debugMode,
-        settings.autoBackup,
-        settings.backupFrequency
-      ]);
-    } else {
-      // Update existing settings
-      await db.query(`
-        UPDATE platform_settings SET
-          platformName = ?, platformDescription = ?, contactEmail = ?, supportPhone = ?,
-          timezone = ?, currency = ?, enablePayments = ?, paymentMethods = ?, transactionFee = ?,
-          minimumPayout = ?, emailNotifications = ?, smsNotifications = ?, pushNotifications = ?,
-          requireEmailVerification = ?, requirePhoneVerification = ?, maxLoginAttempts = ?,
-          sessionTimeout = ?, maintenanceMode = ?, debugMode = ?, autoBackup = ?, backupFrequency = ?,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = 1
-      `, [
-        settings.platformName,
-        settings.platformDescription,
-        settings.contactEmail,
-        settings.supportPhone,
-        settings.timezone,
-        settings.currency,
-        settings.enablePayments,
-        JSON.stringify(settings.paymentMethods),
-        settings.transactionFee,
-        settings.minimumPayout,
-        settings.emailNotifications,
-        settings.smsNotifications,
-        settings.pushNotifications,
-        settings.requireEmailVerification,
-        settings.requirePhoneVerification,
-        settings.maxLoginAttempts,
-        settings.sessionTimeout,
-        settings.maintenanceMode,
-        settings.debugMode,
-        settings.autoBackup,
-        settings.backupFrequency
-      ]);
-    }
-    
+
+    const payload = {
+      id: 1,
+      platform_name: settings.platformName,
+      platform_description: settings.platformDescription || defaultSettings.platformDescription,
+      contact_email: settings.contactEmail,
+      support_phone: settings.supportPhone || null,
+      timezone: settings.timezone || 'Africa/Accra',
+      currency: settings.currency || 'GHS',
+      enable_payments: settings.enablePayments !== false,
+      payment_methods: settings.paymentMethods || defaultSettings.paymentMethods,
+      transaction_fee: Number(settings.transactionFee ?? defaultSettings.transactionFee),
+      minimum_payout: Number(settings.minimumPayout ?? defaultSettings.minimumPayout),
+      email_notifications: settings.emailNotifications !== false,
+      sms_notifications: settings.smsNotifications !== false,
+      push_notifications: Boolean(settings.pushNotifications),
+      require_email_verification: settings.requireEmailVerification !== false,
+      require_phone_verification: Boolean(settings.requirePhoneVerification),
+      max_login_attempts: Number(settings.maxLoginAttempts ?? defaultSettings.maxLoginAttempts),
+      session_timeout: Number(settings.sessionTimeout ?? defaultSettings.sessionTimeout),
+      maintenance_mode: Boolean(settings.maintenanceMode),
+      debug_mode: Boolean(settings.debugMode),
+      auto_backup: settings.autoBackup !== false,
+      backup_frequency: settings.backupFrequency || 'daily',
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabase.from('platform_settings').upsert(payload, { onConflict: 'id' });
+    if (error) throw error;
+
     res.json({ success: true, message: 'Settings updated successfully' });
   } catch (err) {
-    console.error('Update settings error:', err);
-    res.status(500).json({ error: 'Failed to update settings' });
+    handleError(res, 500, 'Failed to update settings', err.message);
   }
 };
-
- 

@@ -1,4 +1,4 @@
-import { db } from '../app.js';
+import { supabase } from '../app.js';
 
 export const createPayout = async (req, res) => {
   try {
@@ -7,19 +7,49 @@ export const createPayout = async (req, res) => {
     if (!order_id || !amount || !farmer_id) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    // Optionally, check that the order belongs to the farmer and is completed/paid
-    const [orders] = await db.query('SELECT * FROM orders WHERE id = ? AND farmer_id = ? AND (status = "completed" OR status = "paid")', [order_id, farmer_id]);
-    if (orders.length === 0) {
+
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      return res.status(400).json({ error: 'Amount must be a positive number' });
+    }
+
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .select('id, status, farmer_id')
+      .eq('id', order_id)
+      .eq('farmer_id', farmer_id)
+      .in('status', ['completed', 'paid'])
+      .maybeSingle();
+
+    if (orderError) {
+      throw orderError;
+    }
+    if (!order) {
       return res.status(400).json({ error: 'Order not found or not eligible for payout' });
     }
-    // Insert payout request
-    const [result] = await db.query(
-      'INSERT INTO payouts (farmer_id, order_id, amount, status) VALUES (?, ?, ?, ?)',
-      [farmer_id, order_id, amount, 'pending']
-    );
-    // Here you could trigger a payment process (integration with payment API)
-    res.status(201).json({ id: result.insertId, farmer_id, order_id, amount, status: 'pending' });
+
+    const reference_id = `PO-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    const { data: payout, error: payoutError } = await supabase
+      .from('payouts')
+      .insert([
+        {
+          farmer_id,
+          order_id,
+          amount: numericAmount,
+          status: 'pending',
+          reference_id
+        }
+      ])
+      .select('*')
+      .single();
+
+    if (payoutError) {
+      throw payoutError;
+    }
+
+    res.status(201).json(payout);
   } catch (err) {
+    console.error('Failed to create payout request', err);
     res.status(500).json({ error: 'Failed to create payout request' });
   }
 }; 
