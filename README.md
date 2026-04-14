@@ -72,21 +72,10 @@ Contributions are welcome! Please read our [Contribution Guidelines](CONTRIBUTIN
 
 ## 📞 Contact
 
-For any questions or feedback, please contact us at [email@example.com](mailto:email@example.com)
+For any questions or feedback, please contact us at [delalirock5@gmail.com](delalirock5@gmail.com)
 
 ---
 
-<div align="center">
-  Made with ❤️ for Ghanaian farmers and buyers
-</div>
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/d5ef4a0f-e801-4992-b7ef-8e25e4b770a3) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
 
 **Use your preferred IDE**
 
