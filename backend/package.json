@@ -8,7 +8,8 @@
     "dev": "nodemon app.js",
     "setup": "node scripts/setupDelivery.js",
     "poll-delivery": "node scripts/pollDeliveryStatus.js",
-    "migrate:supabase": "node scripts/migrateToSupabase.js"
+    "migrate:supabase": "node scripts/migrateToSupabase.js",
+    "test:supabase-crud": "node scripts/testSupabaseCrud.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
