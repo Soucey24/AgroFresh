@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
+    "build": "node scripts/migrateToSupabase.js && node scripts/testSupabaseCrud.js",
     "setup": "node scripts/setupDelivery.js",
     "poll-delivery": "node scripts/pollDeliveryStatus.js",
     "migrate:supabase": "node scripts/migrateToSupabase.js",
