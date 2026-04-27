@@ -21,8 +21,9 @@ dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
+const isProduction = process.env.NODE_ENV === 'production';
 
-if (process.env.NODE_ENV === 'production') {
+if (isProduction) {
   app.set('trust proxy', 1);
 }
 
@@ -43,50 +44,70 @@ export const supabase = createClient(supabaseUrl || 'https://invalid.local', sup
   }
 });
 
-const poolConfig = process.env.DATABASE_URL
-  ? {
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-    }
-  : {
-      host: process.env.PGHOST || '127.0.0.1',
-      port: Number(process.env.PGPORT) || 5432,
-      user: process.env.PGUSER || 'postgres',
-      password: process.env.PGPASSWORD || '',
-      database: process.env.PGDATABASE || 'postgres'
-    };
+const hasSessionDbConfig = Boolean(
+  process.env.DATABASE_URL ||
+  process.env.PGHOST ||
+  process.env.PGPORT ||
+  process.env.PGUSER ||
+  process.env.PGPASSWORD ||
+  process.env.PGDATABASE
+);
 
-const pool = new Pool(poolConfig);
-const PgSession = pgSession(session);
-
-app.use(session({
-  store: new PgSession({
-    pool,
-    tableName: 'session',
-    createTableIfMissing: true
-  }),
+const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'change-this-secret',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProduction,
     httpOnly: true,
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    sameSite: isProduction ? 'none' : 'lax',
     maxAge: 24 * 60 * 60 * 1000
   }
-}));
+};
+
+if (hasSessionDbConfig) {
+  const poolConfig = process.env.DATABASE_URL
+    ? {
+        connectionString: process.env.DATABASE_URL,
+        ssl: isProduction ? { rejectUnauthorized: false } : false
+      }
+    : {
+        host: process.env.PGHOST || '127.0.0.1',
+        port: Number(process.env.PGPORT) || 5432,
+        user: process.env.PGUSER || 'postgres',
+        password: process.env.PGPASSWORD || '',
+        database: process.env.PGDATABASE || 'postgres'
+      };
+
+  const pool = new Pool(poolConfig);
+  pool.on('error', (error) => {
+    console.error('Postgres pool error:', error.message);
+  });
+
+  const PgSession = pgSession(session);
+  sessionConfig.store = new PgSession({
+    pool,
+    tableName: 'session',
+    createTableIfMissing: true
+  });
+} else {
+  console.warn('No Postgres session config found. Using in-memory sessions for local development.');
+}
+
+app.use(session(sessionConfig));
 
 const allowedOrigins = new Set([
   process.env.FRONTEND_URL,
   'https://agrofresh-theta.vercel.app',
-  
+  'http://localhost:3000',
   'http://localhost:8080',
   'http://localhost:5173'
-]);
+].filter(Boolean));
 
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.has(origin)) {
+    const isCodespacesPreview = /^https:\/\/[a-z0-9-]+\.app\.github\.dev$/i.test(origin || '');
+    if (!origin || allowedOrigins.has(origin) || (!isProduction && isCodespacesPreview)) {
       callback(null, true);
       return;
     }
@@ -113,8 +134,11 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', environment: process.env.NODE_ENV || 'development' });
 });
 
-app.use((err, _req, res, _next) => {
+app.use((err, _req, res, next) => {
   console.error('Unhandled error:', err);
+  if (res.headersSent) {
+    return next(err);
+  }
   res.status(err.status || 500).json({
     error: err.message || 'Internal Server Error',
     ...(process.env.NODE_ENV === 'development' && { details: err })
