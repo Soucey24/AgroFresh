@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="#22c55e" opacity="0.1" stroke="#22c55e" stroke-width="2"/>
+  
+  <!-- Main leaf shape -->
+  <path d="M 100 40 Q 140 60 140 100 Q 140 140 100 160 Q 60 140 60 100 Q 60 60 100 40 Z" fill="#22c55e"/>
+  
+  <!-- Leaf vein detail -->
+  <path d="M 100 50 Q 105 75 105 100 Q 105 125 100 150" stroke="#ffffff" stroke-width="3" fill="none" stroke-linecap="round"/>
+  
+  <!-- Side veins -->
+  <path d="M 85 65 Q 90 85 95 100" stroke="#dcfce7" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.8"/>
+  <path d="M 115 65 Q 110 85 105 100" stroke="#dcfce7" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.8"/>
+  <path d="M 75 90 Q 85 95 95 100" stroke="#dcfce7" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.8"/>
+  <path d="M 125 90 Q 115 95 105 100" stroke="#dcfce7" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.8"/>
+  
+  <!-- Grow/up arrow indicator subtle -->
+  <g opacity="0.6">
+    <path d="M 155 120 L 155 145 M 155 120 L 148 127 M 155 120 L 162 127" stroke="#22c55e" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
