@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 class HarvestPredictor:
     """Deterministic harvest predictor using typical days-to-harvest per crop."""
@@ -29,7 +29,7 @@ class HarvestPredictor:
         typical = plant + timedelta(days=days)
         latest = plant + timedelta(days=int(days * 1.1))
 
-        days_until = (typical - datetime.utcnow().date()).days
+        days_until = (typical - datetime.now(timezone.utc).date()).days
 
         return {
             'estimated_harvest': typical.isoformat(),

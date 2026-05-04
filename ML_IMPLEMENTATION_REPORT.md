@@ -41,7 +41,7 @@ Python compilation check completed:
 Unit tests command used:
 
 ```bash
-PYTHONPATH=backend-ml python3 -m unittest discover -s backend-ml/tests -p "test_*.py"
+PYTHONPATH=backend-ml python3 backend-ml/tests/test_models.py
 ```
 
 ## Current Architecture Status
@@ -117,5 +117,5 @@ npm run dev
 
 ### Unit tests
 ```bash
-PYTHONPATH=backend-ml python3 -m unittest discover -s backend-ml/tests -p "test_*.py"
+PYTHONPATH=backend-ml python3 backend-ml/tests/test_models.py
 ```
