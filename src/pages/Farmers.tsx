@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Package, TrendingUp, DollarSign, Calendar, Edit, Trash2, Eye } from "lucide-react";
+import { Plus, Package, TrendingUp, DollarSign, Calendar, Edit, Trash2, Eye, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import Navigation from "@/components/Navigation";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
-import { listCrops, createCrop, deleteCrop, updateCrop, bulkUpdateCropAvailability } from "../api";
+import {
+  listCrops,
+  createCrop,
+  deleteCrop,
+  updateCrop,
+  bulkUpdateCropAvailability,
+  predictHarvestForCrop,
+  getCropPredictions,
+} from "../api";
 import { getImageUrl } from "../utils/imageUtils";
 
 
@@ -364,6 +372,8 @@ const Farmers = () => {
   const [showSalesReport, setShowSalesReport] = useState(false);
   const [showRequestPayment, setShowRequestPayment] = useState(false);
   const [showUpdateAvailability, setShowUpdateAvailability] = useState(false);
+  const [predictionByCrop, setPredictionByCrop] = useState<Record<number, any>>({});
+  const [predictionLoadingByCrop, setPredictionLoadingByCrop] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     listCrops().then(data => {
@@ -491,6 +501,51 @@ const Farmers = () => {
         console.error('Error deleting crop:', error);
         alert('Error deleting crop: ' + error.message);
       }
+    }
+  };
+
+  const handlePredictHarvest = async (crop: Crop) => {
+    setPredictionLoadingByCrop((prev) => ({ ...prev, [crop.id]: true }));
+    try {
+      const result = await predictHarvestForCrop(crop.id, {
+        crop_type: crop.name?.toLowerCase(),
+      });
+
+      if (result?.error) {
+        alert(`Prediction failed: ${result.error}`);
+        return;
+      }
+
+      if (result?.prediction) {
+        setPredictionByCrop((prev) => ({ ...prev, [crop.id]: result.prediction }));
+        alert(`Harvest prediction completed for ${crop.name}`);
+      }
+    } catch (error: any) {
+      alert(`Prediction failed: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setPredictionLoadingByCrop((prev) => ({ ...prev, [crop.id]: false }));
+    }
+  };
+
+  const handleViewPredictions = async (crop: Crop) => {
+    try {
+      const result = await getCropPredictions(crop.id);
+      if (result?.error) {
+        alert(`Failed to fetch predictions: ${result.error}`);
+        return;
+      }
+
+      const latestPrediction = result?.predictions?.[0];
+      const latestAnalysis = result?.image_analysis?.[0];
+      const summary = [
+        `Crop: ${crop.name}`,
+        latestPrediction ? `Harvest days: ${latestPrediction.predicted_value}` : 'Harvest prediction: none',
+        latestAnalysis ? `Quality score: ${latestAnalysis.quality_score}` : 'Quality analysis: none',
+      ].join('\n');
+
+      alert(summary);
+    } catch (error: any) {
+      alert(`Failed to fetch predictions: ${error?.message || 'Unknown error'}`);
     }
   };
 
@@ -758,6 +813,25 @@ const Farmers = () => {
                             <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive h-8 w-8 p-0" onClick={() => handleDeleteCrop(crop.id)}>
                               <Trash2 className="h-3 w-3" />
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => handlePredictHarvest(crop)}
+                              disabled={predictionLoadingByCrop[crop.id]}
+                              title="Run harvest prediction"
+                            >
+                              <Sparkles className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => handleViewPredictions(crop)}
+                              title="View prediction summary"
+                            >
+                              <Eye className="h-3 w-3" />
+                            </Button>
                           </div>
                         </div>
                         <div className="text-xs text-muted-foreground space-y-1">
@@ -765,6 +839,9 @@ const Farmers = () => {
                           <div>Quantity: {crop.quantity} {crop.unit || 'kg'}</div>
                           <div>Price: GH₵{crop.price}</div>
                           <div>Expires: {crop.expiryDate}</div>
+                          {predictionByCrop[crop.id]?.estimated_harvest && (
+                            <div>Predicted Harvest: {predictionByCrop[crop.id].estimated_harvest}</div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -784,6 +861,7 @@ const Farmers = () => {
                     <th className="px-4 py-2 text-left text-sm font-medium text-muted-foreground">Quantity</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-muted-foreground">Price</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-muted-foreground">Expiry Date</th>
+                    <th className="px-4 py-2 text-left text-sm font-medium text-muted-foreground">Predicted Harvest</th>
                     <th className="px-4 py-2 text-right text-sm font-medium text-muted-foreground">Actions</th>
                   </tr>
                 </thead>
@@ -811,6 +889,9 @@ const Farmers = () => {
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-muted-foreground">{crop.quantity} {crop.unit || 'kg'}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-muted-foreground">GH₵{crop.price}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-muted-foreground">{crop.expiryDate}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-muted-foreground">
+                        {predictionByCrop[crop.id]?.estimated_harvest || '-'}
+                      </td>
                       <td className="px-4 py-2 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end space-x-2">
                           <Button variant="ghost" size="sm" onClick={() => setViewCrop(crop)}>
@@ -821,6 +902,23 @@ const Farmers = () => {
                           </Button>
                           <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDeleteCrop(crop.id)}>
                             <Trash2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handlePredictHarvest(crop)}
+                            disabled={predictionLoadingByCrop[crop.id]}
+                            title="Run harvest prediction"
+                          >
+                            <Sparkles className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewPredictions(crop)}
+                            title="View prediction summary"
+                          >
+                            <Eye className="h-4 w-4" />
                           </Button>
                         </div>
                       </td>

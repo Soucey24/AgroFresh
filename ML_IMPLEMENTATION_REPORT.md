@@ -23,12 +23,27 @@ Date: 2026-05-04
   - Best-effort updates to `crops` prediction fields
   - Persistence to `ai_predictions` and `image_analysis`
 
-### 3) Unit tests added
+### 3) Frontend integration (initial UI complete)
+- Added ML API helpers in `src/api.js`:
+  - `getMlCropTypes`
+  - `predictHarvestForCrop`
+  - `analyzeCropQuality`
+  - `getCropPredictions`
+- Wired farmer UI in `src/pages/Farmers.tsx`:
+  - Run harvest prediction action per crop
+  - View prediction summary action per crop
+  - Predicted harvest display in mobile cards and desktop table
+- Wired admin UI in `src/pages/admin/Crops.tsx`:
+  - Run harvest prediction action per listing
+  - View latest prediction summary
+  - Predicted harvest display in listing rows
+
+### 4) Unit tests added
 - Added deterministic unit tests for model logic:
   - `backend-ml/tests/test_models.py`
 - Removed an integration-style test that required a running HTTP server and external dependency.
 
-### 4) Dependency updates
+### 5) Dependency updates
 - Updated `backend/package.json` dependencies with:
   - `axios`
   - `form-data`
@@ -51,6 +66,7 @@ PYTHONPATH=backend-ml python3 backend-ml/tests/test_models.py
 - Express can call ML APIs via service client.
 - Crop-level ML endpoints are exposed through backend.
 - Basic persistence path for predictions exists.
+- Farmer and admin frontend screens can trigger harvest prediction and view prediction summary.
 
 ### Partially completed / Placeholder areas
 - `ProduceQualityScorer` currently uses heuristic image scoring; not yet YOLOv5 production model.

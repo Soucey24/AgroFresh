@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { getAdminCrops, getCropStats, deleteCrop } from "../../api";
+import { getAdminCrops, getCropStats, deleteCrop, predictHarvestForCrop, getCropPredictions } from "../../api";
 import { getImageUrl } from "../../utils/imageUtils";
 
 const Crops = () => {
@@ -18,6 +18,8 @@ const Crops = () => {
     expired: 0
   });
   const [loading, setLoading] = useState(true);
+  const [predictionByCrop, setPredictionByCrop] = useState<Record<number, string>>({});
+  const [predictionLoadingByCrop, setPredictionLoadingByCrop] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     const fetchData = async () => {
@@ -81,6 +83,45 @@ const Crops = () => {
       }
     } catch (err) {
       alert('Failed to delete crop.');
+    }
+  };
+
+  const handlePredictHarvest = async (crop: any) => {
+    setPredictionLoadingByCrop((prev) => ({ ...prev, [crop.id]: true }));
+    try {
+      const result = await predictHarvestForCrop(crop.id, {
+        crop_type: String(crop.name || '').toLowerCase(),
+      });
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
+      if (result?.prediction?.estimated_harvest) {
+        setPredictionByCrop((prev) => ({ ...prev, [crop.id]: result.prediction.estimated_harvest }));
+      }
+    } catch (error: any) {
+      alert(error?.message || 'Failed to run prediction');
+    } finally {
+      setPredictionLoadingByCrop((prev) => ({ ...prev, [crop.id]: false }));
+    }
+  };
+
+  const handleViewPredictions = async (crop: any) => {
+    try {
+      const result = await getCropPredictions(crop.id);
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
+      const latestPrediction = result?.predictions?.[0];
+      const latestAnalysis = result?.image_analysis?.[0];
+      alert([
+        `Crop: ${crop.name}`,
+        latestPrediction ? `Harvest days: ${latestPrediction.predicted_value}` : 'Harvest prediction: none',
+        latestAnalysis ? `Quality score: ${latestAnalysis.quality_score}` : 'Quality analysis: none',
+      ].join('\n'));
+    } catch (error: any) {
+      alert(error?.message || 'Failed to fetch predictions');
     }
   };
 
@@ -207,14 +248,26 @@ const Crops = () => {
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground">{crop.dateAdded}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Predicted: {predictionByCrop[crop.id] || '-'}
+                        </p>
                       </div>
                       
                       <div className="flex space-x-2">
-                        <Button variant="ghost" size="sm" onClick={() => alert('View crop details coming soon!')}>
+                        <Button variant="ghost" size="sm" onClick={() => handleViewPredictions(crop)}>
                           <Eye className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => alert('Edit crop coming soon!')}>
                           <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handlePredictHarvest(crop)}
+                          disabled={predictionLoadingByCrop[crop.id]}
+                          title="Run harvest prediction"
+                        >
+                          <Clock className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(crop.id)}>
                           <Trash2 className="h-4 w-4" />
