@@ -33,6 +33,7 @@ class HarvestPredictor:
 
         return {
             'estimated_harvest': typical.isoformat(),
+            'predicted_days': days,
             'confidence': 0.6,
             'range': { 'earliest': earliest.isoformat(), 'latest': latest.isoformat() },
             'days_until': days_until,

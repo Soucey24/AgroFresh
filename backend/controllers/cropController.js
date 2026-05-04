@@ -1,4 +1,5 @@
 import { supabase } from '../app.js';
+import MLService from '../services/mlService.js';
 
 const handleError = (res, status, message, details) => {
   console.error(`[${status}] ${message}`, details);
@@ -268,5 +269,189 @@ export const searchCrops = async (req, res) => {
     res.json({ crops: transformedCrops, count: transformedCrops.length });
   } catch (err) {
     handleError(res, 500, 'Failed to search crops', err.message);
+  }
+};
+
+export const predictHarvestForCrop = async (req, res) => {
+  try {
+    const cropId = Number(req.params.id);
+    const user = req.session.user;
+    if (!user) {
+      return handleError(res, 401, 'Not authenticated');
+    }
+
+    const { data: crop, error: cropError } = await supabase
+      .from('crops')
+      .select('*')
+      .eq('id', cropId)
+      .single();
+
+    if (cropError?.code === 'PGRST116') {
+      return handleError(res, 404, 'Crop not found');
+    }
+    if (cropError) throw cropError;
+
+    if (user.role !== 'admin' && crop.farmer_id !== user.id) {
+      return handleError(res, 403, 'Not authorized to run predictions for this crop');
+    }
+
+    const cropType = (req.body.crop_type || crop.name || '').toString().trim().toLowerCase();
+    const plantingDate = req.body.planting_date || crop.planting_date || (crop.created_at ? new Date(crop.created_at).toISOString().slice(0, 10) : null);
+    const region = req.body.region || user.location || 'Ashanti';
+
+    if (!cropType || !plantingDate) {
+      return handleError(res, 400, 'Missing crop type or planting date for prediction');
+    }
+
+    const mlResult = await MLService.predictHarvest(cropType, plantingDate, region);
+    if (!mlResult || mlResult.status !== 'success') {
+      return handleError(res, 502, 'ML harvest prediction failed', mlResult?.error);
+    }
+
+    const prediction = mlResult.data;
+
+    // best-effort updates for enhanced schema
+    const { error: cropUpdateError } = await supabase
+      .from('crops')
+      .update({
+        harvest_date_predicted: prediction.estimated_harvest,
+        last_prediction_run: new Date().toISOString()
+      })
+      .eq('id', cropId);
+
+    if (cropUpdateError) {
+      console.warn('Could not update crop prediction fields:', cropUpdateError.message);
+    }
+
+    const { error: predictionError } = await supabase
+      .from('ai_predictions')
+      .insert([
+        {
+          crop_id: cropId,
+          prediction_type: 'harvest_timing',
+          predicted_value: Number(prediction.predicted_days || prediction.days_until || 0),
+          confidence_score: prediction.confidence ?? null,
+          metadata: {
+            estimated_harvest: prediction.estimated_harvest,
+            range: prediction.range,
+            days_until: prediction.days_until,
+            region
+          },
+          model_version: prediction.model_version || 'v0.1-placeholder'
+        }
+      ]);
+
+    if (predictionError) {
+      console.warn('Could not persist ai prediction:', predictionError.message);
+    }
+
+    return res.json({
+      status: 'success',
+      crop_id: cropId,
+      prediction,
+      persisted: !predictionError
+    });
+  } catch (err) {
+    return handleError(res, 500, 'Failed to run harvest prediction', err.message);
+  }
+};
+
+export const analyzeCropQuality = async (req, res) => {
+  try {
+    const cropId = Number(req.params.id);
+    const user = req.session.user;
+    if (!user) {
+      return handleError(res, 401, 'Not authenticated');
+    }
+    if (!req.file) {
+      return handleError(res, 400, 'Image file is required');
+    }
+
+    const { data: crop, error: cropError } = await supabase
+      .from('crops')
+      .select('*')
+      .eq('id', cropId)
+      .single();
+
+    if (cropError?.code === 'PGRST116') {
+      return handleError(res, 404, 'Crop not found');
+    }
+    if (cropError) throw cropError;
+
+    if (user.role !== 'admin' && crop.farmer_id !== user.id) {
+      return handleError(res, 403, 'Not authorized to analyze this crop');
+    }
+
+    const imagePath = req.file.path;
+    const imageUrl = `/uploads/${req.file.filename}`;
+    const mlResult = await MLService.analyzeQuality(imagePath, req.file.originalname, cropId, imageUrl);
+    if (!mlResult || mlResult.status !== 'success') {
+      return handleError(res, 502, 'ML quality analysis failed', mlResult?.error);
+    }
+
+    const data = mlResult.data;
+
+    const { error: cropUpdateError } = await supabase
+      .from('crops')
+      .update({
+        quality_score: Number(data.quality_score),
+        freshness_status: Number(data.quality_score) >= 75 ? 'fresh' : 'review',
+        last_prediction_run: new Date().toISOString()
+      })
+      .eq('id', cropId);
+
+    if (cropUpdateError) {
+      console.warn('Could not update crop quality fields:', cropUpdateError.message);
+    }
+
+    return res.json({
+      status: 'success',
+      crop_id: cropId,
+      analysis: data
+    });
+  } catch (err) {
+    return handleError(res, 500, 'Failed to analyze crop quality', err.message);
+  }
+};
+
+export const getCropPredictions = async (req, res) => {
+  try {
+    const cropId = Number(req.params.id);
+
+    const [{ data: predictions, error: predError }, { data: analyses, error: analysisError }] = await Promise.all([
+      supabase
+        .from('ai_predictions')
+        .select('*')
+        .eq('crop_id', cropId)
+        .order('generated_at', { ascending: false }),
+      supabase
+        .from('image_analysis')
+        .select('*')
+        .eq('crop_id', cropId)
+        .order('analyzed_at', { ascending: false })
+    ]);
+
+    if (predError) throw predError;
+    if (analysisError) throw analysisError;
+
+    return res.json({
+      crop_id: cropId,
+      predictions: predictions || [],
+      image_analysis: analyses || []
+    });
+  } catch (err) {
+    return handleError(res, 500, 'Failed to fetch crop predictions', err.message);
+  }
+};
+
+export const listMlCropTypes = async (_req, res) => {
+  try {
+    const result = await MLService.getCropTypes();
+    if (!result || result.status === 'error') {
+      return handleError(res, 502, 'Failed to fetch crop types from ML service', result?.error);
+    }
+    return res.json(result);
+  } catch (err) {
+    return handleError(res, 500, 'Failed to fetch ML crop types', err.message);
   }
 };

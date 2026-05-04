@@ -1,4 +1,6 @@
 import axios from 'axios';
+import fs from 'fs';
+import FormData from 'form-data';
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8001';
 const ML_TIMEOUT = Number(process.env.ML_SERVICE_TIMEOUT || 30000);
@@ -21,12 +23,10 @@ export default class MLService {
 
   static async predictHarvest(cropType, plantingDate, region = 'Ashanti') {
     try {
-      const payload = new URLSearchParams();
-      payload.append('crop_type', cropType);
-      payload.append('planting_date', plantingDate);
-      payload.append('region', region);
-      const r = await mlClient.post('/api/ml/predict-harvest', payload.toString(), {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      const r = await mlClient.post('/api/ml/predict-harvest', {
+        crop_type: cropType,
+        planting_date: plantingDate,
+        region
       });
       return r.data;
     } catch (e) {
@@ -35,10 +35,12 @@ export default class MLService {
     }
   }
 
-  static async analyzeQuality(file) {
+  static async analyzeQuality(filePath, fileName, cropId = null, imageUrl = null) {
     try {
       const form = new FormData();
-      form.append('image', file);
+      form.append('image', fs.createReadStream(filePath), fileName || 'crop-image.jpg');
+      if (cropId !== null) form.append('crop_id', String(cropId));
+      if (imageUrl) form.append('image_url', imageUrl);
       const r = await mlClient.post('/api/ml/analyze-quality', form, { headers: form.getHeaders() });
       return r.data;
     } catch (e) {
