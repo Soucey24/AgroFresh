@@ -3,6 +3,73 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A modern e-commerce platform connecting farmers directly with buyers in Ghana, providing a seamless marketplace for agricultural products.
+# 🌾 AgroFresh - AI-Powered Agricultural E-Commerce Platform
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green)](https://nodejs.org/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
+[![React](https://img.shields.io/badge/React-18%2B-61dafb)](https://react.dev/)
+
+**A modern, AI-powered agricultural marketplace connecting farmers directly with buyers in Ghana.**
+
+A full-stack platform with machine learning for crop quality analysis, harvest prediction, freshness tracking, and intelligent price forecasting.
+
+## ⚡ Quick Start
+
+### Prerequisites
+- Node.js 18+, Python 3.10+, pnpm/npm
+
+### Setup (3 minutes)
+
+```bash
+# 1. Clone & install
+git clone https://github.com/Dee-Rock/Agrofresh.git && cd Agrofresh
+
+# 2. Backend
+cd backend && npm install && npm run dev &
+
+# 3. ML Service
+cd ../backend-ml && python3 -m venv venv
+source venv/bin/activate && pip install -r requirements.txt
+uvicorn app:app --reload --port 8001 &
+
+# 4. Frontend
+cd ../src && pnpm install && pnpm dev
+```
+
+**Access**: 
+- Frontend: http://localhost:5173
+- Backend: http://localhost:3000
+- ML API: http://localhost:8001
+
+---
+
+## 🌟 Key Features
+
+### 🤖 AI/ML Capabilities
+- **YOLOv5-Inspired Quality Analysis** (v1.0): Defect detection, color analysis (65-95% confidence)
+- **Regional Harvest Prediction** (v1.0): 14 Ghana regions, climate calibration (68-75% confidence)
+- **Freshness Calculator** (v1.0): Storage-aware degradation modeling
+- **Seasonal Price Forecaster** (v1.0): Quality + freshness-based pricing
+
+### 🚜 For Farmers
+- Crop management with AI quality insights
+- Real-time quality scoring for produce images
+- Harvest date prediction with regional adjustments
+- Price forecasting & optimal selling time recommendations
+- Freshness tracking based on storage conditions
+- Sales analytics & payment tracking
+
+### 🛒 For Buyers
+- Browse fresh crops from verified farmers
+- View AI quality scores and defect detection
+- Real-time order tracking
+- Secure in-app reviews & ratings
+
+### 👨‍💼 For Admins
+- Platform-wide monitoring & analytics
+- User & crop management
+- ML model oversight
 
 ## 🌟 Features
 

@@ -19,6 +19,9 @@ import {
   bulkUpdateCropAvailability,
   predictHarvestForCrop,
   getCropPredictions,
+  calculateCropFreshness,
+  forecastCropPrice,
+  recommendCropSellingTime
 } from "../api";
 import { getImageUrl } from "../utils/imageUtils";
 
@@ -374,6 +377,12 @@ const Farmers = () => {
   const [showUpdateAvailability, setShowUpdateAvailability] = useState(false);
   const [predictionByCrop, setPredictionByCrop] = useState<Record<number, any>>({});
   const [predictionLoadingByCrop, setPredictionLoadingByCrop] = useState<Record<number, boolean>>({});
+  const [freshnessByCrop, setFreshnessByCrop] = useState<Record<number, any>>({});
+  const [freshnessLoadingByCrop, setFreshnessLoadingByCrop] = useState<Record<number, boolean>>({});
+  const [priceForecastByCrop, setPriceForecastByCrop] = useState<Record<number, any>>({});
+  const [priceLoadingByCrop, setPriceLoadingByCrop] = useState<Record<number, boolean>>({});
+  const [sellingTimeByCrop, setSellingTimeByCrop] = useState<Record<number, any>>({});
+  const [sellingTimeLoadingByCrop, setSellingTimeLoadingByCrop] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     listCrops().then(data => {
@@ -546,6 +555,70 @@ const Farmers = () => {
       alert(summary);
     } catch (error: any) {
       alert(`Failed to fetch predictions: ${error?.message || 'Unknown error'}`);
+    }
+  };
+
+  const handleCalculateFreshness = async (crop: Crop) => {
+    setFreshnessLoadingByCrop((prev) => ({ ...prev, [crop.id]: true }));
+    try {
+      const harvestDate = crop.expiryDate || new Date().toISOString().split('T')[0];
+      const result = await calculateCropFreshness(crop.id, harvestDate, 'room_temp', 85);
+      
+      if (result?.error) {
+        alert(`Freshness calculation failed: ${result.error}`);
+        return;
+      }
+
+      if (result?.data) {
+        setFreshnessByCrop((prev) => ({ ...prev, [crop.id]: result.data }));
+        alert(`Freshness: ${result.data.status.toUpperCase()}\nScore: ${result.data.freshness_score}/100\nDays remaining: ${result.data.days_remaining}`);
+      }
+    } catch (error: any) {
+      alert(`Failed: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setFreshnessLoadingByCrop((prev) => ({ ...prev, [crop.id]: false }));
+    }
+  };
+
+  const handleForecastPrice = async (crop: Crop) => {
+    setPriceLoadingByCrop((prev) => ({ ...prev, [crop.id]: true }));
+    try {
+      const result = await forecastCropPrice(crop.id, 85, 'good', 0);
+      
+      if (result?.error) {
+        alert(`Price forecast failed: ${result.error}`);
+        return;
+      }
+
+      if (result?.data) {
+        setPriceForecastByCrop((prev) => ({ ...prev, [crop.id]: result.data }));
+        alert(`Price Forecast\nBase: GH₵${result.data.base_price}\nForecast: GH₵${result.data.forecasted_price}\nSeasonal: ${(result.data.adjustments.seasonal >= 0 ? '+' : '')}${result.data.adjustments.seasonal}%`);
+      }
+    } catch (error: any) {
+      alert(`Failed: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setPriceLoadingByCrop((prev) => ({ ...prev, [crop.id]: false }));
+    }
+  };
+
+  const handleRecommendSellingTime = async (crop: Crop) => {
+    setSellingTimeLoadingByCrop((prev) => ({ ...prev, [crop.id]: true }));
+    try {
+      const result = await recommendCropSellingTime(crop.id, 85, 'good');
+      
+      if (result?.error) {
+        alert(`Recommendation failed: ${result.error}`);
+        return;
+      }
+
+      if (result?.data) {
+        setSellingTimeByCrop((prev) => ({ ...prev, [crop.id]: result.data }));
+        alert(`Selling Recommendation\nRecommended date: ${result.data.recommended_selling_date}\nDays: ${result.data.days_until_recommended_sale}\nExpected gain: GH₵${result.data.expected_gain}`);
+      }
+    } catch (error: any) {
+      alert(`Failed: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setSellingTimeLoadingByCrop((prev) => ({ ...prev, [crop.id]: false }));
     }
   };
 
@@ -832,6 +905,36 @@ const Farmers = () => {
                             >
                               <Eye className="h-3 w-3" />
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => handleCalculateFreshness(crop)}
+                              disabled={freshnessLoadingByCrop[crop.id]}
+                              title="Calculate freshness"
+                            >
+                              <Sparkles className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => handleForecastPrice(crop)}
+                              disabled={priceLoadingByCrop[crop.id]}
+                              title="Forecast price"
+                            >
+                              <DollarSign className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => handleRecommendSellingTime(crop)}
+                              disabled={sellingTimeLoadingByCrop[crop.id]}
+                              title="Recommend selling time"
+                            >
+                              <Calendar className="h-3 w-3" />
+                            </Button>
                           </div>
                         </div>
                         <div className="text-xs text-muted-foreground space-y-1">
@@ -840,7 +943,13 @@ const Farmers = () => {
                           <div>Price: GH₵{crop.price}</div>
                           <div>Expires: {crop.expiryDate}</div>
                           {predictionByCrop[crop.id]?.estimated_harvest && (
-                            <div>Predicted Harvest: {predictionByCrop[crop.id].estimated_harvest}</div>
+                            <div className="text-green-600">Harvest: {predictionByCrop[crop.id].estimated_harvest}</div>
+                          )}
+                          {freshnessByCrop[crop.id]?.freshness_score && (
+                            <div className="text-blue-600">Freshness: {freshnessByCrop[crop.id].status} ({freshnessByCrop[crop.id].freshness_score})</div>
+                          )}
+                          {priceForecastByCrop[crop.id]?.forecasted_price && (
+                            <div className="text-purple-600">Price: GH₵{priceForecastByCrop[crop.id].forecasted_price}</div>
                           )}
                         </div>
                       </div>
@@ -919,6 +1028,33 @@ const Farmers = () => {
                             title="View prediction summary"
                           >
                             <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCalculateFreshness(crop)}
+                            disabled={freshnessLoadingByCrop[crop.id]}
+                            title="Calculate freshness"
+                          >
+                            <Sparkles className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleForecastPrice(crop)}
+                            disabled={priceLoadingByCrop[crop.id]}
+                            title="Forecast price"
+                          >
+                            <DollarSign className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRecommendSellingTime(crop)}
+                            disabled={sellingTimeLoadingByCrop[crop.id]}
+                            title="Recommend selling time"
+                          >
+                            <Calendar className="h-4 w-4" />
                           </Button>
                         </div>
                       </td>

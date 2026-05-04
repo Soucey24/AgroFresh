@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { getAdminCrops, getCropStats, deleteCrop, predictHarvestForCrop, getCropPredictions } from "../../api";
+import { getAdminCrops, getCropStats, deleteCrop, predictHarvestForCrop, getCropPredictions, calculateCropFreshness, forecastCropPrice, recommendCropSellingTime } from "../../api";
 import { getImageUrl } from "../../utils/imageUtils";
 
 const Crops = () => {
