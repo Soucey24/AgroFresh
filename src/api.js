@@ -81,6 +81,42 @@ export async function getCrop(id) {
   return res.json();
 }
 
+export async function getMlCropTypes() {
+  const res = await fetch(`${API_BASE}/api/crops/ml/crop-types`, {
+    credentials: 'include',
+  });
+  return res.json();
+}
+
+export async function predictHarvestForCrop(cropId, payload = {}) {
+  const res = await fetch(`${API_BASE}/api/crops/${cropId}/predict-harvest`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+export async function analyzeCropQuality(cropId, imageFile) {
+  const formData = new FormData();
+  formData.append('image', imageFile);
+
+  const res = await fetch(`${API_BASE}/api/crops/${cropId}/analyze-quality`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+  return res.json();
+}
+
+export async function getCropPredictions(cropId) {
+  const res = await fetch(`${API_BASE}/api/crops/${cropId}/predictions`, {
+    credentials: 'include',
+  });
+  return res.json();
+}
+
 // Order APIs
 export async function createOrder(order) {
   const res = await fetch(`${API_BASE}/api/orders`, {
