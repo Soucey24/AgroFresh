@@ -117,6 +117,47 @@ export async function getCropPredictions(cropId) {
   return res.json();
 }
 
+export async function calculateCropFreshness(cropId, harvestDate, storageCondition = 'room_temp', qualityScore = 85) {
+  const res = await fetch(`${API_BASE}/api/crops/${cropId}/calculate-freshness`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      harvest_date: harvestDate,
+      storage_condition: storageCondition,
+      quality_score: qualityScore
+    }),
+  });
+  return res.json();
+}
+
+export async function forecastCropPrice(cropId, qualityScore = 85, freshnessStatus = 'good', daysAhead = 0) {
+  const res = await fetch(`${API_BASE}/api/crops/${cropId}/forecast-price`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      quality_score: qualityScore,
+      freshness_status: freshnessStatus,
+      days_ahead: daysAhead
+    }),
+  });
+  return res.json();
+}
+
+export async function recommendCropSellingTime(cropId, qualityScore = 85, freshnessStatus = 'good') {
+  const res = await fetch(`${API_BASE}/api/crops/${cropId}/recommend-selling-time`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      quality_score: qualityScore,
+      freshness_status: freshnessStatus
+    }),
+  });
+  return res.json();
+}
+
 // Order APIs
 export async function createOrder(order) {
   const res = await fetch(`${API_BASE}/api/orders`, {

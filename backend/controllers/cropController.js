@@ -455,3 +455,139 @@ export const listMlCropTypes = async (_req, res) => {
     return handleError(res, 500, 'Failed to fetch ML crop types', err.message);
   }
 };
+
+export const calculateCropFreshness = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { harvest_date, storage_condition, quality_score } = req.body;
+
+    if (!harvest_date) {
+      return handleError(res, 400, 'harvest_date is required');
+    }
+
+    // Get crop type
+    const { data: crop, error: fetchError } = await supabase
+      .from('crops')
+      .select('category')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      return handleError(res, 404, 'Crop not found');
+    }
+
+    // Call ML service
+    const result = await MLService.calculateFreshness(
+      crop.category.toLowerCase(),
+      harvest_date,
+      storage_condition || 'room_temp',
+      quality_score || 85.0
+    );
+
+    if (result.status === 'error') {
+      return handleError(res, 502, 'ML service freshness calculation failed', result.error);
+    }
+
+    // Optionally persist to database
+    try {
+      const record = {
+        crop_id: id,
+        prediction_type: 'freshness',
+        freshness_score: result.data.freshness_score,
+        status: result.data.status,
+        days_remaining: result.data.days_remaining,
+        storage_condition: result.data.storage_condition,
+        confidence: result.data.confidence
+      };
+      await supabase.table('ai_predictions').insert([record]).execute();
+    } catch (persistErr) {
+      console.warn('Failed to persist freshness prediction:', persistErr.message);
+    }
+
+    return res.json({ status: 'success', data: result.data });
+  } catch (err) {
+    return handleError(res, 500, 'Failed to calculate freshness', err.message);
+  }
+};
+
+export const forecastCropPrice = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quality_score, freshness_status, days_ahead } = req.body;
+
+    // Get crop type
+    const { data: crop, error: fetchError } = await supabase
+      .from('crops')
+      .select('category')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      return handleError(res, 404, 'Crop not found');
+    }
+
+    // Call ML service
+    const result = await MLService.forecastPrice(
+      crop.category.toLowerCase(),
+      quality_score || 85.0,
+      freshness_status || 'good',
+      days_ahead || 0
+    );
+
+    if (result.status === 'error') {
+      return handleError(res, 502, 'ML service price forecast failed', result.error);
+    }
+
+    // Optionally persist to database
+    try {
+      const record = {
+        crop_id: id,
+        prediction_type: 'price_forecast',
+        predicted_price: result.data.forecasted_price,
+        base_price: result.data.base_price,
+        forecast_date: result.data.forecast_date,
+        confidence: result.data.confidence
+      };
+      await supabase.table('ai_predictions').insert([record]).execute();
+    } catch (persistErr) {
+      console.warn('Failed to persist price forecast:', persistErr.message);
+    }
+
+    return res.json({ status: 'success', data: result.data });
+  } catch (err) {
+    return handleError(res, 500, 'Failed to forecast price', err.message);
+  }
+};
+
+export const recommendCropSellingTime = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quality_score, freshness_status } = req.body;
+
+    // Get crop type
+    const { data: crop, error: fetchError } = await supabase
+      .from('crops')
+      .select('category')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      return handleError(res, 404, 'Crop not found');
+    }
+
+    // Call ML service
+    const result = await MLService.recommendSellingTime(
+      crop.category.toLowerCase(),
+      quality_score || 85.0,
+      freshness_status || 'good'
+    );
+
+    if (result.status === 'error') {
+      return handleError(res, 502, 'ML service selling time recommendation failed', result.error);
+    }
+
+    return res.json({ status: 'success', data: result.data });
+  } catch (err) {
+    return handleError(res, 500, 'Failed to recommend selling time', err.message);
+  }
+};

@@ -58,4 +58,49 @@ export default class MLService {
       return { status: 'error', crops: [] };
     }
   }
+
+  static async calculateFreshness(cropType, harvestDate, storageCondition = 'room_temp', qualityScore = 85.0) {
+    try {
+      const r = await mlClient.post('/api/ml/calculate-freshness', {
+        crop_type: cropType,
+        harvest_date: harvestDate,
+        storage_condition: storageCondition,
+        quality_score: qualityScore
+      });
+      return r.data;
+    } catch (e) {
+      console.error('ML calculateFreshness error', e.message);
+      return { status: 'error', error: e.message };
+    }
+  }
+
+  static async forecastPrice(cropType, qualityScore = 85.0, freshnessStatus = 'good', daysAhead = 0) {
+    try {
+      const r = await mlClient.post('/api/ml/forecast-price', {
+        crop_type: cropType,
+        quality_score: qualityScore,
+        freshness_status: freshnessStatus,
+        days_ahead: daysAhead
+      });
+      return r.data;
+    } catch (e) {
+      console.error('ML forecastPrice error', e.message);
+      return { status: 'error', error: e.message };
+    }
+  }
+
+  static async recommendSellingTime(cropType, qualityScore = 85.0, freshnessStatus = 'good') {
+    try {
+      const r = await mlClient.post('/api/ml/recommend-selling-time', {
+        crop_type: cropType,
+        quality_score: qualityScore,
+        freshness_status: freshnessStatus,
+        days_ahead: 0
+      });
+      return r.data;
+    } catch (e) {
+      console.error('ML recommendSellingTime error', e.message);
+      return { status: 'error', error: e.message };
+    }
+  }
 }
