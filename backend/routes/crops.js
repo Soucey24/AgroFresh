@@ -14,6 +14,7 @@ import {
 	forecastCropPrice,
 	recommendCropSellingTime
 } from '../controllers/cropController.js';
+import { createReview, getReviewsForCrop } from '../controllers/reviewController.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { upload } from '../controllers/uploadController.js';
 const router = express.Router();
@@ -27,6 +28,9 @@ router.post('/:id/analyze-quality', requireAuth, requireRole(['admin', 'farmer']
 router.post('/:id/calculate-freshness', requireAuth, requireRole(['admin', 'farmer']), calculateCropFreshness);
 router.post('/:id/forecast-price', requireAuth, requireRole(['admin', 'farmer']), forecastCropPrice);
 router.post('/:id/recommend-selling-time', requireAuth, requireRole(['admin', 'farmer']), recommendCropSellingTime);
+// Reviews
+router.get('/:id/reviews', getReviewsForCrop);
+router.post('/:id/reviews', requireAuth, createReview);
 router.get('/:id/predictions', requireAuth, getCropPredictions);
 router.get('/:id', getCrop);
 router.put('/:id', requireAuth, requireRole('farmer'), upload.single('image'), updateCrop);

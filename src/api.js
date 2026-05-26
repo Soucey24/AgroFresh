@@ -117,6 +117,22 @@ export async function getCropPredictions(cropId) {
   return res.json();
 }
 
+// Reviews / Ratings APIs
+export async function getReviewsForCrop(cropId) {
+  const res = await fetch(`${API_BASE}/api/crops/${cropId}/reviews`, { credentials: 'include' });
+  return res.json();
+}
+
+export async function createReview(cropId, { rating, comment }) {
+  const res = await fetch(`${API_BASE}/api/crops/${cropId}/reviews`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ rating, comment }),
+  });
+  return res.json();
+}
+
 export async function calculateCropFreshness(cropId, harvestDate, storageCondition = 'room_temp', qualityScore = 85) {
   const res = await fetch(`${API_BASE}/api/crops/${cropId}/calculate-freshness`, {
     method: 'POST',

@@ -349,3 +349,60 @@ DROP TABLE IF EXISTS crop_types;
 
 -- Initial setup complete!
 COMMIT;
+
+-- ============================================
+-- Reviews Table (Customer feedback)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS reviews (
+  id SERIAL PRIMARY KEY,
+  crop_id INT NOT NULL,
+  user_id INT,
+  user_name VARCHAR(150),
+  rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  comment TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (crop_id) REFERENCES crops(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_reviews_crop_id ON reviews(crop_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_user_id ON reviews(user_id);
+
+-- Optional view: average rating per crop
+CREATE OR REPLACE VIEW v_crop_ratings AS
+SELECT
+  crop_id,
+  COUNT(*) AS review_count,
+  ROUND(AVG(rating)::numeric,2) AS avg_rating
+FROM reviews
+GROUP BY crop_id;
+
+-- ============================================
+-- Farmer Verification Table
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS user_verifications (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  phone VARCHAR(30) NOT NULL,
+  farm_name VARCHAR(150),
+  farmers_association_address TEXT NOT NULL,
+  ghana_card_number VARCHAR(30) NOT NULL,
+  location_text TEXT,
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION,
+  photo_url TEXT NOT NULL,
+  documents JSONB NOT NULL DEFAULT '[]'::jsonb,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  submitted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  reviewed_at TIMESTAMP WITH TIME ZONE,
+  reviewed_by BIGINT REFERENCES users(id),
+  review_notes TEXT,
+  CONSTRAINT user_verifications_status_check CHECK (status IN ('pending', 'approved', 'rejected'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_verifications_user_id ON user_verifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_verifications_status ON user_verifications(status);
+CREATE INDEX IF NOT EXISTS idx_user_verifications_submitted_at ON user_verifications(submitted_at);
+
+COMMIT;

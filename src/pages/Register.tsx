@@ -39,7 +39,8 @@ const Register = () => {
       return;
     }
     if (result.role === "farmer") {
-      navigate("/farmers");
+      // Verification is completed after farmer logs in.
+      navigate("/login");
     } else if (result.role === "buyer") {
       navigate("/buyers");
     } else if (result.role === "vendor") {

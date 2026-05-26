@@ -24,6 +24,10 @@ const Login = () => {
       return;
     }
     if (result.role === "farmer") {
+      if (result.verificationStatus !== "approved") {
+        navigate(`/verify-farmer?id=${result.id}`);
+        return;
+      }
       navigate("/farmers");
     } else if (result.role === "buyer") {
       navigate("/buyers");

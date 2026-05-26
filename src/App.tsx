@@ -19,6 +19,8 @@ import AdminPayments from "./pages/admin/Payments";
 import BuyerOrders from "./pages/BuyerOrders";
 import FarmerOrders from "./pages/FarmerOrders";
 import Settings from "./pages/admin/Settings";
+import FarmerInsights from "./pages/FarmerInsights";
+import FarmerVerification from "./pages/FarmerVerification";
 import OrderConfirmation from "./pages/OrderConfirmation";
 import Profile from "./pages/Profile";
 import DeliveryTracking from './pages/DeliveryTracking';
@@ -47,6 +49,8 @@ const App = () => (
           <Route path="/admin/settings" element={<Settings />} />
           <Route path="/buyer-orders" element={<BuyerOrders />} />
           <Route path="/farmer-orders" element={<FarmerOrders />} />
+          <Route path="/farmer-insights/:cropId" element={<FarmerInsights />} />
+          <Route path="/verify-farmer" element={<FarmerVerification />} />
           <Route path="/order-confirmation" element={<OrderConfirmation />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/delivery-tracking/:orderId" element={<DeliveryTracking />} />

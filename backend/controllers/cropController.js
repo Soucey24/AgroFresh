@@ -19,8 +19,48 @@ const transformCrop = (crop) => ({
   location: crop.users?.location || 'Unknown',
   harvestDate: crop.created_at,
   image: crop.image,
-  available: crop.available
+  available: crop.available,
+  averageRating: crop.average_rating ?? null,
+  reviewCount: crop.review_count ?? 0
 });
+
+const attachCropRatings = async (crops) => {
+  if (!Array.isArray(crops) || crops.length === 0) {
+    return crops;
+  }
+
+  const cropIds = crops.map((crop) => crop.id);
+  const { data: reviews, error } = await supabase
+    .from('reviews')
+    .select('crop_id, rating')
+    .in('crop_id', cropIds);
+
+  if (error) {
+    console.warn('Could not load crop ratings:', error.message);
+    return crops;
+  }
+
+  const ratingMap = reviews.reduce((acc, review) => {
+    const current = acc[review.crop_id] || { total: 0, count: 0 };
+    current.total += Number(review.rating) || 0;
+    current.count += 1;
+    acc[review.crop_id] = current;
+    return acc;
+  }, {});
+
+  return crops.map((crop) => {
+    const stats = ratingMap[crop.id];
+    if (!stats) {
+      return crop;
+    }
+
+    return {
+      ...crop,
+      average_rating: Number((stats.total / stats.count).toFixed(2)),
+      review_count: stats.count
+    };
+  });
+};
 
 export const listCrops = async (req, res) => {
   try {
@@ -49,7 +89,8 @@ export const listCrops = async (req, res) => {
 
     if (error) throw error;
 
-    const transformedCrops = crops.map(transformCrop);
+    const cropsWithRatings = await attachCropRatings(crops);
+    const transformedCrops = cropsWithRatings.map(transformCrop);
     res.json(transformedCrops);
   } catch (err) {
     handleError(res, 500, 'Failed to fetch crops', err.message);
@@ -114,7 +155,25 @@ export const getCrop = async (req, res) => {
 
     if (error) throw error;
 
-    res.json(transformCrop(crop));
+    const { data: reviews, error: reviewError } = await supabase
+      .from('reviews')
+      .select('rating')
+      .eq('crop_id', crop.id);
+
+    if (reviewError) {
+      console.warn('Could not load crop ratings:', reviewError.message);
+    }
+
+    const reviewCount = Array.isArray(reviews) ? reviews.length : 0;
+    const averageRating = reviewCount > 0
+      ? Number((reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviewCount).toFixed(2))
+      : null;
+
+    res.json(transformCrop({
+      ...crop,
+      average_rating: averageRating,
+      review_count: reviewCount
+    }));
   } catch (err) {
     handleError(res, 500, 'Failed to fetch crop', err.message);
   }

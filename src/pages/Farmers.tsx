@@ -35,6 +35,8 @@ interface Crop {
   price: number;
   expiryDate: string;
   image: string;
+  averageRating?: number | null;
+  reviewCount?: number;
 }
 
 const initialCrops: Crop[] = [
@@ -935,6 +937,11 @@ const Farmers = () => {
                             >
                               <Calendar className="h-3 w-3" />
                             </Button>
+                            <Link to={`/farmer-insights/${crop.id}`}>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Insights">
+                                <TrendingUp className="h-3 w-3" />
+                              </Button>
+                            </Link>
                           </div>
                         </div>
                         <div className="text-xs text-muted-foreground space-y-1">
@@ -942,6 +949,17 @@ const Farmers = () => {
                           <div>Quantity: {crop.quantity} {crop.unit || 'kg'}</div>
                           <div>Price: GH₵{crop.price}</div>
                           <div>Expires: {crop.expiryDate}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-medium">Rating:</div>
+                            {crop.averageRating != null ? (
+                              <div className="flex items-center gap-2 text-sm">
+                                <div className="rounded-full bg-muted/40 px-2 py-0.5 text-xs">{crop.averageRating.toFixed(1)}</div>
+                                <div className="text-xs text-muted-foreground">({crop.reviewCount || 0})</div>
+                              </div>
+                            ) : (
+                              <div className="text-xs text-muted-foreground">No reviews yet</div>
+                            )}
+                          </div>
                           {predictionByCrop[crop.id]?.estimated_harvest && (
                             <div className="text-green-600">Harvest: {predictionByCrop[crop.id].estimated_harvest}</div>
                           )}
@@ -970,6 +988,7 @@ const Farmers = () => {
                     <th className="px-4 py-2 text-left text-sm font-medium text-muted-foreground">Quantity</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-muted-foreground">Price</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-muted-foreground">Expiry Date</th>
+                    <th className="px-4 py-2 text-left text-sm font-medium text-muted-foreground">Rating</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-muted-foreground">Predicted Harvest</th>
                     <th className="px-4 py-2 text-right text-sm font-medium text-muted-foreground">Actions</th>
                   </tr>
@@ -998,6 +1017,9 @@ const Farmers = () => {
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-muted-foreground">{crop.quantity} {crop.unit || 'kg'}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-muted-foreground">GH₵{crop.price}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-muted-foreground">{crop.expiryDate}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-muted-foreground">
+                        {crop.averageRating != null ? `${crop.averageRating.toFixed(1)} / 5 (${crop.reviewCount || 0})` : 'No reviews yet'}
+                      </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-muted-foreground">
                         {predictionByCrop[crop.id]?.estimated_harvest || '-'}
                       </td>
@@ -1056,6 +1078,11 @@ const Farmers = () => {
                           >
                             <Calendar className="h-4 w-4" />
                           </Button>
+                          <Link to={`/farmer-insights/${crop.id}`}>
+                            <Button variant="ghost" size="sm">
+                              <TrendingUp className="h-4 w-4" />
+                            </Button>
+                          </Link>
                         </div>
                       </td>
                     </tr>

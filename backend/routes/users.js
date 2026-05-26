@@ -1,6 +1,8 @@
 import express from 'express';
 import { listUsers, createUser, updateUser, deleteUser, getUser, uploadAvatar, changePassword, verifyEmailChange, updateProfile, getProfile } from '../controllers/userController.js';
 import { upload } from '../controllers/uploadController.js';
+import { requestVerification } from '../controllers/verificationController.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -14,5 +16,14 @@ router.post('/', createUser); // POST /api/users
 router.get('/:id', getUser); // GET /api/users/:id
 router.put('/:id', upload.single('avatar'), updateUser); // PUT /api/users/:id
 router.delete('/:id', deleteUser); // DELETE /api/users/:id
+router.post(
+	'/:id/verification',
+	requireAuth,
+	upload.fields([
+		{ name: 'photo', maxCount: 1 },
+		{ name: 'documents', maxCount: 6 }
+	]),
+	requestVerification
+); // POST /api/users/:id/verification
 
 export default router; 

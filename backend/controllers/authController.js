@@ -60,7 +60,8 @@ export const register = async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      location: user.location
+      location: user.location,
+      verificationStatus: role === 'farmer' ? 'not_submitted' : 'not_required'
     };
 
     res.status(201).json({
@@ -68,7 +69,8 @@ export const register = async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      location: user.location
+      location: user.location,
+      verificationStatus: role === 'farmer' ? 'not_submitted' : 'not_required'
     });
   } catch (err) {
     handleError(res, 500, 'Registration failed', err.message);
@@ -117,13 +119,38 @@ export const login = async (req, res) => {
 
     if (updateError) throw updateError;
 
+    let verificationStatus = 'not_required';
+    if (user.role === 'farmer') {
+      verificationStatus = 'not_submitted';
+      try {
+        const { data: verification, error: verificationError } = await supabase
+          .from('user_verifications')
+          .select('status')
+          .eq('user_id', user.id)
+          .order('submitted_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (verificationError && verificationError.code !== 'PGRST116') {
+          throw verificationError;
+        }
+
+        if (verification?.status) {
+          verificationStatus = verification.status;
+        }
+      } catch (verificationLookupError) {
+        console.warn('Unable to read user_verifications status:', verificationLookupError.message);
+      }
+    }
+
     // Set session
     req.session.user = {
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
-      location: user.location
+      location: user.location,
+      verificationStatus
     };
 
     res.json({
@@ -131,7 +158,8 @@ export const login = async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      location: user.location
+      location: user.location,
+      verificationStatus
     });
   } catch (err) {
     handleError(res, 500, 'Login failed', err.message);
