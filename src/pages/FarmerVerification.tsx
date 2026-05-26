@@ -448,12 +448,3 @@ const FarmerVerification = () => {
 };
 
 export default FarmerVerification;
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-};
-
-export default FarmerVerification;
