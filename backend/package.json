@@ -11,6 +11,8 @@
     "poll-delivery": "node scripts/pollDeliveryStatus.js",
     "migrate:supabase": "node scripts/migrateToSupabase.js",
     "test:supabase-crud": "node scripts/testSupabaseCrud.js"
+    ,"create:verifications-bucket": "node scripts/create_verifications_bucket.js"
+    ,"migrate:user-verifications": "node scripts/apply_verification_migration.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

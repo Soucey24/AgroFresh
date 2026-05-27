@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { MapPin, Camera, IdCard, Volume2, Phone, MapPinPlus, Check, ChevronRight, X, Loader2 } from 'lucide-react';
+import { MapPin, Camera, IdCard, Phone, MapPinPlus, Check, ChevronRight, X, Loader2 } from 'lucide-react';
 import BackgroundSlideshow from '@/components/BackgroundSlideshow';
 import { createFarmerVerification } from '../api_verification';
 
@@ -87,11 +87,7 @@ const FarmerVerification = () => {
     setCameraActive(true);
   };
 
-  const speak = (text: string) => {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-  };
+  // Voice guidance removed: keep function area empty to avoid runtime errors if referenced elsewhere
 
   const captureLocation = () => {
     setError('');
@@ -104,7 +100,6 @@ const FarmerVerification = () => {
       (position) => {
         setLatitude(position.coords.latitude.toFixed(6));
         setLongitude(position.coords.longitude.toFixed(6));
-        speak('Location saved successfully.');
         setLocationLoading(false);
       },
       () => {
@@ -118,16 +113,12 @@ const FarmerVerification = () => {
   const goNext = () => {
     if (step === 1) {
       if (!phone) return setError('Please enter your phone number');
-      speak('Phone number saved. Next step: Ghana card number.');
     } else if (step === 2) {
       if (!ghanaCardNumber) return setError('Please enter your Ghana card number');
-      speak('Ghana card saved. Next: take your photo.');
     } else if (step === 3) {
       if (!photoBlob) return setError('Please take a photo');
-      speak('Photo saved. Next: enter your farmers association address.');
     } else if (step === 4) {
       if (!associationAddress) return setError('Please enter your association address');
-      speak('Address saved. Final step: your location.');
     }
     setError('');
     setStep(step + 1);
@@ -168,7 +159,7 @@ const FarmerVerification = () => {
       if (res.error) {
         setError(res.error || 'Verification submission failed');
       } else {
-        speak('Your verification has been submitted. Please wait for approval.');
+        // Submission successful; redirect to farmers dashboard after short delay
         setTimeout(() => navigate('/farmers'), 1500);
       }
     } catch (err: any) {
@@ -217,9 +208,7 @@ const FarmerVerification = () => {
                     className="text-lg p-3 h-12"
                     autoFocus
                   />
-                  <Button type="button" variant="secondary" className="w-full h-10" onClick={() => speak('Enter your phone number')}>
-                    <Volume2 className="h-5 w-5 mr-2" /> Hear This Again
-                  </Button>
+                  {/* Voice guidance removed */}
                 </div>
               )}
 
@@ -242,9 +231,7 @@ const FarmerVerification = () => {
                     className="text-lg p-3 h-12 font-mono"
                     autoFocus
                   />
-                  <Button type="button" variant="secondary" className="w-full h-10" onClick={() => speak('Enter your Ghana card number')}>
-                    <Volume2 className="h-5 w-5 mr-2" /> Hear This Again
-                  </Button>
+                  {/* Voice guidance removed */}
                 </div>
               )}
 
@@ -267,7 +254,6 @@ const FarmerVerification = () => {
                       className="w-full h-24 text-lg font-semibold bg-green-600 hover:bg-green-700"
                       onClick={() => {
                         setCameraActive(true);
-                        speak('Camera is opening. Make sure your face is visible.');
                       }}
                     >
                       <Camera className="h-8 w-8 mr-2" /> Open Camera
@@ -331,9 +317,7 @@ const FarmerVerification = () => {
                     className="text-lg p-3 h-12"
                     autoFocus
                   />
-                  <Button type="button" variant="secondary" className="w-full h-10" onClick={() => speak('Enter your farmers association address')}>
-                    <Volume2 className="h-5 w-5 mr-2" /> Hear This Again
-                  </Button>
+                  {/* Voice guidance removed */}
                 </div>
               )}
 
@@ -387,9 +371,7 @@ const FarmerVerification = () => {
                     />
                   </div>
 
-                  <Button type="button" variant="secondary" className="w-full h-10" onClick={() => speak('Enter your farm location')}>
-                    <Volume2 className="h-5 w-5 mr-2" /> Hear This Again
-                  </Button>
+                  {/* Voice guidance removed */}
                 </div>
               )}
 

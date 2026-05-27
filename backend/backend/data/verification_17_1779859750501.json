@@ -1,0 +1,14 @@
+{
+  "user_id": 17,
+  "phone": "0243404515",
+  "farm_name": null,
+  "farmers_association_address": "eJISI",
+  "ghana_card_number": "GHA-1234556788",
+  "location_text": null,
+  "latitude": 6.591478,
+  "longitude": 0.469294,
+  "photo_url": "/uploads/1779859748736-485227403-farmer_photo.jpg",
+  "documents": [],
+  "status": "pending",
+  "submitted_at": "2026-05-27T05:29:09.827Z"
+}
