@@ -1,0 +1,17 @@
+{
+  "user_id": 17,
+  "phone": "0243404515",
+  "farm_name": null,
+  "farmers_association_address": "Ejisu",
+  "ghana_card_number": "GHA-123456789",
+  "location_text": "Region: Volta Region\r\nDistrict: Ho Municipal District\r\nTown/Village: Ho",
+  "region": "Volta Region",
+  "district": "Ho Municipal District",
+  "town_village": "Ho",
+  "latitude": 6.591478,
+  "longitude": 0.469294,
+  "photo_url": "https://gavmjvwrulijsljezrpo.supabase.co/storage/v1/object/sign/verifications/verifications/17/1779866660932_farmer_photo.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kNmU2YjY2NS1kMGZhLTRhZjgtOTNlZC04YmY2NTMzODQzY2IiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJ2ZXJpZmljYXRpb25zL3ZlcmlmaWNhdGlvbnMvMTcvMTc3OTg2NjY2MDkzMl9mYXJtZXJfcGhvdG8uanBnIiwiaWF0IjoxNzc5ODY2Njg4LCJleHAiOjE3ODA0NzE0ODh9.TP3eoo9FidWTsCKXKKH4ZJ-eD9OC2pSLA5DxH78bOZU",
+  "documents": [],
+  "status": "pending",
+  "submitted_at": "2026-05-27T07:24:26.804Z"
+}

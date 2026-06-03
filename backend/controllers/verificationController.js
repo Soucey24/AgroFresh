@@ -7,6 +7,34 @@ const handleError = (res, status, message, details) => {
   res.status(status).json({ error: message });
 };
 
+const createStorageEntry = async (supabaseClient, bucketName, file) => {
+  const buffer = fs.readFileSync(file.path);
+  const key = `verifications/${file.userId}/${Date.now()}_${file.originalname}`;
+  const { data, error } = await supabaseClient.storage.from(bucketName).upload(key, buffer, {
+    contentType: file.mimetype,
+    upsert: false,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const storedPath = data?.path || key;
+  const { data: signed, error: signedError } = await supabaseClient.storage
+    .from(bucketName)
+    .createSignedUrl(storedPath, 60 * 60 * 24 * 7);
+
+  if (signedError) {
+    throw signedError;
+  }
+
+  return {
+    name: file.originalname,
+    path: storedPath,
+    url: signed?.signedUrl || null,
+  };
+};
+
 export const requestVerification = async (req, res) => {
   try {
     const userId = parseInt(req.params.id, 10);
@@ -20,11 +48,18 @@ export const requestVerification = async (req, res) => {
     const farmers_association_address = req.body.farmers_association_address || null;
     const ghana_card_number = req.body.ghana_card_number || null;
     const location_text = req.body.location_text || null;
+    const region = req.body.region || null;
+    const district = req.body.district || null;
+    const town_village = req.body.town_village || null;
     const latitude = req.body.latitude ? Number(req.body.latitude) : null;
     const longitude = req.body.longitude ? Number(req.body.longitude) : null;
 
     if (!phone || !farmers_association_address || !ghana_card_number) {
       return handleError(res, 400, 'Phone, association address, and Ghana card number are required');
+    }
+
+    if (latitude === null || longitude === null || Number.isNaN(latitude) || Number.isNaN(longitude)) {
+      return handleError(res, 400, 'Real GPS location is required');
     }
 
     const uploaded = [];
@@ -38,18 +73,10 @@ export const requestVerification = async (req, res) => {
     if (supabase && allFiles.length) {
       for (const f of allFiles) {
         try {
-          const buffer = fs.readFileSync(f.path);
-          const key = `verifications/${userId}/${Date.now()}_${f.originalname}`;
-          const { data, error } = await supabase.storage.from('verifications').upload(key, buffer, {
-            contentType: f.mimetype,
-            upsert: false,
+          const entry = await createStorageEntry(supabase, 'verifications', {
+            ...f,
+            userId,
           });
-          if (error) {
-            console.warn('Supabase storage upload error', error.message);
-            continue;
-          }
-          const { publicURL } = supabase.storage.from('verifications').getPublicUrl(data.path || key);
-          const entry = { name: f.originalname, path: key, url: publicURL };
           if (photoFile && f.filename === photoFile.filename) {
             photoUpload = entry;
           } else {
@@ -80,6 +107,9 @@ export const requestVerification = async (req, res) => {
       farmers_association_address,
       ghana_card_number,
       location_text,
+      region,
+      district,
+      town_village,
       latitude,
       longitude,
       photo_url: photoUpload.url,

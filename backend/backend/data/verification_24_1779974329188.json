@@ -1,0 +1,17 @@
+{
+  "user_id": 24,
+  "phone": " 0559245135",
+  "farm_name": null,
+  "farmers_association_address": "offinso farmers assoication",
+  "ghana_card_number": "GHA-234567890-6",
+  "location_text": "Region: Greater Accra Region\r\nDistrict: Korle-Klottey Municipal District\r\nTown/Village: Accra",
+  "region": "Greater Accra Region",
+  "district": "Korle-Klottey Municipal District",
+  "town_village": "Accra",
+  "latitude": 5.5599,
+  "longitude": -0.2,
+  "photo_url": "https://gavmjvwrulijsljezrpo.supabase.co/storage/v1/object/sign/verifications/verifications/24/1779974322276_farmer_photo.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kNmU2YjY2NS1kMGZhLTRhZjgtOTNlZC04YmY2NTMzODQzY2IiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJ2ZXJpZmljYXRpb25zL3ZlcmlmaWNhdGlvbnMvMjQvMTc3OTk3NDMyMjI3Nl9mYXJtZXJfcGhvdG8uanBnIiwiaWF0IjoxNzc5OTc0MzQ5LCJleHAiOjE3ODA1NzkxNDl9.NSzuKxJxbe2WQDAxPNAebHBfuSVaDN7tZCVrYuvcbgE",
+  "documents": [],
+  "status": "pending",
+  "submitted_at": "2026-05-28T13:18:47.596Z"
+}
