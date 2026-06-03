@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useToast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,20 +16,21 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [role, setRole] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
     const result = await login(email, password, role);
+    setLoading(false);
     if (result.error) {
       setError(result.error);
       return;
     }
+    toast({ title: 'Signed in', description: 'Welcome back!' });
     if (result.role === "farmer") {
-      if (result.verificationStatus !== "approved") {
-        navigate(`/verify-farmer?id=${result.id}`);
-        return;
-      }
       navigate("/farmers");
     } else if (result.role === "buyer") {
       navigate("/buyers");
@@ -105,8 +108,14 @@ const Login = () => {
                 </div>
               </div>
 
-              <Button type="submit" className="w-full h-11">
-                Sign In
+              <Button type="submit" className="w-full h-11" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Signing in...
+                  </>
+                ) : (
+                  'Sign In'
+                )}
               </Button>
             </form>
 

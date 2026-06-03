@@ -5,9 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Leaf, User, Mail, Lock, MapPin } from "lucide-react";
+import { Leaf, User, Mail, Lock, MapPin, Loader2 } from "lucide-react";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
 import { register } from '../api';
+import { useToast } from '@/hooks/use-toast';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -20,6 +21,8 @@ const Register = () => {
     location: ""
   });
   const [error, setError] = useState("");
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,14 +36,18 @@ const Register = () => {
       return;
     }
     // Call backend API
+    setLoading(true);
     const result = await register(formData);
+    setLoading(false);
     if (result.error) {
       setError(result.error);
       return;
     }
+    toast({ title: 'Account created' });
+
     if (result.role === "farmer") {
-      // Verification is completed after farmer logs in.
-      navigate("/login");
+      // Keep the user signed-in and send them straight to the verification wizard
+      navigate(`/verify-farmer?id=${result.id}`);
     } else if (result.role === "buyer") {
       navigate("/buyers");
     } else if (result.role === "vendor") {
@@ -165,8 +172,14 @@ const Register = () => {
                 <div className="text-red-500 text-sm mb-2 text-center">{error}</div>
               )}
 
-              <Button type="submit" className="w-full">
-                Create Account
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating...
+                  </>
+                ) : (
+                  'Create Account'
+                )}
               </Button>
             </form>
 

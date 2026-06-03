@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { MapPin, Camera, IdCard, Phone, MapPinPlus, Check, ChevronRight, X, Loader2 } from 'lucide-react';
 import BackgroundSlideshow from '@/components/BackgroundSlideshow';
 import { createFarmerVerification } from '../api_verification';
+import { useToast } from '@/hooks/use-toast';
 
 const FarmerVerification = () => {
   const navigate = useNavigate();
@@ -23,12 +24,18 @@ const FarmerVerification = () => {
   const [associationAddress, setAssociationAddress] = useState('');
   const [latitude, setLatitude] = useState<string>('');
   const [longitude, setLongitude] = useState<string>('');
-  const [locationText, setLocationText] = useState('');
+  const [locationDetails, setLocationDetails] = useState({
+    region: '',
+    district: '',
+    townVillage: '',
+  });
+  const [locationConfirmed, setLocationConfirmed] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [error, setError] = useState('');
+  const { toast } = useToast();
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -41,6 +48,12 @@ const FarmerVerification = () => {
       stopCamera();
     };
   }, [cameraActive, step]);
+
+  useEffect(() => {
+    if (step === 5 && !latitude && !longitude && !locationLoading) {
+      captureLocation();
+    }
+  }, [step, latitude, longitude, locationLoading]);
 
   const startCamera = async () => {
     try {
@@ -92,18 +105,79 @@ const FarmerVerification = () => {
   const captureLocation = () => {
     setError('');
     if (!navigator.geolocation) {
-      setError('Location not supported. Type your location instead.');
+      setError('Location is not supported on this device or browser.');
       return;
     }
     setLocationLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLatitude(position.coords.latitude.toFixed(6));
-        setLongitude(position.coords.longitude.toFixed(6));
-        setLocationLoading(false);
+      async (position) => {
+        const nextLatitude = position.coords.latitude.toFixed(6);
+        const nextLongitude = position.coords.longitude.toFixed(6);
+        setLatitude(nextLatitude);
+        setLongitude(nextLongitude);
+
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${nextLatitude}&lon=${nextLongitude}`,
+            {
+              headers: {
+                Accept: 'application/json',
+              },
+            }
+          );
+          const data = await response.json();
+          const countryCode = (data?.address?.country_code || '').toLowerCase();
+          if (countryCode !== 'gh' && (data?.address?.country || '').toLowerCase() !== 'ghana') {
+            setLatitude('');
+            setLongitude('');
+            setLocationDetails({ region: '', district: '', townVillage: '' });
+            setError('Please stand in Ghana and try again so we can capture the farm location.');
+            return;
+          }
+
+          // Ghana-specific parsing: try several address fields to find the best match
+          const addr = data?.address || {};
+          const region = addr.state || addr.region || addr.state_district || addr['ISO3166-2-lvl4'] || '';
+          const district = addr.county || addr.municipality || addr.district || addr.city_district || addr.subdivision || addr.county_code || '';
+          const townVillage = addr.village || addr.town || addr.city || addr.hamlet || addr.suburb || addr.locality || '';
+
+          // Fallback: try to parse display_name for more granular locality if empty
+          let displayFallback = '';
+          if ((!region || !district || !townVillage) && data?.display_name) {
+            const parts = data.display_name.split(',').map((p: string) => p.trim());
+            // Typical display_name: "Place, Suburb, District, Region, Ghana"
+            if (parts.length >= 3) {
+              const last = parts[parts.length - 1];
+              const maybeCountry = last.toLowerCase();
+              if (maybeCountry === 'ghana' || maybeCountry === 'republic of ghana') {
+                // pick from the end: region = parts[-2], district = parts[-3], town = parts[0]
+                displayFallback = parts.join(', ');
+                if (!region) region = parts[parts.length - 2] || region;
+                if (!district) district = parts[parts.length - 3] || district;
+                if (!townVillage) townVillage = parts[0] || townVillage;
+              }
+            }
+          }
+
+          setLocationDetails({
+            region: region || 'Unknown region',
+            district: district || 'Unknown district',
+            townVillage: townVillage || 'Unknown town/village',
+          });
+          setLocationConfirmed(false);
+        } catch {
+          setLocationDetails({
+            region: 'Unknown region',
+            district: 'Unknown district',
+            townVillage: 'Unknown town/village',
+          });
+          setLocationConfirmed(false);
+        } finally {
+          setLocationLoading(false);
+        }
       },
       () => {
-        setError('Could not get location. Allow location access or type your location.');
+        setError('Could not get your real location. Please allow GPS/location access and try again.');
         setLocationLoading(false);
       },
       { enableHighAccuracy: true, timeout: 15000 }
@@ -140,8 +214,11 @@ const FarmerVerification = () => {
     if (!phone || !ghanaCardNumber || !photoBlob || !associationAddress) {
       return setError('Please complete all steps');
     }
-    if (!locationText && (!latitude || !longitude)) {
-      return setError('Please enter your location');
+    if (!latitude || !longitude || !locationDetails.region || !locationDetails.district || !locationDetails.townVillage) {
+      return setError('Please get your real location first');
+    }
+    if (!locationConfirmed) {
+      return setError('Please confirm the location details before submitting');
     }
 
     setLoading(true);
@@ -150,7 +227,13 @@ const FarmerVerification = () => {
       form.append('phone', phone);
       form.append('ghana_card_number', ghanaCardNumber);
       form.append('farmers_association_address', associationAddress);
-      form.append('location_text', locationText);
+      form.append(
+        'location_text',
+        `Region: ${locationDetails.region}\nDistrict: ${locationDetails.district}\nTown/Village: ${locationDetails.townVillage}`
+      );
+      form.append('region', locationDetails.region);
+      form.append('district', locationDetails.district);
+      form.append('town_village', locationDetails.townVillage);
       if (latitude) form.append('latitude', latitude);
       if (longitude) form.append('longitude', longitude);
       form.append('photo', photoBlob, 'farmer_photo.jpg');
@@ -158,9 +241,18 @@ const FarmerVerification = () => {
       const res = await createFarmerVerification(userId, form);
       if (res.error) {
         setError(res.error || 'Verification submission failed');
+        toast({ title: 'Verification failed', description: res.error || 'Submission failed' });
+      } else if (res.fallback) {
+        // Saved to local file because DB or storage unavailable
+        toast({ title: 'Saved locally', description: `Verification saved to server fallback: ${res.path || 'server'}` });
+        setTimeout(() => navigate('/farmers'), 1400);
+      } else if (res.success) {
+        toast({ title: 'Verification submitted', description: 'Your verification is pending review' });
+        setTimeout(() => navigate('/farmers'), 1200);
       } else {
-        // Submission successful; redirect to farmers dashboard after short delay
-        setTimeout(() => navigate('/farmers'), 1500);
+        // Unexpected response
+        setError('Unexpected server response');
+        toast({ title: 'Verification failed', description: 'Unexpected server response' });
       }
     } catch (err: any) {
       setError(err?.message || 'Submission error');
@@ -327,9 +419,9 @@ const FarmerVerification = () => {
                   <div className="flex items-center gap-3 mb-4">
                     <MapPin className="h-8 w-8 text-red-500" />
                     <div>
-                      <h3 className="text-xl font-semibold">Your Farm Location</h3>
+                      <h3 className="text-xl font-semibold">Your Real Farm Location</h3>
                       <p className="text-sm text-muted-foreground">
-                        We'll save your GPS location or accept a description
+                        We will use your phone's GPS to capture the real location
                       </p>
                     </div>
                   </div>
@@ -361,17 +453,44 @@ const FarmerVerification = () => {
                     </div>
                   )}
 
-                  <div>
-                    <Label>Or describe your location</Label>
-                    <Input
-                      value={locationText}
-                      onChange={(e) => setLocationText(e.target.value)}
-                      placeholder="e.g., Near the market, Ashanti region"
-                      className="text-lg p-3 h-12"
-                    />
-                  </div>
+                  {locationDetails.region && locationDetails.district && locationDetails.townVillage && (
+                    <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">Exact location details</p>
+                      <div className="mt-2 space-y-1 text-sm text-blue-800 dark:text-blue-200">
+                        <p><span className="font-semibold">Region:</span> {locationDetails.region}</p>
+                        <p><span className="font-semibold">District:</span> {locationDetails.district}</p>
+                        <p><span className="font-semibold">Town/Village:</span> {locationDetails.townVillage}</p>
+                      </div>
+                    </div>
+                  )}
 
-                  {/* Voice guidance removed */}
+                  {locationDetails.region && locationDetails.district && locationDetails.townVillage && (
+                    <Button
+                      type="button"
+                      className="w-full h-14 text-base font-semibold bg-blue-600 hover:bg-blue-700"
+                      onClick={() => setLocationConfirmed(true)}
+                    >
+                      {locationConfirmed ? (
+                        <>
+                          <Check className="h-5 w-5 mr-2" /> Location Confirmed
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-5 w-5 mr-2" /> Confirm This Location
+                        </>
+                      )}
+                    </Button>
+                  )}
+
+                  {locationConfirmed && (
+                    <p className="text-sm font-semibold text-green-700 dark:text-green-300">
+                      Location confirmed. You can now submit the verification.
+                    </p>
+                  )}
+
+                  <p className="text-sm text-muted-foreground">
+                    We use your live GPS coordinates and the nearest place name. If it is wrong, tap <strong>Get My Location</strong> again and allow location access.
+                  </p>
                 </div>
               )}
 
@@ -403,7 +522,7 @@ const FarmerVerification = () => {
                   <Button
                     type="submit"
                     className="flex-1 h-12 text-base font-semibold bg-green-600 hover:bg-green-700"
-                    disabled={loading}
+                    disabled={loading || !locationConfirmed}
                   >
                     {loading ? (
                       <>

@@ -9,7 +9,20 @@ export async function createFarmerVerification(userId, formData) {
     credentials: 'include',
     body: formData,
   });
-  return res.json();
+
+  let body = {};
+  try {
+    body = await res.json();
+  } catch (err) {
+    // Non-JSON response
+    body = { error: `Server returned status ${res.status}` };
+  }
+
+  if (!res.ok) {
+    return { error: body.error || `Request failed (${res.status})`, status: res.status, raw: body };
+  }
+
+  return body;
 }
 
 export default { createFarmerVerification };
