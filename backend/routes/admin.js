@@ -6,17 +6,19 @@ import {
   getOrderStats, 
   getPaymentStats,
   getAdminCrops,
+  reviewCropListing,
   getAdminOrders,
   getAdminPayments,
   getAdminSettings,
   updateAdminSettings
 } from '../controllers/adminController.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { approveFarmerVerification, getPendingVerifications } from '../controllers/adminController.js';
 
 const router = express.Router();
 
-// All admin routes require vendor role
-router.use(requireAuth, requireRole('vendor'));
+// All admin routes require either admin or legacy vendor role
+router.use(requireAuth, requireRole(['admin', 'vendor']));
 
 // Dashboard statistics
 router.get('/stats', getDashboardStats);
@@ -37,6 +39,7 @@ router.get('/payments/stats', getPaymentStats);
 
 // Admin crop listings with farmer info
 router.get('/crops', getAdminCrops);
+router.patch('/crops/:id/review', reviewCropListing);
 
 // Admin orders with all details
 router.get('/orders', getAdminOrders);
@@ -47,5 +50,10 @@ router.get('/payments', getAdminPayments);
 // Admin settings
 router.get('/settings', getAdminSettings);
 router.put('/settings', updateAdminSettings);
+
+// Farmer verification review
+router.get('/verifications/pending', getPendingVerifications);
+router.patch('/verifications/:id/approve', approveFarmerVerification);
+router.patch('/verifications/:id/reject', approveFarmerVerification);
 
 export default router; 

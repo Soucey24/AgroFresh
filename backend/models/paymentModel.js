@@ -8,7 +8,7 @@ export async function createPaymentsTable() {
       buyer_id INT NOT NULL,
       farmer_id INT NOT NULL,
       amount DECIMAL(10,2) NOT NULL,
-      payment_method ENUM('mtn-momo', 'vodafone-cash', 'airteltigo-money', 'card', 'bank-transfer') NOT NULL,
+      payment_method ENUM('mtn-momo', 'vodafone-cash', 'airteltigo-money', 'card', 'bank-transfer', 'paystack') NOT NULL,
       phone_number VARCHAR(20),
       transaction_id VARCHAR(255),
       reference_id VARCHAR(255) UNIQUE,

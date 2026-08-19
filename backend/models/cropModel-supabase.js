@@ -1,7 +1,7 @@
 import { supabase } from '../app.js';
 
 // Create crop listing
-export async function createCrop(name, description, price, quantity, unit, farmerId, image, expiryDate = null) {
+export async function createCrop(name, description, price, quantity, unit, farmerId, image, expiryDate = null, plantingDate = null, harvestDatePredicted = null, predictedExpiry = null) {
   const { data, error } = await supabase
     .from('crops')
     .insert([
@@ -14,6 +14,9 @@ export async function createCrop(name, description, price, quantity, unit, farme
         farmer_id: farmerId,
         image,
         expiry_date: expiryDate,
+        planting_date: plantingDate,
+        harvest_date_predicted: harvestDatePredicted,
+        predicted_expiry: predictedExpiry,
         available: true
       }
     ])

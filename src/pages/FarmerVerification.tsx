@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { MapPin, Camera, IdCard, Phone, MapPinPlus, Check, ChevronRight, X, Loader2 } from 'lucide-react';
+import { MapPin, Camera, IdCard, MapPinPlus, Check, ChevronRight, X, Loader2 } from 'lucide-react';
 import BackgroundSlideshow from '@/components/BackgroundSlideshow';
 import { createFarmerVerification } from '../api_verification';
 import { useToast } from '@/hooks/use-toast';
@@ -14,22 +14,21 @@ const FarmerVerification = () => {
   const { search } = useLocation();
   const params = new URLSearchParams(search);
   const userId = params.get('id');
+  const prefilledPhone = params.get('phone') || '';
 
   // Wizard state
   const [step, setStep] = useState(1);
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(prefilledPhone);
   const [ghanaCardNumber, setGhanaCardNumber] = useState('');
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>('');
   const [associationAddress, setAssociationAddress] = useState('');
-  const [latitude, setLatitude] = useState<string>('');
-  const [longitude, setLongitude] = useState<string>('');
+  const [exactLocation, setExactLocation] = useState('');
   const [locationDetails, setLocationDetails] = useState({
     region: '',
     district: '',
     townVillage: '',
   });
-  const [locationConfirmed, setLocationConfirmed] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
@@ -42,30 +41,47 @@ const FarmerVerification = () => {
 
   // Camera setup & cleanup
   useEffect(() => {
-    if (!cameraActive || step !== 3) return;
+    if (!cameraActive || step !== 2) return;
     startCamera();
     return () => {
       stopCamera();
     };
   }, [cameraActive, step]);
 
-  useEffect(() => {
-    if (step === 5 && !latitude && !longitude && !locationLoading) {
-      captureLocation();
-    }
-  }, [step, latitude, longitude, locationLoading]);
+
+  const isValidGhanaPhone = (value: string) => {
+    const clean = value.replace(/\s+/g, '');
+    return /^(?:\+233|233|0)(?:20|24|26|27|50|54|55|59)\d{7,8}$/.test(clean);
+  };
 
   const startCamera = async () => {
     try {
       setError('');
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setError('This browser does not support camera capture. Please use Chrome or Edge on desktop or mobile.');
+        setCameraActive(false);
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } },
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
       });
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.muted = true;
+        videoRef.current.playsInline = true;
+        await videoRef.current.play().catch(() => undefined);
       }
     } catch (err: any) {
-      setError('Cannot access camera. Please check permissions.');
+      console.error('Camera access failed:', err);
+      setError('Camera access was blocked. Please allow camera permission in your browser and try again.');
       setCameraActive(false);
     }
   };
@@ -74,6 +90,7 @@ const FarmerVerification = () => {
     if (videoRef.current?.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
       stream.getTracks().forEach((track) => track.stop());
+      videoRef.current.srcObject = null;
     }
   };
 
@@ -102,97 +119,15 @@ const FarmerVerification = () => {
 
   // Voice guidance removed: keep function area empty to avoid runtime errors if referenced elsewhere
 
-  const captureLocation = () => {
-    setError('');
-    if (!navigator.geolocation) {
-      setError('Location is not supported on this device or browser.');
-      return;
-    }
-    setLocationLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const nextLatitude = position.coords.latitude.toFixed(6);
-        const nextLongitude = position.coords.longitude.toFixed(6);
-        setLatitude(nextLatitude);
-        setLongitude(nextLongitude);
-
-        try {
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${nextLatitude}&lon=${nextLongitude}`,
-            {
-              headers: {
-                Accept: 'application/json',
-              },
-            }
-          );
-          const data = await response.json();
-          const countryCode = (data?.address?.country_code || '').toLowerCase();
-          if (countryCode !== 'gh' && (data?.address?.country || '').toLowerCase() !== 'ghana') {
-            setLatitude('');
-            setLongitude('');
-            setLocationDetails({ region: '', district: '', townVillage: '' });
-            setError('Please stand in Ghana and try again so we can capture the farm location.');
-            return;
-          }
-
-          // Ghana-specific parsing: try several address fields to find the best match
-          const addr = data?.address || {};
-          const region = addr.state || addr.region || addr.state_district || addr['ISO3166-2-lvl4'] || '';
-          const district = addr.county || addr.municipality || addr.district || addr.city_district || addr.subdivision || addr.county_code || '';
-          const townVillage = addr.village || addr.town || addr.city || addr.hamlet || addr.suburb || addr.locality || '';
-
-          // Fallback: try to parse display_name for more granular locality if empty
-          let displayFallback = '';
-          if ((!region || !district || !townVillage) && data?.display_name) {
-            const parts = data.display_name.split(',').map((p: string) => p.trim());
-            // Typical display_name: "Place, Suburb, District, Region, Ghana"
-            if (parts.length >= 3) {
-              const last = parts[parts.length - 1];
-              const maybeCountry = last.toLowerCase();
-              if (maybeCountry === 'ghana' || maybeCountry === 'republic of ghana') {
-                // pick from the end: region = parts[-2], district = parts[-3], town = parts[0]
-                displayFallback = parts.join(', ');
-                if (!region) region = parts[parts.length - 2] || region;
-                if (!district) district = parts[parts.length - 3] || district;
-                if (!townVillage) townVillage = parts[0] || townVillage;
-              }
-            }
-          }
-
-          setLocationDetails({
-            region: region || 'Unknown region',
-            district: district || 'Unknown district',
-            townVillage: townVillage || 'Unknown town/village',
-          });
-          setLocationConfirmed(false);
-        } catch {
-          setLocationDetails({
-            region: 'Unknown region',
-            district: 'Unknown district',
-            townVillage: 'Unknown town/village',
-          });
-          setLocationConfirmed(false);
-        } finally {
-          setLocationLoading(false);
-        }
-      },
-      () => {
-        setError('Could not get your real location. Please allow GPS/location access and try again.');
-        setLocationLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 15000 }
-    );
-  };
-
   const goNext = () => {
     if (step === 1) {
-      if (!phone) return setError('Please enter your phone number');
-    } else if (step === 2) {
       if (!ghanaCardNumber) return setError('Please enter your Ghana card number');
-    } else if (step === 3) {
+    } else if (step === 2) {
       if (!photoBlob) return setError('Please take a photo');
-    } else if (step === 4) {
+    } else if (step === 3) {
       if (!associationAddress) return setError('Please enter your association address');
+    } else if (step === 4) {
+      if (!exactLocation.trim()) return setError('Please type the exact farm location');
     }
     setError('');
     setStep(step + 1);
@@ -211,31 +146,24 @@ const FarmerVerification = () => {
     e.preventDefault();
     setError('');
     if (!userId) return setError('Missing user id');
-    if (!phone || !ghanaCardNumber || !photoBlob || !associationAddress) {
+    if (!ghanaCardNumber || !photoBlob || !associationAddress) {
       return setError('Please complete all steps');
     }
-    if (!latitude || !longitude || !locationDetails.region || !locationDetails.district || !locationDetails.townVillage) {
-      return setError('Please get your real location first');
-    }
-    if (!locationConfirmed) {
-      return setError('Please confirm the location details before submitting');
+    if (!exactLocation.trim()) {
+      return setError('Please type the exact farm location before submitting');
     }
 
     setLoading(true);
     try {
       const form = new FormData();
+      form.append('user_id', String(userId || ''));
       form.append('phone', phone);
       form.append('ghana_card_number', ghanaCardNumber);
-      form.append('farmers_association_address', associationAddress);
-      form.append(
-        'location_text',
-        `Region: ${locationDetails.region}\nDistrict: ${locationDetails.district}\nTown/Village: ${locationDetails.townVillage}`
-      );
-      form.append('region', locationDetails.region);
-      form.append('district', locationDetails.district);
-      form.append('town_village', locationDetails.townVillage);
-      if (latitude) form.append('latitude', latitude);
-      if (longitude) form.append('longitude', longitude);
+      form.append('farmers_association_address', associationAddress.trim());
+      form.append('location_text', exactLocation.trim());
+      form.append('region', locationDetails.region || '');
+      form.append('district', locationDetails.district || '');
+      form.append('town_village', locationDetails.townVillage || '');
       form.append('photo', photoBlob, 'farmer_photo.jpg');
 
       const res = await createFarmerVerification(userId, form);
@@ -268,44 +196,21 @@ const FarmerVerification = () => {
         <Card className="bg-card/40 backdrop-blur-sm border-border/50">
           <CardHeader className="text-center border-b">
             <div className="mb-2 text-sm font-medium text-muted-foreground">
-              Step {step} of 5
+              Step {step} of 4
             </div>
             <CardTitle className="text-3xl">Farmer Verification</CardTitle>
             <div className="mt-2 h-1 w-full bg-muted rounded-full overflow-hidden">
               <div
                 className="h-full bg-green-500 transition-all duration-300"
-                style={{ width: `${(step / 5) * 100}%` }}
+                style={{ width: `${(step / 4) * 100}%` }}
               />
             </div>
           </CardHeader>
 
           <CardContent className="pt-6">
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Step 1: Phone */}
+              {/* Step 1: Ghana Card */}
               {step === 1 && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Phone className="h-8 w-8 text-blue-500" />
-                    <div>
-                      <h3 className="text-xl font-semibold">Your Phone Number</h3>
-                      <p className="text-sm text-muted-foreground">
-                        We'll use this to contact you about your farm
-                      </p>
-                    </div>
-                  </div>
-                  <Input
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="e.g. +233 20 123 4567"
-                    className="text-lg p-3 h-12"
-                    autoFocus
-                  />
-                  {/* Voice guidance removed */}
-                </div>
-              )}
-
-              {/* Step 2: Ghana Card */}
-              {step === 2 && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     <IdCard className="h-8 w-8 text-purple-500" />
@@ -327,8 +232,8 @@ const FarmerVerification = () => {
                 </div>
               )}
 
-              {/* Step 3: Take Photo */}
-              {step === 3 && (
+              {/* Step 2: Take Photo */}
+              {step === 2 && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 mb-4">
                     <Camera className="h-8 w-8 text-green-500" />
@@ -390,8 +295,8 @@ const FarmerVerification = () => {
                 </div>
               )}
 
-              {/* Step 4: Association Address */}
-              {step === 4 && (
+              {/* Step 3: Association Address */}
+              {step === 3 && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     <MapPinPlus className="h-8 w-8 text-orange-500" />
@@ -413,83 +318,33 @@ const FarmerVerification = () => {
                 </div>
               )}
 
-              {/* Step 5: Location */}
-              {step === 5 && (
+              {/* Step 4: Location */}
+              {step === 4 && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 mb-4">
                     <MapPin className="h-8 w-8 text-red-500" />
                     <div>
-                      <h3 className="text-xl font-semibold">Your Real Farm Location</h3>
+                      <h3 className="text-xl font-semibold">Exact Farm Location</h3>
                       <p className="text-sm text-muted-foreground">
-                        We will use your phone's GPS to capture the real location
+                        Type the precise location of the farm or business area
                       </p>
                     </div>
                   </div>
 
-                  <Button
-                    type="button"
-                    className="w-full h-16 text-lg font-semibold bg-red-600 hover:bg-red-700"
-                    onClick={captureLocation}
-                    disabled={locationLoading}
-                  >
-                    {locationLoading ? (
-                      <>
-                        <Loader2 className="h-6 w-6 mr-2 animate-spin" /> Getting Location...
-                      </>
-                    ) : (
-                      <>
-                        <MapPin className="h-6 w-6 mr-2" /> Get My Location
-                      </>
-                    )}
-                  </Button>
-
-                  {latitude && longitude && (
-                    <div className="bg-green-50 dark:bg-green-950 p-3 rounded-lg border border-green-200 dark:border-green-800 flex items-start gap-2">
-                      <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                      <div className="text-sm">
-                        <p className="font-semibold text-green-900 dark:text-green-100">Location saved</p>
-                        <p className="text-green-800 dark:text-green-200 font-mono text-xs">{latitude}, {longitude}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {locationDetails.region && locationDetails.district && locationDetails.townVillage && (
-                    <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">Exact location details</p>
-                      <div className="mt-2 space-y-1 text-sm text-blue-800 dark:text-blue-200">
-                        <p><span className="font-semibold">Region:</span> {locationDetails.region}</p>
-                        <p><span className="font-semibold">District:</span> {locationDetails.district}</p>
-                        <p><span className="font-semibold">Town/Village:</span> {locationDetails.townVillage}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {locationDetails.region && locationDetails.district && locationDetails.townVillage && (
-                    <Button
-                      type="button"
-                      className="w-full h-14 text-base font-semibold bg-blue-600 hover:bg-blue-700"
-                      onClick={() => setLocationConfirmed(true)}
-                    >
-                      {locationConfirmed ? (
-                        <>
-                          <Check className="h-5 w-5 mr-2" /> Location Confirmed
-                        </>
-                      ) : (
-                        <>
-                          <Check className="h-5 w-5 mr-2" /> Confirm This Location
-                        </>
-                      )}
-                    </Button>
-                  )}
-
-                  {locationConfirmed && (
-                    <p className="text-sm font-semibold text-green-700 dark:text-green-300">
-                      Location confirmed. You can now submit the verification.
-                    </p>
-                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="exact-location">Exact location</Label>
+                    <Input
+                      id="exact-location"
+                      value={exactLocation}
+                      onChange={(e) => setExactLocation(e.target.value)}
+                      placeholder="e.g. Besease, Bosome Freho District, Eastern Region, Ghana"
+                      className="text-base p-3 h-12"
+                      autoFocus
+                    />
+                  </div>
 
                   <p className="text-sm text-muted-foreground">
-                    We use your live GPS coordinates and the nearest place name. If it is wrong, tap <strong>Get My Location</strong> again and allow location access.
+                    This should be the exact address or farm location as it should appear for buyers and delivery teams.
                   </p>
                 </div>
               )}
@@ -510,7 +365,7 @@ const FarmerVerification = () => {
                   </Button>
                 )}
 
-                {step < 5 ? (
+                {step < 4 ? (
                   <Button
                     type="button"
                     className="flex-1 h-12 text-base font-semibold bg-blue-600 hover:bg-blue-700"
@@ -522,7 +377,7 @@ const FarmerVerification = () => {
                   <Button
                     type="submit"
                     className="flex-1 h-12 text-base font-semibold bg-green-600 hover:bg-green-700"
-                    disabled={loading || !locationConfirmed}
+                    disabled={loading}
                   >
                     {loading ? (
                       <>

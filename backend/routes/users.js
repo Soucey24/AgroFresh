@@ -18,7 +18,6 @@ router.put('/:id', upload.single('avatar'), updateUser); // PUT /api/users/:id
 router.delete('/:id', deleteUser); // DELETE /api/users/:id
 router.post(
 	'/:id/verification',
-	requireAuth,
 	upload.fields([
 		{ name: 'photo', maxCount: 1 },
 		{ name: 'documents', maxCount: 6 }

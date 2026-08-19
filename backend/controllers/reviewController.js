@@ -26,6 +26,26 @@ export const createReview = async (req, res) => {
     }
     if (cropError) throw cropError;
 
+    const { data: purchase, error: purchaseError } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('buyer_id', user.id)
+      .eq('crop_id', cropId)
+      .in('status', ['paid', 'completed', 'delivered'])
+      .limit(1)
+      .maybeSingle();
+    if (purchaseError) throw purchaseError;
+    if (!purchase) return handleError(res, 403, 'Only buyers with a completed purchase can review this product');
+
+    const { data: existingReview, error: existingReviewError } = await supabase
+      .from('reviews')
+      .select('id')
+      .eq('crop_id', cropId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (existingReviewError) throw existingReviewError;
+    if (existingReview) return handleError(res, 409, 'You have already reviewed this product');
+
     const record = {
       crop_id: cropId,
       user_id: user.id || null,

@@ -8,9 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import Navigation from "@/components/Navigation";
-import BackgroundSlideshow from "@/components/BackgroundSlideshow";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import FarmerLayout from "@/components/FarmerLayout";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   listCrops,
   createCrop,
@@ -22,8 +22,10 @@ import {
   calculateCropFreshness,
   forecastCropPrice,
   recommendCropSellingTime
+  ,getPayouts
 } from "../api";
 import { getImageUrl } from "../utils/imageUtils";
+import { toast } from "@/components/ui/sonner";
 
 
 interface Crop {
@@ -75,7 +77,7 @@ const initialCrops: Crop[] = [
 function SalesReportModal({ open, onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [orders, setOrders] = useState([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [summary, setSummary] = useState({ totalSales: 0, totalRevenue: 0 });
 
   useEffect(() => {
@@ -83,18 +85,19 @@ function SalesReportModal({ open, onClose }) {
     setLoading(true);
     setError("");
     fetch("/api/orders/sales-report", { credentials: "include" })
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setOrders(data);
-          const totalSales = data.length;
-          const totalRevenue = data.reduce((acc, o) => acc + (o.price * o.quantity), 0);
+      .then((res) => res.json())
+      .then((data) => {
+        const report = Array.isArray(data) ? data : data.report;
+        if (Array.isArray(report)) {
+          setOrders(report);
+          const totalSales = report.length;
+          const totalRevenue = data.totalSales ?? report.reduce((acc, order) => acc + Number(order.total || 0), 0);
           setSummary({ totalSales, totalRevenue });
         } else {
           setError(data.error || "Failed to fetch sales report");
         }
       })
-      .catch(err => setError("Failed to fetch sales report"))
+      .catch(() => setError("Failed to fetch sales report"))
       .finally(() => setLoading(false));
   }, [open]);
 
@@ -110,7 +113,7 @@ function SalesReportModal({ open, onClose }) {
           {error && <div className="text-center text-destructive">{error}</div>}
           {!loading && !error && (
             <>
-              <div className="mb-4 flex flex-wrap gap-4 justify-between">
+              <div className="mb-4 flex flex-wrap gap-4 justify-between text-sm">
                 <div><strong>Total Orders:</strong> {summary.totalSales}</div>
                 <div><strong>Total Revenue:</strong> GH₵ {summary.totalRevenue.toFixed(2)}</div>
               </div>
@@ -118,25 +121,19 @@ function SalesReportModal({ open, onClose }) {
                 <table className="min-w-full text-xs sm:text-sm">
                   <thead>
                     <tr>
-                      <th className="px-2 py-1">Date</th>
-                      <th className="px-2 py-1">Crop</th>
-                      <th className="px-2 py-1">Quantity</th>
-                      <th className="px-2 py-1">Unit</th>
-                      <th className="px-2 py-1">Price</th>
-                      <th className="px-2 py-1">Buyer</th>
-                      <th className="px-2 py-1">Status</th>
+                      <th className="text-left py-2 pr-3">Order ID</th>
+                      <th className="text-left py-2 pr-3">Crop</th>
+                      <th className="text-left py-2 pr-3">Amount</th>
+                      <th className="text-left py-2 pr-3">Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {orders.map(order => (
-                      <tr key={order.id}>
-                        <td className="px-2 py-1">{new Date(order.created_at).toLocaleDateString()}</td>
-                        <td className="px-2 py-1">{order.crop_name || order.crop_id}</td>
-                        <td className="px-2 py-1">{order.quantity}</td>
-                        <td className="px-2 py-1">{order.unit || "kg"}</td>
-                        <td className="px-2 py-1">GH₵ {order.price}</td>
-                        <td className="px-2 py-1">{order.buyer_name || order.buyer_id}</td>
-                        <td className="px-2 py-1">{order.status}</td>
+                    {orders.map((order) => (
+                      <tr key={order.id} className="border-t">
+                        <td className="py-2 pr-3">{order.orderId ?? order.id}</td>
+                        <td className="py-2 pr-3">{order.cropName || order.crop_name || order.crop_id}</td>
+                        <td className="py-2 pr-3">GH₵ {Number(order.total || 0).toFixed(2)}</td>
+                        <td className="py-2 pr-3">{order.status}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -145,60 +142,74 @@ function SalesReportModal({ open, onClose }) {
             </>
           )}
         </div>
-        <Button variant="outline" onClick={onClose} className="w-full mt-4">Close</Button>
+        <Button variant="outline" onClick={onClose} className="w-full">Close</Button>
       </DialogContent>
     </Dialog>
   );
 }
 
 function RequestPaymentModal({ open, onClose }) {
+  const [orders, setOrders] = useState<any[]>([]);
+  const [selected, setSelected] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
-  const [orders, setOrders] = useState([]);
-  const [selected, setSelected] = useState([]);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [payouts, setPayouts] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setSelected([]);
+      setError("");
+      setSuccess("");
+      return;
+    }
+
     setLoading(true);
-    setError('');
-    setSuccess('');
-    fetch('/api/orders/sales-report', { credentials: 'include' })
-      .then(res => res.json())
-      .then(data => {
-        // Filter for eligible orders (e.g., completed, not paid out)
-        setOrders(data.filter(o => o.status === 'completed' && !o.paid_out));
+    setError("");
+    Promise.all([
+      fetch("/api/orders/sales-report", { credentials: "include" }).then((res) => res.json()),
+      getPayouts()
+    ]).then(([data, payoutData]) => {
+        if (Array.isArray(payoutData)) setPayouts(payoutData);
+        const report = Array.isArray(data) ? data : data.report;
+        if (Array.isArray(report)) {
+          const requested = new Set((payoutData || []).map((payout) => payout.order_id));
+          setOrders(report.filter((order) => !requested.has(order.orderId ?? order.id)));
+        } else {
+          setError(data.error || "Failed to fetch orders");
+        }
       })
-      .catch(() => setError('Failed to fetch orders'))
+      .catch(() => setError("Failed to fetch orders"))
       .finally(() => setLoading(false));
   }, [open]);
 
   const handleRequest = async () => {
     setLoading(true);
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
     try {
       for (const orderId of selected) {
-        const order = orders.find(o => o.id === orderId);
+        const order = orders.find((item) => (item.orderId ?? item.id) === orderId);
         if (!order) continue;
-        const res = await fetch('/api/payouts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ order_id: orderId, amount: order.price * order.quantity }),
+
+        const res = await fetch("/api/payouts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ order_id: orderId, amount: Number(order.total || 0) }),
         });
         const result = await res.json();
         if (result.error) {
           setError(result.error);
-          setLoading(false);
           return;
         }
       }
-      setSuccess('Payout(s) requested successfully!');
+      setSuccess("Payout(s) requested successfully!");
     } catch {
-      setError('Failed to request payout');
+      setError("Failed to request payout");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -212,6 +223,7 @@ function RequestPaymentModal({ open, onClose }) {
           {loading && <div>Loading...</div>}
           {error && <div className="text-destructive">{error}</div>}
           {success && <div className="text-green-600">{success}</div>}
+          {payouts.length > 0 && <div className="rounded-md bg-muted/40 p-3 text-sm"><div className="font-semibold">Payout history</div>{payouts.map((payout) => <div key={payout.id} className="flex justify-between border-t py-2"><span>Order #{payout.order_id}</span><span>{payout.status} · GH₵ {Number(payout.amount).toFixed(2)}</span></div>)}</div>}
           {!loading && !error && (
             <table className="min-w-full text-xs sm:text-sm">
               <thead>
@@ -224,24 +236,24 @@ function RequestPaymentModal({ open, onClose }) {
                 </tr>
               </thead>
               <tbody>
-                {orders.map(order => (
+                {orders.map((order) => (
                   <tr key={order.id}>
                     <td>
                       <input
                         type="checkbox"
-                        checked={selected.includes(order.id)}
-                        onChange={e => {
-                          setSelected(sel =>
+                          checked={selected.includes(order.orderId ?? order.id)}
+                        onChange={(e) => {
+                          setSelected((current) =>
                             e.target.checked
-                              ? [...sel, order.id]
-                              : sel.filter(id => id !== order.id)
+                              ? [...current, order.orderId ?? order.id]
+                              : current.filter((id) => id !== (order.orderId ?? order.id))
                           );
                         }}
                       />
                     </td>
-                    <td>{order.id}</td>
-                    <td>{order.crop_name || order.crop_id}</td>
-                    <td>GH₵ {order.price * order.quantity}</td>
+                    <td>{order.orderId ?? order.id}</td>
+                    <td>{order.cropName || order.crop_name || order.crop_id}</td>
+                    <td>GH₵ {Number(order.total || 0).toFixed(2)}</td>
                     <td>{order.status}</td>
                   </tr>
                 ))}
@@ -249,11 +261,7 @@ function RequestPaymentModal({ open, onClose }) {
             </table>
           )}
         </div>
-        <Button
-          onClick={handleRequest}
-          disabled={loading || selected.length === 0}
-          className="w-full mt-4"
-        >
+        <Button onClick={handleRequest} disabled={loading || selected.length === 0} className="w-full mt-4">
           Request Payment
         </Button>
         <Button variant="outline" onClick={onClose} className="w-full mt-2">
@@ -359,8 +367,10 @@ function BulkUpdateAvailabilityModal({ open, onClose, crops, onUpdated }) {
 }
 
 const Farmers = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [crops, setCrops] = useState<Crop[]>([]);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+ 
   const [newCrop, setNewCrop] = useState<Omit<Crop, "id">>({
     name: "",
     category: "Vegetables",
@@ -377,6 +387,13 @@ const Farmers = () => {
   const [showSalesReport, setShowSalesReport] = useState(false);
   const [showRequestPayment, setShowRequestPayment] = useState(false);
   const [showUpdateAvailability, setShowUpdateAvailability] = useState(false);
+
+  useEffect(() => {
+    const hash = location.hash;
+    if (hash === '#quick-sales') setShowSalesReport(true);
+    if (hash === '#quick-payout') setShowRequestPayment(true);
+    if (hash === '#quick-availability') setShowUpdateAvailability(true);
+  }, [location.hash]);
   const [predictionByCrop, setPredictionByCrop] = useState<Record<number, any>>({});
   const [predictionLoadingByCrop, setPredictionLoadingByCrop] = useState<Record<number, boolean>>({});
   const [freshnessByCrop, setFreshnessByCrop] = useState<Record<number, any>>({});
@@ -391,6 +408,10 @@ const Farmers = () => {
       if (Array.isArray(data)) setCrops(data);
     });
   }, []);
+
+ 
+
+  const showMyCropsSection = location.hash === "#my-crops";
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -448,7 +469,6 @@ const Farmers = () => {
       setCrops([...crops, result]);
       setNewCrop({ name: '', category: 'Vegetables', quantity: 0, unit: 'kg', price: 0, expiryDate: '', image: '' });
       setImageFile(null);
-      setIsDialogOpen(false);
     }
   };
 
@@ -499,20 +519,31 @@ const Farmers = () => {
   };
 
   const handleDeleteCrop = async (id: number) => {
-    if (confirm('Are you sure you want to delete this crop?')) {
-      try {
-        const result = await deleteCrop(id);
-        if (!result.error) {
-          setCrops(crops.filter(crop => crop.id !== id));
-          alert('Crop deleted successfully!');
-        } else {
-          alert('Error deleting crop: ' + result.error);
+    toast('Are you sure you want to delete this crop?', {
+      description: 'This action cannot be undone.',
+      action: {
+        label: 'Delete',
+        onClick: async () => {
+          try {
+            const result = await deleteCrop(id);
+            if (!result.error) {
+              setCrops((current) => current.filter((crop) => crop.id !== id));
+              toast.success('Crop deleted successfully');
+            } else {
+              toast.error(`Error deleting crop: ${result.error}`);
+            }
+          } catch (error: any) {
+            console.error('Error deleting crop:', error);
+            toast.error(`Error deleting crop: ${error.message || 'Request failed'}`);
+          }
         }
-      } catch (error) {
-        console.error('Error deleting crop:', error);
-        alert('Error deleting crop: ' + error.message);
-      }
-    }
+      },
+      cancel: {
+        label: 'Cancel',
+        onClick: () => toast.info('Crop deletion cancelled')
+      },
+      duration: 10000
+    });
   };
 
   const handlePredictHarvest = async (crop: Crop) => {
@@ -625,104 +656,16 @@ const Farmers = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background relative">
-      <BackgroundSlideshow />
-      <div className="relative z-10">
-        <Navigation />
-        
+    <FarmerLayout>
         <div className="container mx-auto px-4 py-4 sm:py-8">
           {/* Header */}
           <div className="bg-card/40 backdrop-blur-sm rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold text-foreground">Your Farm Dashboard</h1>
-                <p className="text-sm sm:text-base text-muted-foreground">Manage your crops and sales</p>
+                <p className="text-sm sm:text-base text-muted-foreground">Simple analytics for your farm performance</p>
               </div>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="default" className="w-full sm:w-auto">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add New Product
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Add New Product</DialogTitle>
-                    <DialogDescription>
-                      Add a new product to your inventory.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-                      <Label htmlFor="name" className="text-sm font-medium sm:text-right">
-                        Name
-                      </Label>
-                      <Input id="name" name="name" value={newCrop.name} onChange={handleInputChange} className="sm:col-span-3" />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-                      <Label htmlFor="category" className="text-sm font-medium sm:text-right">
-                        Category
-                      </Label>
-                      <Select onValueChange={handleSelectChange} defaultValue={newCrop.category} >
-                        <SelectTrigger className="sm:col-span-3">
-                          <SelectValue placeholder="Select a category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Vegetables">Vegetables</SelectItem>
-                          <SelectItem value="Fruits">Fruits</SelectItem>
-                          <SelectItem value="Grains">Grains</SelectItem>
-                          <SelectItem value="LifeStocks">LifeStocks</SelectItem>
-                          <SelectItem value="Spices">Spices</SelectItem>
-                          <SelectItem value="Oil">Oil</SelectItem>
-                          <SelectItem value="Cereals">Cereals</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-                      <Label htmlFor="quantity" className="text-sm font-medium sm:text-right">
-                        Quantity
-                      </Label>
-                      <div className="sm:col-span-3 flex gap-2">
-                        <Input type="number" id="quantity" name="quantity" value={String(newCrop.quantity)} onChange={handleInputChange} className="flex-1" />
-                        <Select onValueChange={(value) => setNewCrop(prev => ({ ...prev, unit: value }))} value={newCrop.unit}>
-                          <SelectTrigger className="w-24">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="kg">kg</SelectItem>
-                            <SelectItem value="g">g</SelectItem>
-                            <SelectItem value="lb">lb</SelectItem>
-                            <SelectItem value="oz">oz</SelectItem>
-                            <SelectItem value="pieces">pieces</SelectItem>
-                            <SelectItem value="bunches">bunches</SelectItem>
-                            <SelectItem value="bags">bags</SelectItem>
-                            <SelectItem value="crates">crates</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-                      <Label htmlFor="price" className="text-sm font-medium sm:text-right">
-                        Price
-                      </Label>
-                      <Input type="number" id="price" name="price" value={String(newCrop.price)} onChange={handleInputChange} className="sm:col-span-3" />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-                      <Label htmlFor="expiryDate" className="text-sm font-medium sm:text-right">
-                        Expiry Date
-                      </Label>
-                      <Input type="date" id="expiryDate" name="expiryDate" value={newCrop.expiryDate} onChange={handleInputChange} className="sm:col-span-3" />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-                      <Label htmlFor="image" className="text-sm font-medium sm:text-right">
-                        Image
-                      </Label>
-                      <Input type="file" id="image" name="image" accept="image/*" onChange={handleImageChange} className="sm:col-span-3" />
-                    </div>
-                  </div>
-                  <Button type="submit" onClick={handleAddCrop} className="w-full">Add Crop</Button>
-                </DialogContent>
-              </Dialog>
+              
             </div>
           </div>
 
@@ -832,27 +775,16 @@ const Farmers = () => {
             </Card>
           </div>
 
-          {/* Quick Actions */}
-          <div className="bg-card/40 backdrop-blur-sm rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
-            <h2 className="text-base sm:text-lg font-semibold mb-4 text-foreground">Quick Actions</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-              <Button variant="secondary" className="flex items-center space-x-2 h-12" onClick={() => setShowSalesReport(true)}>
-                <TrendingUp className="h-4 w-4" />
-                <span className="text-sm">View Sales Report</span>
-              </Button>
-              <Button variant="secondary" className="flex items-center space-x-2 h-12" onClick={() => setShowRequestPayment(true)}>
-                <DollarSign className="h-4 w-4" />
-                <span className="text-sm">Request Payment</span>
-              </Button>
-              <Button variant="secondary" className="flex items-center space-x-2 h-12" onClick={() => setShowUpdateAvailability(true)}>
-                <Calendar className="h-4 w-4" />
-                <span className="text-sm">Update Availability</span>
-              </Button>
+          {!showMyCropsSection && (
+            <div className="bg-card/40 backdrop-blur-sm rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
+              <h2 className="text-base sm:text-lg font-semibold mb-2 text-foreground">Analytics Overview</h2>
+              <p className="text-sm text-muted-foreground">Use the sidebar to open Add Product or view My Crops and Orders.</p>
             </div>
-          </div>
+          )}
 
           {/* Recent Crops */}
-          <div className="bg-card/40 backdrop-blur-sm rounded-lg p-4 sm:p-6">
+          {showMyCropsSection && (
+          <div id="my-crops" className="bg-card/40 backdrop-blur-sm rounded-lg p-4 sm:p-6 scroll-mt-24">
             <h2 className="text-base sm:text-lg font-semibold mb-4 text-foreground">Recent Crops</h2>
             
             {/* Mobile Cards View */}
@@ -1091,8 +1023,8 @@ const Farmers = () => {
               </table>
             </div>
           </div>
+          )}
         </div>
-      </div>
       {viewCrop && (
         <Dialog open={!!viewCrop} onOpenChange={() => setViewCrop(null)}>
           <DialogContent className="max-w-md">
@@ -1257,7 +1189,7 @@ const Farmers = () => {
           }}
         />
       )}
-    </div>
+    </FarmerLayout>
   );
 };
 

@@ -7,8 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Navigation from "@/components/Navigation";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
-import { listCrops } from "../api";
+import { getProfile, getReviewsForCrop, listCrops } from "../api";
 import { useNavigate } from "react-router-dom";
+import { toast } from "@/components/ui/sonner";
 import { getImageUrl } from "../utils/imageUtils";
 
 interface Crop {
@@ -23,24 +24,73 @@ interface Crop {
   harvestDate: string;
   expiryDate: string;
   image?: string;
+  qualityScore?: number;
+  freshnessStatus?: string;
+  averageRating?: number;
+  reviewCount?: number;
+  farmerId?: number;
+  farmerBio?: string | null;
+  farmerAvatar?: string | null;
+  farmerVerified?: boolean;
 }
 
 const Buyers = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [user, setUser] = useState<{ id?: number | string } | null>(null);
   const [cart, setCart] = useState<Array<{crop: Crop, quantity: number}>>([]);
+  const [addedItemIds, setAddedItemIds] = useState<Record<string, boolean>>({});
   const [crops, setCrops] = useState<Crop[]>([]);
+  const [selectedCrop, setSelectedCrop] = useState<Crop | null>(null);
+  const [selectedReviews, setSelectedReviews] = useState<any[]>([]);
   const navigate = useNavigate();
-  
+
+  const getCartStorageKey = (currentUser?: { id?: number | string } | null) =>
+    currentUser?.id ? `cart_${currentUser.id}` : 'cart_guest';
+
+  useEffect(() => {
+    getProfile()
+      .then((profile) => {
+        if (profile && !profile.error) {
+          setUser(profile);
+        } else {
+          setUser(null);
+        }
+      })
+      .catch(() => setUser(null));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCrop) {
+      setSelectedReviews([]);
+      return;
+    }
+    getReviewsForCrop(Number(selectedCrop.id)).then((data) => {
+      setSelectedReviews(Array.isArray(data) ? data : []);
+    }).catch(() => setSelectedReviews([]));
+  }, [selectedCrop]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const storedCart = localStorage.getItem(getCartStorageKey(user));
+      setCart(storedCart ? JSON.parse(storedCart) : []);
+    } catch {
+      setCart([]);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(getCartStorageKey(user), JSON.stringify(cart));
+  }, [cart, user?.id]);
+
   useEffect(() => {
     listCrops().then(data => {
       if (Array.isArray(data)) setCrops(data);
     });
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(cart));
-  }, [cart]);
 
   const filteredCrops = crops.filter(crop => {
     const matchesSearch = crop.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -52,15 +102,24 @@ const Buyers = () => {
 
   const addToCart = (crop: Crop, quantity: number) => {
     const existingItem = cart.find(item => item.crop.id === crop.id);
-    if (existingItem) {
-      setCart(cart.map(item => 
-        item.crop.id === crop.id 
-          ? { ...item, quantity: item.quantity + quantity }
-          : item
-      ));
-    } else {
-      setCart([...cart, { crop, quantity }]);
-    }
+    const nextCart = existingItem
+      ? cart.map(item => 
+          item.crop.id === crop.id 
+            ? { ...item, quantity: item.quantity + quantity }
+            : item
+        )
+      : [...cart, { crop, quantity }];
+
+    setCart(nextCart);
+    setAddedItemIds(prev => ({ ...prev, [crop.id]: true }));
+
+    window.setTimeout(() => {
+      setAddedItemIds(prev => ({ ...prev, [crop.id]: false }));
+    }, 1200);
+
+    toast.success(`${crop.name} added to cart`, {
+      description: `${quantity} ${crop.unit} added to your basket.`
+    });
   };
 
   const getTotalItems = () => {
@@ -100,6 +159,18 @@ const Buyers = () => {
             </div>
           </div>
 
+          {user && (
+            <Card className="mb-6 border-primary/20 bg-primary/5">
+              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+                <div>
+                  <div className="font-semibold">Build trust with your feedback</div>
+                  <p className="text-sm text-muted-foreground">Rate farmers, write reviews, or report an order issue from My Orders.</p>
+                </div>
+                <Button variant="outline" className="w-full sm:w-auto" onClick={() => navigate('/buyer-orders')}>Open My Orders</Button>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Search and Filters */}
           <div className="bg-card/40 backdrop-blur-sm rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
             <div className="flex flex-col gap-4">
@@ -135,18 +206,25 @@ const Buyers = () => {
               const daysUntilExpiry = getDaysUntilExpiry(crop.expiryDate);
               
               return (
-                <Card key={crop.id} className="bg-card/40 backdrop-blur-sm border-border/50 hover:shadow-lg transition-all duration-300 group">
+                <Card key={crop.id} onClick={() => setSelectedCrop(crop)} className="cursor-pointer bg-card/40 backdrop-blur-sm border-border/50 hover:shadow-lg transition-all duration-300 group">
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start gap-2">
                       <div className="flex-1 min-w-0">
                         <CardTitle className="text-base sm:text-lg truncate">{crop.name}</CardTitle>
                         <CardDescription className="text-xs sm:text-sm line-clamp-2">{crop.description}</CardDescription>
                       </div>
-                      {daysUntilExpiry <= 2 && (
-                        <Badge variant="destructive" className="text-xs flex-shrink-0">
-                          Expires in {daysUntilExpiry} days
-                        </Badge>
-                      )}
+                      <div className="flex flex-col items-end gap-1">
+                        {crop.qualityScore && (
+                          <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300">
+                            {crop.qualityScore}% Quality
+                          </Badge>
+                        )}
+                        {daysUntilExpiry <= 2 && (
+                          <Badge variant="destructive" className="text-xs flex-shrink-0">
+                            Expires in {daysUntilExpiry} days
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </CardHeader>
                   
@@ -184,6 +262,12 @@ const Buyers = () => {
                         <div className="text-muted-foreground truncate">
                           Farmer: {crop.farmer}
                         </div>
+                        {crop.averageRating != null && (
+                          <div className="flex items-center gap-1 text-sm text-amber-600">
+                            <Star className="h-4 w-4 fill-amber-400" />
+                            <span>{crop.averageRating.toFixed(1)} farmer rating</span>
+                          </div>
+                        )}
                         <div className="text-muted-foreground">
                           Available: {crop.quantity} {crop.unit}
                         </div>
@@ -191,6 +275,7 @@ const Buyers = () => {
                       
                       <div className="flex flex-col sm:flex-row gap-2 pt-2">
                         <Input 
+                          onClick={(event) => event.stopPropagation()}
                           type="number" 
                           placeholder="Qty" 
                           className="w-full sm:w-20" 
@@ -199,7 +284,7 @@ const Buyers = () => {
                           id={`quantity-${crop.id}`}
                         />
                         <Button 
-                          className="gap-2" 
+                          className={`gap-2 ${addedItemIds[crop.id] ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`} 
                           onClick={() => {
                             const quantityInput = document.getElementById(`quantity-${crop.id}`) as HTMLInputElement;
                             const quantity = parseInt(quantityInput?.value || "1");
@@ -210,10 +295,13 @@ const Buyers = () => {
                           }}
                         >
                           <ShoppingCart className="h-4 w-4" />
-                          <span className="hidden sm:inline">Add to Cart</span>
-                          <span className="sm:hidden">Add</span>
+                          <span className="hidden sm:inline">{addedItemIds[crop.id] ? 'Added ✓' : 'Add to Cart'}</span>
+                          <span className="sm:hidden">{addedItemIds[crop.id] ? 'Added' : 'Add'}</span>
                         </Button>
                       </div>
+                      {addedItemIds[crop.id] && (
+                        <div className="mt-2 text-xs text-emerald-600 font-medium">Item added to your cart</div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -222,6 +310,48 @@ const Buyers = () => {
           </div>
         </div>
       </div>
+      {selectedCrop && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelectedCrop(null)}>
+          <Card className="max-h-[90vh] w-full max-w-2xl overflow-y-auto" onClick={(event) => event.stopPropagation()}>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle>{selectedCrop.name}</CardTitle>
+                  <CardDescription>Product and farmer details</CardDescription>
+                </div>
+                {selectedCrop.farmerVerified && <Badge className="bg-emerald-600 text-white">Verified farmer</Badge>}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-5 sm:grid-cols-[180px_1fr]">
+                {selectedCrop.image ? <img src={getImageUrl(selectedCrop.image)} alt={selectedCrop.name} className="h-40 w-full rounded object-cover" /> : <div className="flex h-40 items-center justify-center rounded bg-muted text-muted-foreground">No Image</div>}
+                <div className="space-y-2 text-sm">
+                  <div className="text-2xl font-bold text-primary">GH₵ {selectedCrop.price} <span className="text-sm font-normal text-muted-foreground">per {selectedCrop.unit}</span></div>
+                  <p>{selectedCrop.description || 'No product description provided.'}</p>
+                  <p className="text-muted-foreground">Available: {selectedCrop.quantity} {selectedCrop.unit}</p>
+                  <p className="text-muted-foreground">Expires: {selectedCrop.expiryDate}</p>
+                </div>
+              </div>
+              <div className="rounded-lg border bg-muted/20 p-4">
+                <div className="flex items-center gap-3">
+                  {selectedCrop.farmerAvatar ? <img src={getImageUrl(selectedCrop.farmerAvatar)} alt={selectedCrop.farmer} className="h-12 w-12 rounded-full object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 font-semibold text-primary">{selectedCrop.farmer.slice(0, 1)}</div>}
+                  <div>
+                    <div className="flex items-center gap-2 font-semibold">{selectedCrop.farmer}{selectedCrop.farmerVerified && <Badge variant="outline" className="border-emerald-500 text-emerald-700">Verified</Badge>}</div>
+                    <div className="text-sm text-muted-foreground">{selectedCrop.location}</div>
+                  </div>
+                </div>
+                <p className="mt-3 text-sm text-muted-foreground">{selectedCrop.farmerBio || 'This farmer has not added a profile description yet.'}</p>
+              </div>
+              <div>
+                <div className="mb-2 flex items-center gap-2 font-semibold"><Star className="h-4 w-4 fill-amber-400 text-amber-400" /> {selectedCrop.averageRating?.toFixed(1) || 'No rating'} ({selectedCrop.reviewCount || selectedReviews.length} reviews)</div>
+                <div className="space-y-2">{selectedReviews.slice(0, 5).map((review) => <div key={review.id} className="rounded border p-3 text-sm"><div className="font-medium">{review.user_name || 'Buyer'} · {review.rating}/5</div>{review.comment && <p className="mt-1 text-muted-foreground">{review.comment}</p>}</div>)}</div>
+                {!selectedReviews.length && <p className="text-sm text-muted-foreground">No reviews yet.</p>}
+              </div>
+              <Button className="w-full" onClick={() => { setSelectedCrop(null); navigate('/buyer-orders'); }}>View My Orders and Reviews</Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

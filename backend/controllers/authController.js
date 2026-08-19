@@ -1,21 +1,35 @@
 import bcrypt from 'bcryptjs';
 import { supabase } from '../app.js';
+import { notifyRegistration, sendSms } from '../services/notificationService.js';
 
 const handleError = (res, status, message, details) => {
   console.error(`[${status}] ${message}`, details);
   res.status(status).json({ error: message });
 };
 
+const allowedRoles = ['farmer', 'buyer', 'admin', 'vendor'];
+const normalizeLoginPhone = (value) => {
+  const raw = String(value || '').replace(/\s+/g, '');
+  if (raw.startsWith('+233')) return raw;
+  if (raw.startsWith('233')) return `+${raw}`;
+  if (raw.startsWith('0')) return `+233${raw.slice(1)}`;
+  return `+233${raw}`;
+};
+
 export const register = async (req, res) => {
   try {
-    const { name, email, password, role, location } = req.body;
+    const { name, email, password, role, location, phone } = req.body;
 
     // Validation
     if (!name || !email || !password || !role) {
       return handleError(res, 400, 'All fields are required');
     }
 
-    if (!['farmer', 'buyer', 'vendor', 'admin'].includes(role)) {
+    if (role === 'admin') {
+      return handleError(res, 403, 'Admin accounts are created by the platform team. Please sign in with the seeded admin account.');
+    }
+
+    if (!['farmer', 'buyer', 'vendor'].includes(role)) {
       return handleError(res, 400, 'Invalid role');
     }
 
@@ -47,6 +61,7 @@ export const register = async (req, res) => {
         password_hash,
         role,
         location: location || null,
+        phone: phone || null,
         status: 'Active'
       }])
       .select()
@@ -54,36 +69,109 @@ export const register = async (req, res) => {
 
     if (insertError) throw insertError;
 
-    // Set session
-    req.session.user = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      location: user.location,
-      verificationStatus: role === 'farmer' ? 'not_submitted' : 'not_required'
-    };
+    const normalizedPhone = normalizeLoginPhone(phone);
+    const otpCode = String(Math.floor(100000 + Math.random() * 900000));
+    const { error: otpError } = await supabase.from('phone_verifications').insert([{
+      user_id: user.id,
+      phone: normalizedPhone,
+      otp_code: otpCode,
+      expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      status: 'pending'
+    }]);
+    if (otpError) throw otpError;
+    await sendSms({ recipient: { phone: normalizedPhone }, message: `Your AgroFresh signup code is ${otpCode}. It expires in 5 minutes.` });
 
-    res.status(201).json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      location: user.location,
-      verificationStatus: role === 'farmer' ? 'not_submitted' : 'not_required'
+    void notifyRegistration(user).catch((notificationError) => {
+      console.error('[notifications] registration SMS failed:', notificationError.message);
     });
+
+    req.session.pendingRegistration = { userId: user.id, phone: normalizedPhone };
+    res.status(201).json({ requiresPhoneOtp: true, userId: user.id, phone: `${normalizedPhone.slice(0, 7)}****${normalizedPhone.slice(-2)}` });
   } catch (err) {
     handleError(res, 500, 'Registration failed', err.message);
   }
 };
 
+export const verifyRegistrationOtp = async (req, res) => {
+  try {
+    const pending = req.session.pendingRegistration;
+    const otpCode = String(req.body.otpCode || '').trim();
+    if (!pending || !otpCode) return handleError(res, 400, 'Signup OTP is required');
+
+    const { data: verification, error } = await supabase.from('phone_verifications')
+      .select('*').eq('user_id', pending.userId).eq('phone', pending.phone)
+      .eq('status', 'pending').order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (error) throw error;
+    if (!verification) return handleError(res, 400, 'No active signup OTP found');
+    if (new Date(verification.expires_at) < new Date()) return handleError(res, 400, 'Signup OTP has expired');
+    if (String(verification.otp_code) !== otpCode) return handleError(res, 400, 'Invalid signup OTP');
+
+    await supabase.from('phone_verifications').update({ status: 'verified', verified_at: new Date().toISOString() }).eq('id', verification.id);
+    const { data: user, error: userError } = await supabase.from('users').select('*').eq('id', pending.userId).single();
+    if (userError) throw userError;
+    const verificationStatus = user.role === 'farmer' ? 'not_submitted' : 'not_required';
+    req.session.user = { id: user.id, name: user.name, email: user.email, role: user.role, location: user.location, phone: user.phone, avatar: user.avatar, bio: user.bio, verificationStatus };
+    delete req.session.pendingRegistration;
+    res.json({ id: user.id, name: user.name, email: user.email, role: user.role, location: user.location, phone: user.phone, verificationStatus });
+  } catch (err) {
+    handleError(res, 500, 'Signup OTP verification failed', err.message);
+  }
+};
+
+const resendPendingOtp = async (req, res, sessionKey, message) => {
+  try {
+    const pending = req.session[sessionKey];
+    if (!pending) return handleError(res, 400, 'There is no pending verification to resend');
+    const otpCode = String(Math.floor(100000 + Math.random() * 900000));
+    const { error } = await supabase.from('phone_verifications').insert([{
+      user_id: pending.userId,
+      phone: pending.phone,
+      otp_code: otpCode,
+      expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      status: 'pending'
+    }]);
+    if (error) throw error;
+    await sendSms({ recipient: { phone: pending.phone }, message: `${message} ${otpCode}. It expires in 5 minutes.` });
+    res.json({ success: true, message: 'A new verification code was sent.' });
+  } catch (err) {
+    handleError(res, 500, 'Failed to resend OTP', err.message);
+  }
+};
+
+export const resendRegistrationOtp = (req, res) => resendPendingOtp(req, res, 'pendingRegistration', 'Your AgroFresh signup code is');
+
+export const resendLoginOtp = async (req, res) => {
+  try {
+    const pending = req.session.pendingLogin;
+    const email = String(req.body.email || '').trim();
+    const password = String(req.body.password || '');
+    let userId = pending?.userId;
+    let phone = pending?.phone;
+
+    if (!userId) {
+      if (!email || !password) return handleError(res, 400, 'Enter your email and password again to resend the code');
+      const { data: user, error } = await supabase.from('users').select('id, password_hash, phone').eq('email', email).maybeSingle();
+      if (error) throw error;
+      if (!user || !(await bcrypt.compare(password, user.password_hash))) return handleError(res, 401, 'Invalid credentials');
+      if (!user.phone) return handleError(res, 400, 'A phone number is required for login verification');
+      userId = user.id;
+      phone = normalizeLoginPhone(user.phone);
+    }
+
+    req.session.pendingLogin = { userId, phone };
+    return resendPendingOtp(req, res, 'pendingLogin', 'Your AgroFresh login code is');
+  } catch (err) {
+    handleError(res, 500, 'Failed to resend login OTP', err.message);
+  }
+};
+
 export const login = async (req, res) => {
   try {
-    const { email, password, role } = req.body;
+    const { email, password } = req.body;
 
     // Validation
-    if (!email || !password || !role) {
-      return handleError(res, 400, 'Email, password, and role are required');
+    if (!email || !password) {
+      return handleError(res, 400, 'Email and password are required');
     }
 
     // Get user
@@ -91,7 +179,6 @@ export const login = async (req, res) => {
       .from('users')
       .select('*')
       .eq('email', email)
-      .eq('role', role)
       .maybeSingle();
 
     if (fetchError && fetchError.code !== 'PGRST116') {
@@ -108,61 +195,66 @@ export const login = async (req, res) => {
       return handleError(res, 401, 'Invalid credentials');
     }
 
-    // Update status and last login
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({
-        status: 'Active',
-        last_login: new Date().toISOString()
-      })
-      .eq('id', user.id);
+    if (!user.phone) {
+      return handleError(res, 400, 'A phone number is required for login verification. Add it in your profile first.');
+    }
 
-    if (updateError) throw updateError;
+    const otpCode = String(Math.floor(100000 + Math.random() * 900000));
+    const normalizedPhone = normalizeLoginPhone(user.phone);
+    const { error: otpError } = await supabase.from('phone_verifications').insert([{
+      user_id: user.id,
+      phone: normalizedPhone,
+      otp_code: otpCode,
+      expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      status: 'pending'
+    }]);
+    if (otpError) throw otpError;
+    await sendSms({ recipient: { phone: normalizedPhone }, message: `Your AgroFresh login code is ${otpCode}. It expires in 5 minutes.` });
+    req.session.pendingLogin = { userId: user.id, phone: normalizedPhone };
+    return res.json({ requiresOtp: true, phone: `${normalizedPhone.slice(0, 7)}****${normalizedPhone.slice(-2)}` });
+
+  } catch (err) {
+    if (err.message?.includes('Arkesel SMS credit')) {
+      return handleError(res, 402, 'Login verification is temporarily unavailable', err.message);
+    }
+    handleError(res, 500, 'Login failed', err.message);
+  }
+};
+
+export const verifyLoginOtp = async (req, res) => {
+  try {
+    const pending = req.session.pendingLogin;
+    const otpCode = String(req.body.otpCode || '').trim();
+    if (!pending || !otpCode) return handleError(res, 400, 'Login OTP is required');
+
+    const { data: verification, error } = await supabase.from('phone_verifications')
+      .select('*')
+      .eq('user_id', pending.userId)
+      .eq('phone', pending.phone)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (!verification) return handleError(res, 400, 'No active login OTP found');
+    if (new Date(verification.expires_at) < new Date()) return handleError(res, 400, 'OTP has expired');
+    if (String(verification.otp_code) !== otpCode) return handleError(res, 400, 'Invalid OTP');
+
+    await supabase.from('phone_verifications').update({ status: 'verified', verified_at: new Date().toISOString() }).eq('id', verification.id);
+    const { data: user, error: userError } = await supabase.from('users').select('*').eq('id', pending.userId).single();
+    if (userError) throw userError;
 
     let verificationStatus = 'not_required';
     if (user.role === 'farmer') {
-      verificationStatus = 'not_submitted';
-      try {
-        const { data: verification, error: verificationError } = await supabase
-          .from('user_verifications')
-          .select('status')
-          .eq('user_id', user.id)
-          .order('submitted_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (verificationError && verificationError.code !== 'PGRST116') {
-          throw verificationError;
-        }
-
-        if (verification?.status) {
-          verificationStatus = verification.status;
-        }
-      } catch (verificationLookupError) {
-        console.warn('Unable to read user_verifications status:', verificationLookupError.message);
-      }
+      const farmerVerification = await supabase.from('user_verifications').select('status').eq('user_id', user.id).order('submitted_at', { ascending: false }).limit(1).maybeSingle();
+      verificationStatus = farmerVerification.data?.status || 'not_submitted';
     }
-
-    // Set session
-    req.session.user = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      location: user.location,
-      verificationStatus
-    };
-
-    res.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      location: user.location,
-      verificationStatus
-    });
+    await supabase.from('users').update({ status: 'Active', last_login: new Date().toISOString() }).eq('id', user.id);
+    req.session.user = { id: user.id, name: user.name, email: user.email, role: user.role, location: user.location, phone: user.phone, avatar: user.avatar, bio: user.bio, verificationStatus };
+    delete req.session.pendingLogin;
+    res.json({ id: user.id, name: user.name, email: user.email, role: user.role, location: user.location, phone: user.phone, avatar: user.avatar, bio: user.bio, verificationStatus });
   } catch (err) {
-    handleError(res, 500, 'Login failed', err.message);
+    handleError(res, 500, 'Login OTP verification failed', err.message);
   }
 };
 

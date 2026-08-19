@@ -1,10 +1,23 @@
 import fs from 'fs';
 import path from 'path';
+import { notifyVerificationSubmitted } from '../services/notificationService.js';
 import { supabase } from '../app.js';
 
 const handleError = (res, status, message, details) => {
   console.error(`[${status}] ${message}`, details);
   res.status(status).json({ error: message });
+};
+
+const normalizeGhanaPhone = (value) => String(value || '').replace(/\s+/g, '');
+
+const isValidGhanaPhone = (value) => {
+  const phone = normalizeGhanaPhone(value);
+  return /^(?:\+233|233|0)(?:20|24|26|27|50|54|55|59)\d{7,8}$/.test(phone);
+};
+
+const isValidGhanaCardNumber = (value) => {
+  const card = String(value || '').replace(/\s+/g, '');
+  return /^GHA[-]?\d{9,13}$/i.test(card) || /^\d{9,13}$/.test(card);
 };
 
 const createStorageEntry = async (supabaseClient, bucketName, file) => {
@@ -39,28 +52,60 @@ export const requestVerification = async (req, res) => {
   try {
     const userId = parseInt(req.params.id, 10);
     if (!userId) return handleError(res, 400, 'Invalid user id');
-    if (!req.session?.user || req.session.user.id !== userId) {
+
+    const sessionUserId = req.session?.user?.id ? Number(req.session.user.id) : null;
+    const requestUserId = req.body.user_id ? Number(req.body.user_id) : null;
+
+    if (sessionUserId !== null && sessionUserId !== userId) {
       return handleError(res, 403, 'You can only submit verification for your own account');
     }
 
-    const phone = req.body.phone || null;
+    if (sessionUserId === null && requestUserId !== null && requestUserId !== userId) {
+      return handleError(res, 403, 'You can only submit verification for your own account');
+    }
+
+    let phone = req.body.phone || req.session?.user?.phone || null;
+    if (!phone) {
+      const { data: userRecord, error: userError } = await supabase
+        .from('users')
+        .select('phone')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (!userError && userRecord?.phone) {
+        phone = userRecord.phone;
+      }
+    }
+
     const farm_name = req.body.farm_name || null;
     const farmers_association_address = req.body.farmers_association_address || null;
     const ghana_card_number = req.body.ghana_card_number || null;
-    const location_text = req.body.location_text || null;
+    const location_text = req.body.location_text || req.body.exact_location || null;
     const region = req.body.region || null;
     const district = req.body.district || null;
     const town_village = req.body.town_village || null;
     const latitude = req.body.latitude ? Number(req.body.latitude) : null;
     const longitude = req.body.longitude ? Number(req.body.longitude) : null;
 
-    if (!phone || !farmers_association_address || !ghana_card_number) {
-      return handleError(res, 400, 'Phone, association address, and Ghana card number are required');
+    if (!farmers_association_address || !ghana_card_number || !location_text) {
+      return handleError(res, 400, 'Exact farm location, association address, and Ghana card number are required');
     }
 
-    if (latitude === null || longitude === null || Number.isNaN(latitude) || Number.isNaN(longitude)) {
-      return handleError(res, 400, 'Real GPS location is required');
+    if (phone && !isValidGhanaPhone(phone)) {
+      return handleError(res, 400, 'Phone number must be a valid Ghana mobile number (e.g. 0241234567 or +233241234567)');
     }
+
+    if (!isValidGhanaCardNumber(ghana_card_number)) {
+      return handleError(res, 400, 'Ghana card number must look like a valid card number');
+    }
+
+    const trimmedAssociationAddress = String(farmers_association_address || '').trim();
+    if (!trimmedAssociationAddress) {
+      return handleError(res, 400, 'Please provide a valid association name or association address');
+    }
+
+    // Accept realistic addresses and names without forcing an arbitrary 6-character minimum.
+    const normalizedAssociationAddress = trimmedAssociationAddress;
 
     const uploaded = [];
     let photoUpload = null;
@@ -104,14 +149,14 @@ export const requestVerification = async (req, res) => {
       user_id: userId,
       phone,
       farm_name,
-      farmers_association_address,
+      farmers_association_address: normalizedAssociationAddress,
       ghana_card_number,
       location_text,
       region,
       district,
       town_village,
-      latitude,
-      longitude,
+      latitude: latitude !== null && !Number.isNaN(latitude) ? latitude : null,
+      longitude: longitude !== null && !Number.isNaN(longitude) ? longitude : null,
       photo_url: photoUpload.url,
       documents: uploaded,
       status: 'pending',
@@ -127,6 +172,9 @@ export const requestVerification = async (req, res) => {
         req.session.user.verificationRequested = true;
         req.session.user.verificationStatus = 'pending';
       }
+      void notifyVerificationSubmitted(userId).catch((notificationError) => {
+        console.error('[notifications] verification submission SMS failed:', notificationError.message);
+      });
       return res.json({ success: true, id: data.id });
     } catch (err) {
       console.warn('Could not insert into user_verifications, falling back to local file', err.message);
@@ -139,6 +187,9 @@ export const requestVerification = async (req, res) => {
         req.session.user.verificationRequested = true;
         req.session.user.verificationStatus = 'pending';
       }
+      void notifyVerificationSubmitted(userId).catch((notificationError) => {
+        console.error('[notifications] verification submission SMS failed:', notificationError.message);
+      });
       return res.json({ success: true, fallback: true, path: outPath });
     }
   } catch (err) {

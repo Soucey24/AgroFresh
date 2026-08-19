@@ -6,16 +6,19 @@ import {
   Package, 
   ShoppingCart, 
   CreditCard,
+  WalletCards,
   Settings, 
   LogOut,
   Leaf,
   Menu,
-  X
+  X,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
 import { logout } from "@/api";
+import NotificationBell from "@/components/NotificationBell";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -29,9 +32,11 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
   const navigationItems = [
     { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/admin/users", icon: Users, label: "Users" },
+    { href: "/admin/verifications", icon: ShieldCheck, label: "Approvals" },
     { href: "/admin/crops", icon: Package, label: "Crops" },
     { href: "/admin/orders", icon: ShoppingCart, label: "Orders" },
     { href: "/admin/payments", icon: CreditCard, label: "Payments" },
+    { href: "/admin/payouts", icon: WalletCards, label: "Farmer Payouts" },
     { href: "/admin/settings", icon: Settings, label: "Settings" },
   ];
 
@@ -74,6 +79,8 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                 <p className="text-sm text-muted-foreground">Admin Panel</p>
               </div>
             </Link>
+            <div className="flex items-center gap-1">
+              <NotificationBell />
             {/* Close button for mobile */}
             <Button
               variant="ghost"
@@ -83,6 +90,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
             >
               <X className="h-5 w-5" />
             </Button>
+            </div>
           </div>
 
           {/* Navigation */}
@@ -144,7 +152,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                 <Leaf className="h-6 w-6 text-primary" />
                 <span className="font-semibold text-foreground">Admin</span>
               </div>
-              <div className="w-10" /> {/* Spacer for centering */}
+              <NotificationBell />
             </div>
           </div>
 

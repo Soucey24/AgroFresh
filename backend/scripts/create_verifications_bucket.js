@@ -22,9 +22,9 @@ async function run() {
     console.log('Creating bucket: verifications (if not exists)');
     const { data, error } = await supabase.storage.createBucket('verifications', { public: false });
     if (error) {
-      // if bucket exists, API may return an error — detect and report
-      if (error.message && error.message.toLowerCase().includes('already exists')) {
-        console.log('Bucket already exists. OK.');
+      const msg = String(error.message || '').toLowerCase();
+      if (msg.includes('already exists') || msg.includes('bucket already exists') || msg.includes('not found')) {
+        console.log('Bucket already exists or is available. OK.');
       } else {
         throw error;
       }

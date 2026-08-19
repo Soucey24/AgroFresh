@@ -132,13 +132,13 @@ const Payments = () => {
     }
   };
 
-  const totalAmount = payments.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+  const totalAmount = payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
   const completedAmount = payments
     .filter(payment => payment.status === 'completed')
-    .reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+    .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
   const pendingAmount = payments
     .filter(payment => payment.status === 'pending' || payment.status === 'processing')
-    .reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+    .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
 
   const stats = [
     {
@@ -161,7 +161,7 @@ const Payments = () => {
     },
     {
       title: "Total Amount",
-      value: `GH₵ ${((parseFloat(paymentStats.completed.amount) || 0) + (parseFloat(paymentStats.pending.amount) || 0)).toFixed(2)}`,
+      value: `GH₵ ${((Number(paymentStats.completed.amount) || 0) + (Number(paymentStats.pending.amount) || 0)).toFixed(2)}`,
       icon: DollarSign,
       color: "text-purple-600"
     }
@@ -175,13 +175,13 @@ const Payments = () => {
       const paymentsToExport = exportScope === 'filtered' ? filteredPayments : payments;
       
       // Calculate summary statistics
-      const totalAmount = paymentsToExport.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+      const totalAmount = paymentsToExport.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
       const completedAmount = paymentsToExport
         .filter(payment => payment.status === 'completed')
-        .reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+        .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
       const pendingAmount = paymentsToExport
         .filter(payment => payment.status === 'pending' || payment.status === 'processing')
-        .reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+        .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
       
       const statusCounts = paymentsToExport.reduce((acc, payment) => {
         acc[payment.status] = (acc[payment.status] || 0) + 1;
@@ -231,7 +231,7 @@ const Payments = () => {
         payment.order_id,
         getMethodLabel(payment.payment_method),
         payment.phone_number || 'N/A',
-        (parseFloat(payment.amount) || 0).toFixed(2),
+        (Number(payment.amount) || 0).toFixed(2),
         payment.status.toUpperCase(),
         payment.transaction_id || 'N/A',
         new Date(payment.created_at).toLocaleString(),
@@ -272,13 +272,13 @@ const Payments = () => {
       const paymentsToExport = exportScope === 'filtered' ? filteredPayments : payments;
       
       // Calculate summary statistics
-      const totalAmount = paymentsToExport.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+      const totalAmount = paymentsToExport.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
       const completedAmount = paymentsToExport
         .filter(payment => payment.status === 'completed')
-        .reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+        .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
       const pendingAmount = paymentsToExport
         .filter(payment => payment.status === 'pending' || payment.status === 'processing')
-        .reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
+        .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
       
       const statusCounts = paymentsToExport.reduce((acc, payment) => {
         acc[payment.status] = (acc[payment.status] || 0) + 1;
@@ -357,7 +357,7 @@ const Payments = () => {
           payment.order_id.toString(),
           getMethodLabel(payment.payment_method),
           payment.phone_number || 'N/A',
-          `GH₵ ${(parseFloat(payment.amount) || 0).toFixed(2)}`,
+          `GH₵ ${(Number(payment.amount) || 0).toFixed(2)}`,
           payment.status.toUpperCase(),
           payment.transaction_id || 'N/A',
           new Date(payment.created_at).toLocaleDateString(),
@@ -551,7 +551,7 @@ const Payments = () => {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="text-sm font-medium">GH₵ {(parseFloat(payment.amount) || 0).toFixed(2)}</div>
+                        <div className="text-sm font-medium">GH₵ {(Number(payment.amount) || 0).toFixed(2)}</div>
                       </td>
                       <td className="px-4 py-3">
                         <Badge variant={getStatusBadgeVariant(payment.status)}>
@@ -598,7 +598,7 @@ const Payments = () => {
               <CardContent className="space-y-4">
                 <PaymentStatusTracker
                   paymentId={selectedPayment.id}
-                  amount={parseFloat(selectedPayment.amount) || 0}
+                  amount={Number(selectedPayment.amount) || 0}
                   showDetails={true}
                   autoRefresh={true}
                 />
@@ -620,7 +620,7 @@ const Payments = () => {
                       <div><strong>Order ID:</strong> #{selectedPayment.order_id}</div>
                       <div><strong>Buyer ID:</strong> {selectedPayment.buyer_id}</div>
                       <div><strong>Farmer ID:</strong> {selectedPayment.farmer_id}</div>
-                      <div><strong>Amount:</strong> GH₵ {(parseFloat(selectedPayment.amount) || 0).toFixed(2)}</div>
+                      <div><strong>Amount:</strong> GH₵ {(Number(selectedPayment.amount) || 0).toFixed(2)}</div>
                     </div>
                   </div>
                 </div>

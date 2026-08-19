@@ -49,6 +49,33 @@ export default class MLService {
     }
   }
 
+  static async verifyCropPhoto(filePath, fileName, cropName = '', cropCategory = '', cropId = null, imageUrl = null) {
+    try {
+      const form = new FormData();
+      form.append('image', fs.createReadStream(filePath), fileName || 'crop-photo.jpg');
+      if (cropName) form.append('crop_name', cropName);
+      if (cropCategory) form.append('crop_category', cropCategory);
+      if (cropId !== null) form.append('crop_id', String(cropId));
+      if (imageUrl) form.append('image_url', imageUrl);
+      const r = await mlClient.post('/api/ml/verify-crop-photo', form, { headers: form.getHeaders() });
+      return r.data;
+    } catch (e) {
+      console.error('ML verifyCropPhoto error', e.message);
+      return {
+        status: 'error',
+        error: e.message,
+        data: {
+          is_real_crop: true,
+          confidence: 0.5,
+          crop_category: cropCategory || 'unknown',
+          quality_score: 50,
+          requires_review: true,
+          reason: 'ML verification temporarily unavailable; fallback review required.'
+        }
+      };
+    }
+  }
+
   static async getCropTypes() {
     try {
       const r = await mlClient.get('/api/ml/crop-types');

@@ -7,6 +7,7 @@ import {
 	deleteCrop,
 	bulkUpdateAvailability,
 	predictHarvestForCrop,
+	verifyCropPhoto,
 	analyzeCropQuality,
 	getCropPredictions,
 	listMlCropTypes,
@@ -15,15 +16,16 @@ import {
 	recommendCropSellingTime
 } from '../controllers/cropController.js';
 import { createReview, getReviewsForCrop } from '../controllers/reviewController.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requireRole, requireFarmerApproved } from '../middleware/auth.js';
 import { upload } from '../controllers/uploadController.js';
 const router = express.Router();
 
 router.get('/', listCrops);
 router.get('/ml/crop-types', requireAuth, listMlCropTypes);
-router.post('/', requireAuth, requireRole('farmer'), upload.single('image'), createCrop);
+router.post('/', requireAuth, requireRole('farmer'), requireFarmerApproved, upload.single('image'), createCrop);
 router.post('/bulk-update-availability', bulkUpdateAvailability);
 router.post('/:id/predict-harvest', requireAuth, requireRole(['admin', 'farmer']), predictHarvestForCrop);
+router.post('/:id/verify-photo', requireAuth, requireRole(['admin', 'farmer']), upload.single('image'), verifyCropPhoto);
 router.post('/:id/analyze-quality', requireAuth, requireRole(['admin', 'farmer']), upload.single('image'), analyzeCropQuality);
 router.post('/:id/calculate-freshness', requireAuth, requireRole(['admin', 'farmer']), calculateCropFreshness);
 router.post('/:id/forecast-price', requireAuth, requireRole(['admin', 'farmer']), forecastCropPrice);
@@ -33,7 +35,7 @@ router.get('/:id/reviews', getReviewsForCrop);
 router.post('/:id/reviews', requireAuth, createReview);
 router.get('/:id/predictions', requireAuth, getCropPredictions);
 router.get('/:id', getCrop);
-router.put('/:id', requireAuth, requireRole('farmer'), upload.single('image'), updateCrop);
+router.put('/:id', requireAuth, requireRole('farmer'), requireFarmerApproved, upload.single('image'), updateCrop);
 router.delete('/:id', requireAuth, requireRole(['admin', 'farmer']), deleteCrop);
 
 export default router; 

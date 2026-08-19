@@ -9,6 +9,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Farmers from "./pages/Farmers";
+import AddProduct from "./pages/AddProduct";
 import RequireAuth from "./components/RequireAuth";
 import Buyers from "./pages/Buyers";
 import Checkout from "./pages/Checkout";
@@ -17,11 +18,14 @@ import AdminUsers from "./pages/admin/Users";
 import AdminCrops from "./pages/admin/Crops";
 import AdminOrders from "./pages/admin/Orders";
 import AdminPayments from "./pages/admin/Payments";
+import Payouts from "./pages/admin/Payouts";
 import BuyerOrders from "./pages/BuyerOrders";
 import FarmerOrders from "./pages/FarmerOrders";
 import Settings from "./pages/admin/Settings";
+import Verifications from "./pages/admin/Verifications";
 import FarmerInsights from "./pages/FarmerInsights";
 import FarmerVerification from "./pages/FarmerVerification";
+import FarmerQuickActionPage from "./pages/FarmerQuickActionPage";
 import OrderConfirmation from "./pages/OrderConfirmation";
 import Profile from "./pages/Profile";
 import DeliveryTracking from './pages/DeliveryTracking';
@@ -40,20 +44,26 @@ const App = () => (
           <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
           <Route path="/farmers" element={<RequireAuth><Farmers /></RequireAuth>} />
+          <Route path="/farmers/add" element={<RequireAuth><AddProduct /></RequireAuth>} />
+          <Route path="/farmers/sales-report" element={<RequireAuth><FarmerQuickActionPage mode="sales" /></RequireAuth>} />
+          <Route path="/farmers/payouts" element={<RequireAuth><FarmerQuickActionPage mode="payout" /></RequireAuth>} />
+          <Route path="/farmers/availability" element={<RequireAuth><FarmerQuickActionPage mode="availability" /></RequireAuth>} />
           <Route path="/buyers" element={<Buyers />} />
-          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/checkout" element={<RequireAuth><Checkout /></RequireAuth>} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/users" element={<AdminUsers />} />
+          <Route path="/admin/verifications" element={<Verifications />} />
           <Route path="/admin/crops" element={<AdminCrops />} />
           <Route path="/admin/orders" element={<AdminOrders />} />
           <Route path="/admin/payments" element={<AdminPayments />} />
+          <Route path="/admin/payouts" element={<Payouts />} />
           <Route path="/admin/settings" element={<Settings />} />
           <Route path="/buyer-orders" element={<BuyerOrders />} />
           <Route path="/farmer-orders" element={<FarmerOrders />} />
           <Route path="/farmer-insights/:cropId" element={<FarmerInsights />} />
           <Route path="/verify-farmer" element={<FarmerVerification />} />
           <Route path="/order-confirmation" element={<OrderConfirmation />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
           <Route path="/delivery-tracking/:orderId" element={<DeliveryTracking />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

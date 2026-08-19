@@ -37,19 +37,53 @@ class HarvestPredictor:
         self.model_version = 'v1.0-regional-calibrated'
 
     def predict_harvest_date(self, crop_type: str, planting_date: str, region: str = 'Ashanti') -> dict:
-        if crop_type not in self.CROP_DATA:
+        normalized = (crop_type or '').strip().lower().replace('-', ' ')
+        crop_aliases = {
+            'tomato': 'tomato',
+            'tomatoes': 'tomato',
+            'lettuce': 'lettuce',
+            'cabbage': 'lettuce',
+            'yam': 'yam',
+            'yams': 'yam',
+            'maize': 'maize',
+            'corn': 'maize',
+            'pepper': 'pepper',
+            'peppers': 'pepper',
+            'cucumber': 'cucumber',
+            'cucumbers': 'cucumber',
+            'okra': 'okra',
+            'cassava': 'cassava',
+            'plantain': 'maize',
+            'banana': 'maize'
+        }
+
+        crop_key = crop_aliases.get(normalized, normalized)
+        if crop_key not in self.CROP_DATA:
             raise ValueError(f'Unsupported crop type: {crop_type}')
 
         try:
-            plant = datetime.fromisoformat(planting_date).date()
-        except Exception:
-            raise ValueError('planting_date must be ISO format YYYY-MM-DD')
+            cleaned_date = str(planting_date).strip()
+            if cleaned_date.endswith('Z'):
+                cleaned_date = cleaned_date[:-1] + '+00:00'
+            try:
+                plant = datetime.fromisoformat(cleaned_date).date()
+            except ValueError:
+                for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%Y/%m/%d'):
+                    try:
+                        plant = datetime.strptime(cleaned_date, fmt).date()
+                        break
+                    except ValueError:
+                        continue
+                else:
+                    raise ValueError('planting_date must be ISO format YYYY-MM-DD or common date formats')
+        except Exception as exc:
+            raise ValueError('planting_date must be a valid date format') from exc
 
         # Get regional adjustment
         region_adj = self.REGION_ADJUSTMENTS.get(region, 1.0)
-        
+
         # Calculate base days with regional calibration
-        base_days = int(self.CROP_DATA[crop_type]['days_to_harvest'])
+        base_days = int(self.CROP_DATA[crop_key]['days_to_harvest'])
         adjusted_days = int(base_days * region_adj)
         
         # Confidence calibration: regional adjustments reduce confidence slightly

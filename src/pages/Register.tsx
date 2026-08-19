@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Leaf, User, Mail, Lock, MapPin, Loader2 } from "lucide-react";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
-import { register } from '../api';
+import { register, resendRegistrationOtp, verifyRegistrationOtp } from '../api';
 import { useToast } from '@/hooks/use-toast';
 
 const Register = () => {
@@ -20,9 +20,18 @@ const Register = () => {
     userType: "",
     location: ""
   });
+  const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [otpStep, setOtpStep] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [maskedPhone, setMaskedPhone] = useState('');
+
+  const isValidGhanaPhone = (value: string) => {
+    const clean = value.replace(/\s+/g, '');
+    return /^(?:\+233|233|0)(?:20|24|26|27|50|54|55|59)\d{7,8}$/.test(clean);
+  };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,26 +44,67 @@ const Register = () => {
       setError("Passwords do not match.");
       return;
     }
+    if (!phone) {
+      setError("Please enter your phone number before continuing.");
+      return;
+    }
+    if (!isValidGhanaPhone(phone)) {
+      setError("Please enter a valid Ghana mobile number before continuing.");
+      return;
+    }
     // Call backend API
     setLoading(true);
-    const result = await register(formData);
+    const result = await register({ ...formData, phone });
     setLoading(false);
     if (result.error) {
       setError(result.error);
       return;
     }
+    if (result.requiresPhoneOtp) {
+      setMaskedPhone(result.phone || 'your phone');
+      setOtpStep(true);
+      toast({ title: 'Phone verification required', description: `Enter the code sent to ${result.phone || 'your phone'}.` });
+      return;
+    }
+
+    completeRegistration(result);
+  };
+
+  const completeRegistration = (result: any) => {
     toast({ title: 'Account created' });
 
     if (result.role === "farmer") {
-      // Keep the user signed-in and send them straight to the verification wizard
-      navigate(`/verify-farmer?id=${result.id}`);
+      // Reuse the phone number already collected during registration
+      const verificationPhone = encodeURIComponent(phone);
+      navigate(`/verify-farmer?id=${result.id}&phone=${verificationPhone}`);
     } else if (result.role === "buyer") {
       navigate("/buyers");
-    } else if (result.role === "vendor") {
+    } else if (result.role === "admin" || result.role === "vendor") {
       navigate("/admin");
     } else {
       navigate("/dashboard");
     }
+  };
+
+  const handleOtpSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setLoading(true);
+    const result = await verifyRegistrationOtp(otpCode);
+    setLoading(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    completeRegistration(result);
+  };
+
+  const handleResendOtp = async () => {
+    setLoading(true);
+    const result = await resendRegistrationOtp();
+    setLoading(false);
+    if (result.error) setError(result.error);
+    else toast({ title: 'Code resent', description: 'A new signup code was sent to your phone.' });
   };
 
   return (
@@ -72,7 +122,16 @@ const Register = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleRegister} className="space-y-4">
+            <form onSubmit={otpStep ? handleOtpSubmit : handleRegister} className="space-y-4">
+              {otpStep ? (
+                <>
+                  <div className="rounded-md bg-primary/10 p-3 text-sm text-primary">A verification code was sent to {maskedPhone}.</div>
+                  <Label htmlFor="signup-otp">Phone verification code</Label>
+                  <Input id="signup-otp" inputMode="numeric" maxLength={6} placeholder="Enter 6-digit code" value={otpCode} onChange={(event) => setOtpCode(event.target.value)} required />
+                  <Button type="button" variant="link" className="px-0 text-sm" onClick={handleResendOtp} disabled={loading}>Resend code</Button>
+                </>
+              ) : (
+                <>
               <div>
                 <Label htmlFor="name">Full Name</Label>
                 <div className="relative">
@@ -87,7 +146,6 @@ const Register = () => {
                   />
                 </div>
               </div>
-
               <div>
                 <Label htmlFor="email">Email</Label>
                 <div className="relative">
@@ -116,9 +174,25 @@ const Register = () => {
                   <SelectContent>
                     <SelectItem value="farmer">Farmer</SelectItem>
                     <SelectItem value="buyer">Buyer (Restaurant/Individual)</SelectItem>
-                    <SelectItem value="vendor">Admin</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Admin accounts are created by the platform team. If you are an admin, sign in with the dedicated admin account.
+                </p>
+              </div>
+
+              <div className="space-y-3 rounded-md border border-dashed p-3 bg-muted/20">
+                <div>
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    placeholder="e.g. +233 20 123 4567"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="mt-1"
+                    required
+                  />
+                </div>
               </div>
 
               <div>
@@ -167,6 +241,8 @@ const Register = () => {
                   />
                 </div>
               </div>
+                </>
+              )}
 
               {error && (
                 <div className="text-red-500 text-sm mb-2 text-center">{error}</div>
@@ -177,8 +253,8 @@ const Register = () => {
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating...
                   </>
-                ) : (
-                  'Create Account'
+                  ) : (
+                  otpStep ? 'Verify phone and continue' : 'Create Account'
                 )}
               </Button>
             </form>

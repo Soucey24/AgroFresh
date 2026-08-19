@@ -6,16 +6,18 @@ import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Leaf, Mail, Lock, User } from "lucide-react";
+import { Leaf, Mail, Lock } from "lucide-react";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
-import { login } from '../api';
+import { login, resendLoginOtp, verifyLoginOtp } from '../api';
 
 const Login = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [role, setRole] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpStep, setOtpStep] = useState(false);
+  const [maskedPhone, setMaskedPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -23,22 +25,57 @@ const Login = () => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const result = await login(email, password, role);
+    const result = await login(email, password);
     setLoading(false);
     if (result.error) {
       setError(result.error);
       return;
     }
+    if (result.requiresOtp) {
+      setMaskedPhone(result.phone || 'your phone');
+      setOtpStep(true);
+      toast({ title: 'Verification code sent', description: `Enter the code sent to ${result.phone || 'your phone'}.` });
+      return;
+    }
+    finishLogin(result);
+  };
+
+  const finishLogin = (result: any) => {
     toast({ title: 'Signed in', description: 'Welcome back!' });
     if (result.role === "farmer") {
-      navigate("/farmers");
+      if (result.verificationStatus === 'not_submitted' || result.verificationStatus === 'pending' || result.verificationStatus === 'rejected') {
+        navigate(`/verify-farmer?id=${result.id}`);
+      } else {
+        navigate("/farmers");
+      }
     } else if (result.role === "buyer") {
       navigate("/buyers");
-    } else if (result.role === "vendor") {
+    } else if (result.role === "admin" || result.role === "vendor") {
       navigate("/admin");
     } else {
       navigate("/dashboard");
     }
+  };
+
+  const handleOtpVerification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    const result = await verifyLoginOtp(otp);
+    setLoading(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    finishLogin(result);
+  };
+
+  const handleResendOtp = async () => {
+    setLoading(true);
+    const result = await resendLoginOtp(email, password);
+    setLoading(false);
+    if (result.error) setError(result.error);
+    else toast({ title: 'Code resent', description: 'A new login code was sent to your phone.' });
   };
 
   return (
@@ -56,26 +93,8 @@ const Login = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <Label htmlFor="role" className="text-sm font-medium">Role</Label>
-                <div className="relative mt-1">
-                  <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <select
-                    id="role"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="w-full border rounded-md px-10 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                    required
-                  >
-                    <option value="">Select role</option>
-                    <option value="farmer">Farmer</option>
-                    <option value="buyer">Buyer</option>
-                    <option value="vendor">Admin</option>
-                  </select>
-                </div>
-              </div>
-
+            <form onSubmit={otpStep ? handleOtpVerification : handleLogin} className="space-y-4">
+              {!otpStep ? <>
               <div>
                 <Label htmlFor="email" className="text-sm font-medium">Email</Label>
                 <div className="relative mt-1">
@@ -107,14 +126,21 @@ const Login = () => {
                   />
                 </div>
               </div>
-
+              </> : <>
+                <div className="rounded-md bg-primary/10 p-3 text-sm text-primary">A verification code was sent to {maskedPhone}.</div>
+                <div>
+                  <Label htmlFor="otp">Verification code</Label>
+                  <Input id="otp" inputMode="numeric" maxLength={6} placeholder="Enter 6-digit code" value={otp} onChange={(e) => setOtp(e.target.value)} required />
+                  <Button type="button" variant="link" className="px-0 text-sm" onClick={handleResendOtp} disabled={loading}>Resend code</Button>
+                </div>
+              </>}
               <Button type="submit" className="w-full h-11" disabled={loading}>
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Signing in...
                   </>
                 ) : (
-                  'Sign In'
+                  otpStep ? 'Verify and Sign In' : 'Sign In'
                 )}
               </Button>
             </form>

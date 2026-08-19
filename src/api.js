@@ -1,13 +1,57 @@
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+export async function getNotifications() {
+  const res = await fetch(`${API_BASE}/api/notifications`, { credentials: 'include' });
+  return res.json();
+}
+
+export async function markNotificationRead(id) {
+  const res = await fetch(`${API_BASE}/api/notifications/${id}/read`, {
+    method: 'PATCH',
+    credentials: 'include'
+  });
+  return res.json();
+}
+
+export async function markAllNotificationsRead() {
+  const res = await fetch(`${API_BASE}/api/notifications/read-all`, {
+    method: 'PATCH',
+    credentials: 'include'
+  });
+  return res.json();
+}
+
 export async function getUser(id) {
   const res = await fetch(`${API_BASE}/api/users/${id}`, { credentials: 'include' });
   return res.json();
 }
 
 export async function getProfile() {
+  console.log('[auth] getProfile start', { apiBase: API_BASE, url: `${API_BASE}/api/users/profile/me` });
+
   const res = await fetch(`${API_BASE}/api/users/profile/me`, { credentials: 'include' });
-  return res.json();
+  const text = await res.text();
+
+  console.log('[auth] getProfile response', {
+    status: res.status,
+    ok: res.ok,
+    contentType: res.headers.get('content-type'),
+    bodyPreview: text.slice(0, 500)
+  });
+
+  if (!text) {
+    console.log('[auth] getProfile empty response');
+    return {};
+  }
+
+  try {
+    const data = JSON.parse(text);
+    console.log('[auth] getProfile parsed', data);
+    return data;
+  } catch (error) {
+    console.error('[auth] getProfile parse error', error, text);
+    return { error: 'Invalid profile response' };
+  }
 }
 
 export async function logout() {
@@ -17,24 +61,104 @@ export async function logout() {
   });
 }
 
-export async function login(email, password, role) {
+export async function login(email, password) {
   const res = await fetch(`${API_BASE}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ email, password, role }),
+    body: JSON.stringify({ email, password }),
   });
   return res.json();
 }
 
-export async function register({ name, email, password, userType, location }) {
+export async function verifyLoginOtp(otpCode) {
+  const res = await fetch(`${API_BASE}/api/auth/login/verify-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ otpCode }),
+  });
+  return res.json();
+}
+
+export async function register({ name, email, password, userType, location, phone }) {
   const res = await fetch(`${API_BASE}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ name, email, password, role: userType, location }),
+    body: JSON.stringify({ name, email, password, role: userType, location, phone }),
   });
   return res.json();
+}
+
+export async function verifyRegistrationOtp(otpCode) {
+  const res = await fetch(`${API_BASE}/api/auth/register/verify-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ otpCode }),
+  });
+  return res.json();
+}
+
+export async function resendRegistrationOtp() {
+  const res = await fetch(`${API_BASE}/api/auth/register/resend-otp`, { method: 'POST', credentials: 'include' });
+  return res.json();
+}
+
+export async function resendLoginOtp(email, password) {
+  const res = await fetch(`${API_BASE}/api/auth/login/resend-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ email, password }),
+  });
+  return res.json();
+}
+
+export async function sendOtp(phone, userId = null) {
+  const res = await fetch(`${API_BASE}/api/otp/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ phone, userId }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to send OTP');
+  }
+  return data;
+}
+
+export async function resendOtp(phone, userId = null) {
+  const res = await fetch(`${API_BASE}/api/otp/resend`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ phone, userId }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to resend OTP');
+  }
+  return data;
+}
+
+export async function verifyOtp(phone, otpCode) {
+  const res = await fetch(`${API_BASE}/api/otp/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ phone, otpCode }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to verify OTP');
+  }
+  return data;
 }
 
 // Crop APIs
@@ -129,6 +253,16 @@ export async function createReview(cropId, { rating, comment }) {
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify({ rating, comment }),
+  });
+  return res.json();
+}
+
+export async function createComplaint(complaint) {
+  const res = await fetch(`${API_BASE}/api/complaints`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(complaint),
   });
   return res.json();
 }
@@ -280,6 +414,16 @@ export async function requestPayout({ order_id, amount }) {
   return res.json();
 }
 
+export async function getPayouts() {
+  const res = await fetch(`${API_BASE}/api/payouts`, { credentials: 'include' });
+  return res.json();
+}
+
+export async function updatePayout(id, data) {
+  const res = await fetch(`${API_BASE}/api/payouts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(data) });
+  return res.json();
+}
+
 export async function changePassword(currentPassword, newPassword) {
   const res = await fetch(`${API_BASE}/api/users/change-password`, {
     method: 'POST',
@@ -307,6 +451,15 @@ export async function createPayment(paymentData) {
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify(paymentData),
+  });
+  return res.json();
+}
+
+export async function verifyPaystackPayment(reference) {
+  const res = await fetch(`${API_BASE}/api/payments/verify/${encodeURIComponent(reference)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
   });
   return res.json();
 }
@@ -361,6 +514,31 @@ export async function getRecentActivity() {
   return res.json();
 }
 
+export async function getPendingFarmerVerifications() {
+  const res = await fetch(`${API_BASE}/api/admin/verifications/pending`, {
+    credentials: 'include',
+  });
+  return res.json();
+}
+
+export async function approveFarmerVerification(verificationId) {
+  const res = await fetch(`${API_BASE}/api/admin/verifications/${verificationId}/approve`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+  });
+  return res.json();
+}
+
+export async function rejectFarmerVerification(verificationId) {
+  const res = await fetch(`${API_BASE}/api/admin/verifications/${verificationId}/reject`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+  });
+  return res.json();
+}
+
 // Admin Payment APIs
 export async function getPaymentStats() {
   const res = await fetch(`${API_BASE}/api/admin/payments/stats`, {
@@ -397,6 +575,16 @@ export async function getOrderStats() {
 export async function getAdminCrops() {
   const res = await fetch(`${API_BASE}/api/admin/crops`, {
     credentials: 'include',
+  });
+  return res.json();
+}
+
+export async function reviewCropListing(cropId, status, reviewNotes = '') {
+  const res = await fetch(`${API_BASE}/api/admin/crops/${cropId}/review`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ status, review_notes: reviewNotes }),
   });
   return res.json();
 }
