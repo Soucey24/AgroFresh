@@ -1,0 +1,7 @@
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS payout_method VARCHAR(30),
+  ADD COLUMN IF NOT EXISTS payout_provider VARCHAR(80),
+  ADD COLUMN IF NOT EXISTS payout_account_name VARCHAR(120),
+  ADD COLUMN IF NOT EXISTS payout_account_number VARCHAR(120);
+
+ALTER TABLE payouts ADD COLUMN IF NOT EXISTS provider_response JSONB;

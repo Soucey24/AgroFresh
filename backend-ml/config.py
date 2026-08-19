@@ -9,9 +9,12 @@ class Settings:
     SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
     SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY')
 
+    GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+    GROQ_MODEL = os.getenv('GROQ_MODEL', 'llama-3.2-11b-vision-preview')
+
     YOLOV5_MODEL = os.getenv('YOLOV5_MODEL', 'yolov5s')
-    IMAGE_MAX_SIZE_MB = int(os.getenv('IMAGE_MAX_SIZE_MB', 5))
-    CONFIDENCE_THRESHOLD = float(os.getenv('CONFIDENCE_THRESHOLD', 0.6))
+    IMAGE_MAX_SIZE_MB = int(os.getenv('IMAGE_MAX_SIZE_MB', 8))
+    CONFIDENCE_THRESHOLD = float(os.getenv('CONFIDENCE_THRESHOLD', 0.7))
 
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     CACHE_TTL_SECONDS = int(os.getenv('CACHE_TTL_SECONDS', 3600))

@@ -1,10 +1,10 @@
+import 'dotenv/config';
 import express from 'express';
 import session from 'express-session';
 import { createClient } from '@supabase/supabase-js';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 import pgSession from 'connect-pg-simple';
 import { Pool } from 'pg';
 import authRoutes from './routes/auth.js';
@@ -20,9 +20,6 @@ import payoutsRoutes from './routes/payouts.js';
 import paymentsRoutes from './routes/payments.js';
 import adminRoutes from './routes/admin.js';
 import webhooksRouter from './routes/webhooks.js';
-
-// Load environment variables
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;

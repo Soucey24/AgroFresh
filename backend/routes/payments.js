@@ -3,6 +3,7 @@ import {
   createPayment, 
   getPaymentStatus, 
   simulatePaymentCompletion,
+  verifyPayment,
   paymentWebhook,
   getPaymentHistory,
   cancelPayment
@@ -19,6 +20,10 @@ router.get('/history', requireAuth, getPaymentHistory);
 
 // Simulate payment completion (for testing) - specific route
 router.post('/simulate', requireAuth, simulatePaymentCompletion);
+
+// Verify a Paystack transaction by reference
+router.post('/verify/:reference', requireAuth, verifyPayment);
+router.get('/verify/:reference', requireAuth, verifyPayment);
 
 // Webhook endpoint for payment providers (no auth required for webhooks) - specific route
 router.post('/webhook', paymentWebhook);

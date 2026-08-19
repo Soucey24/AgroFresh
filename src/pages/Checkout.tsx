@@ -5,11 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { ShoppingCart, MapPin, Phone, User, ArrowLeft } from "lucide-react";
+import { ShoppingCart, MapPin, Phone, User, ArrowLeft, Trash2, Loader2 } from "lucide-react";
 import PaymentModal from "@/components/PaymentModal";
 import Navigation from "@/components/Navigation";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
-import { createOrder, updateOrderTracking } from '../api';
+import { createOrder, deleteOrder, getProfile, updateOrder, updateOrderTracking } from '../api';
 import { useToast } from "@/components/ui/use-toast";
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
@@ -28,8 +28,11 @@ interface DeliveryInfo {
   fullName: string;
   phone: string;
   address: string;
+  pickupLocation: string;
   specialInstructions: string;
-  deliveryMethod: "sendstack" | "";
+  preferredTime: string;
+  deliveryMethod: "pickup" | "farmer-delivery" | "company-delivery" | "";
+  deliveryService: "sendstack" | "gig" | "farmer" | "other" | "";
 }
 
 // Extend jsPDF type to include lastAutoTable
@@ -46,24 +49,51 @@ const Checkout = () => {
     fullName: "",
     phone: "",
     address: "",
+    pickupLocation: "",
     specialInstructions: "",
-    deliveryMethod: ""
+    preferredTime: "",
+    deliveryMethod: "",
+    deliveryService: ""
   });
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [user, setUser] = useState<{ id?: number | string; email?: string } | null>(null);
   const [orderId, setOrderId] = useState<number | null>(null);
+  const [createdOrderIds, setCreatedOrderIds] = useState<number[]>([]);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const { toast } = useToast();
+
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
   const [trackingInfo, setTrackingInfo] = useState(null);
   const [showTracking, setShowTracking] = useState(false);
-  const [deliveryMethod, setDeliveryMethod] = useState<"sendstack" | "">("");
+  const [deliveryMethod, setDeliveryMethod] = useState<"pickup" | "farmer-delivery" | "company-delivery" | "">("");
+
+  const getCartStorageKey = (currentUser?: { id?: number | string } | null) =>
+    currentUser?.id ? `cart_${currentUser.id}` : 'cart_guest';
 
   useEffect(() => {
-    const storedCart = localStorage.getItem('cart');
+    getProfile()
+      .then((profile) => {
+        if (profile && !profile.error) {
+          setUser(profile);
+        } else {
+          setUser(null);
+          navigate('/login', { replace: true });
+        }
+      })
+      .catch(() => {
+        setUser(null);
+        navigate('/login', { replace: true });
+      });
+  }, [navigate]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const storedCart = localStorage.getItem(getCartStorageKey(user));
     if (storedCart) {
       try {
         const parsed = JSON.parse(storedCart);
-        // Map to expected shape if needed
         if (parsed.length && parsed[0].crop) {
           setCartItems(parsed.map((item: any) => ({
             id: item.crop.id,
@@ -79,104 +109,165 @@ const Checkout = () => {
       } catch {
         setCartItems([]);
       }
+    } else {
+      setCartItems([]);
     }
-  }, []);
+  }, [user?.id]);
+
+  const saveCartItems = (nextItems: CartItem[]) => {
+    setCartItems(nextItems);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(getCartStorageKey(user), JSON.stringify(nextItems));
+    }
+  };
+
+  const updateCartQuantity = (id: string, change: number) => {
+    const nextItems = cartItems
+      .map((item) => item.id === id ? { ...item, quantity: Math.max(0, item.quantity + change) } : item)
+      .filter((item) => item.quantity > 0);
+
+    saveCartItems(nextItems);
+
+    if (nextItems.length !== cartItems.length || nextItems.some((item) => item.id === id && item.quantity === 0)) {
+      toast({
+        title: 'Cart updated',
+        description: change > 0 ? 'Item quantity increased.' : 'Item quantity decreased.'
+      });
+    }
+  };
+
+  const removeCartItem = (id: string) => {
+    const nextItems = cartItems.filter((item) => item.id !== id);
+    saveCartItems(nextItems);
+    toast({
+      title: 'Item removed',
+      description: 'The item has been removed from your cart.'
+    });
+  };
 
   const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
 
   const handleProceedToPayment = async () => {
-    if (!deliveryInfo.fullName || !deliveryInfo.phone || !deliveryInfo.address) {
-      toast({ 
-        title: "Missing Information", 
-        description: "Please fill in all required delivery information.",
+    if (!user) {
+      toast({
+        title: "Please sign in",
+        description: "You need to be logged in before placing an order.",
         variant: "destructive"
       });
+      navigate('/login', { replace: true });
       return;
     }
+
+    setIsPlacingOrder(true);
+
+    if (!deliveryInfo.fullName || !deliveryInfo.phone) {
+      toast({ 
+        title: "Missing Information", 
+        description: "Please fill in your name and phone number.",
+        variant: "destructive"
+      });
+      setIsPlacingOrder(false);
+      return;
+    }
+
     if (!deliveryMethod) {
       toast({ 
         title: "Select Delivery Method", 
-        description: "Please choose a delivery method.",
+        description: "Please choose how you want to receive your order.",
         variant: "destructive"
       });
       return;
     }
 
+    if (deliveryMethod === "pickup") {
+      if (!deliveryInfo.pickupLocation) {
+        toast({
+          title: "Pickup location required",
+          description: "Please provide the pickup point or farm location.",
+          variant: "destructive"
+        });
+        return;
+      }
+    } else {
+      if (!deliveryInfo.address) {
+        toast({
+          title: "Delivery address required",
+          description: "Please enter a delivery address for your order.",
+          variant: "destructive"
+        });
+        return;
+      }
+      if (deliveryMethod === "company-delivery" && !deliveryInfo.deliveryService) {
+        toast({
+          title: "Delivery company required",
+          description: "Please choose a delivery company or courier.",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
+    const provisionalOrderIds: number[] = [];
+
     try {
-      // Create actual orders for each cart item first
+      const normalizedDeliveryInfo = {
+        ...deliveryInfo,
+        deliveryMethod,
+        deliveryService: deliveryMethod === "company-delivery" ? deliveryInfo.deliveryService : deliveryMethod === "pickup" ? "pickup" : "farmer",
+        address: deliveryMethod === "pickup" ? deliveryInfo.pickupLocation || "Pickup from farm" : deliveryInfo.address,
+      };
+
       const createdOrders = [];
       for (const item of cartItems) {
-        const orderResult = await createOrder({ 
-          crop_id: item.id, 
+        const orderResult = await createOrder({
+          crop_id: item.id,
           quantity: item.quantity,
-          delivery_info: { ...deliveryInfo, deliveryMethod }, // Save delivery method with delivery info
+          delivery_info: normalizedDeliveryInfo,
         });
         if (orderResult.error) {
           throw new Error(`Failed to create order for ${item.name}: ${orderResult.error}`);
         }
         createdOrders.push(orderResult);
+        provisionalOrderIds.push(orderResult.id);
       }
 
-      // Integrate with selected delivery method and save tracking info
-      const primaryOrderId = createdOrders[0].id;
-      if (deliveryMethod === "sendstack") {
-        try {
-          const deliveryResult = await fetch('/api/orders/delivery', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              deliveryInfo,
-              cartItems,
-              orderId: primaryOrderId
-            }),
-          });
-          
-          if (!deliveryResult.ok) {
-            console.warn('Delivery creation failed, but order was created successfully');
-          }
-        } catch (error) {
-          console.error('Error creating delivery:', error);
-          // Order was created successfully, delivery can be handled later
-        }
-      }
-      // Save tracking info to the first order (or all orders if needed)
-      // Use the first order ID for payment (or create a combined order)
+      const primaryOrderId = createdOrders[0]?.id;
+      setCreatedOrderIds(createdOrders.map((order) => order.id));
       setOrderId(primaryOrderId);
       setShowPaymentModal(true);
     } catch (error) {
       console.error('Error creating orders:', error);
+      await Promise.all(provisionalOrderIds.map((id) => deleteOrder(id))).catch((cleanupError) => {
+        console.error('Error cleaning up provisional orders:', cleanupError);
+      });
       toast({ 
         title: "Error", 
         description: "Failed to create orders. Please try again.",
         variant: "destructive"
       });
+    } finally {
+      setIsPlacingOrder(false);
     }
   };
 
   const handlePaymentSuccess = async () => {
     try {
-      localStorage.removeItem('cart');
+      const orderIdFromPayment = orderId;
+      if (!orderIdFromPayment) {
+        throw new Error('Payment succeeded but no provisional order was found');
+      }
+      await Promise.all(
+        createdOrderIds
+          .filter((id) => id !== orderIdFromPayment)
+          .map((id) => updateOrder(id, { status: 'paid' }))
+      );
+      localStorage.removeItem(getCartStorageKey(user));
+      setCartItems([]);
       toast({ 
         title: "Order Placed Successfully!", 
         description: "Your order has been confirmed and payment processed.",
       });
-      // Fetch order details for receipt
-      const res = await fetch(`/api/orders/${orderId}`);
-      const contentType = res.headers.get("content-type");
-      if (!res.ok) {
-        throw new Error('Order not found or server error');
-      }
-      if (contentType && contentType.indexOf("application/json") !== -1) {
-        const order = await res.json();
-        setReceiptData(order);
-        setShowReceipt(true);
-      } else {
-        const text = await res.text();
-        console.error("Non-JSON response:", text);
-        throw new Error('Server returned non-JSON response');
-      }
+      navigate('/buyer-orders', { replace: true });
     } catch (error) {
       console.error('Error handling payment success:', error);
       toast({ 
@@ -263,9 +354,13 @@ const Checkout = () => {
         body: [
           ['Full Name', deliveryInfo.fullName || 'N/A'],
           ['Phone', deliveryInfo.phone || 'N/A'],
-          ['Address', deliveryInfo.address || 'N/A'],
+          ['Address', deliveryInfo.address || (deliveryInfo.pickupLocation || 'N/A')],
           ['Special Instructions', deliveryInfo.specialInstructions || 'None'],
-          ['Delivery Method', deliveryInfo.deliveryMethod === 'sendstack' ? 'Sendstack' : 'N/A']
+          ['Delivery Method',
+            deliveryInfo.deliveryMethod === 'pickup' ? 'Pickup' :
+            deliveryInfo.deliveryMethod === 'farmer-delivery' ? 'Farmer Delivery' :
+            deliveryInfo.deliveryMethod === 'company-delivery' ? (deliveryInfo.deliveryService === 'sendstack' ? 'Sendstack Delivery' : 'Company Delivery') : 'N/A'
+          ]
         ],
         headStyles: { fillColor: [34, 197, 94], textColor: [255, 255, 255] },
         styles: { fontSize: 10 }
@@ -399,7 +494,7 @@ const Checkout = () => {
               <CardContent>
                 <div className="space-y-4">
                   {cartItems.map((item) => (
-                    <div key={item.id} className="flex justify-between items-start">
+                    <div key={item.id} className="flex justify-between items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <h4 className="font-medium text-sm sm:text-base">{item.name}</h4>
                         <p className="text-xs sm:text-sm text-muted-foreground">
@@ -409,10 +504,40 @@ const Checkout = () => {
                           From: {item.farmer}
                         </p>
                       </div>
-                      <div className="text-right ml-2">
+                      <div className="text-right ml-2 flex flex-col items-end gap-2">
+                        <div className="flex items-center gap-2 border rounded-md px-2 py-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 rounded-full"
+                            onClick={() => updateCartQuantity(item.id, -1)}
+                          >
+                            −
+                          </Button>
+                          <span className="min-w-5 text-center text-sm font-medium">{item.quantity}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 rounded-full"
+                            onClick={() => updateCartQuantity(item.id, 1)}
+                          >
+                            +
+                          </Button>
+                        </div>
                         <p className="font-medium text-sm sm:text-base">
                           GH₵ {(item.price * item.quantity).toFixed(2)}
                         </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => removeCartItem(item.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />
+                          Remove
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -474,14 +599,109 @@ const Checkout = () => {
                   </div>
 
                   <div>
-                    <Label htmlFor="address" className="text-sm font-medium">Delivery Address *</Label>
-                    <textarea
-                      id="address"
-                      placeholder="Enter your full delivery address including landmarks"
-                      value={deliveryInfo.address}
-                      onChange={(e) => setDeliveryInfo({...deliveryInfo, address: e.target.value})}
-                      className="w-full min-h-20 px-3 py-2 border border-input bg-background rounded-md text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 mt-1"
-                      required
+                    <Label className="mt-4">Choose delivery option</Label>
+                    <div className="flex flex-col gap-2 mt-2 mb-4">
+                      <label className="flex items-center gap-2 rounded-md border p-2">
+                        <input
+                          type="radio"
+                          name="deliveryMethod"
+                          value="pickup"
+                          checked={deliveryMethod === "pickup"}
+                          onChange={() => {
+                            setDeliveryMethod("pickup");
+                            setDeliveryInfo((prev) => ({ ...prev, deliveryMethod: "pickup", deliveryService: "" }));
+                          }}
+                        />
+                        Pickup from farm / collection point
+                      </label>
+
+                      <label className="flex items-center gap-2 rounded-md border p-2">
+                        <input
+                          type="radio"
+                          name="deliveryMethod"
+                          value="farmer-delivery"
+                          checked={deliveryMethod === "farmer-delivery"}
+                          onChange={() => {
+                            setDeliveryMethod("farmer-delivery");
+                            setDeliveryInfo((prev) => ({ ...prev, deliveryMethod: "farmer-delivery", deliveryService: "farmer" }));
+                          }}
+                        />
+                        Farmer delivers it to me
+                      </label>
+
+                      <label className="flex items-center gap-2 rounded-md border p-2">
+                        <input
+                          type="radio"
+                          name="deliveryMethod"
+                          value="company-delivery"
+                          checked={deliveryMethod === "company-delivery"}
+                          onChange={() => {
+                            setDeliveryMethod("company-delivery");
+                            setDeliveryInfo((prev) => ({ ...prev, deliveryMethod: "company-delivery", deliveryService: "sendstack" }));
+                          }}
+                        />
+                        Delivery by logistics company
+                      </label>
+                    </div>
+                  </div>
+
+                  {deliveryMethod === "pickup" && (
+                    <div>
+                      <Label htmlFor="pickupLocation" className="text-sm font-medium">Pickup location *</Label>
+                      <textarea
+                        id="pickupLocation"
+                        placeholder="Farm location, collection point, or pickup address"
+                        value={deliveryInfo.pickupLocation}
+                        onChange={(e) => setDeliveryInfo({ ...deliveryInfo, pickupLocation: e.target.value })}
+                        className="w-full min-h-20 px-3 py-2 border border-input bg-background rounded-md text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 mt-1"
+                      />
+                    </div>
+                  )}
+
+                  {(deliveryMethod === "farmer-delivery" || deliveryMethod === "company-delivery") && (
+                    <div>
+                      <Label htmlFor="address" className="text-sm font-medium">Delivery Address *</Label>
+                      <textarea
+                        id="address"
+                        placeholder="Enter your full delivery address including landmarks"
+                        value={deliveryInfo.address}
+                        onChange={(e) => setDeliveryInfo({ ...deliveryInfo, address: e.target.value })}
+                        className="w-full min-h-20 px-3 py-2 border border-input bg-background rounded-md text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 mt-1"
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {deliveryMethod === "company-delivery" && (
+                    <div>
+                      <Label className="text-sm font-medium">Delivery company *</Label>
+                      <div className="flex flex-col gap-2 mt-2">
+                        {['sendstack', 'gig', 'other'].map((option) => (
+                          <label key={option} className="flex items-center gap-2 rounded-md border p-2">
+                            <input
+                              type="radio"
+                              name="deliveryService"
+                              value={option}
+                              checked={deliveryInfo.deliveryService === option}
+                              onChange={() => setDeliveryInfo({ ...deliveryInfo, deliveryService: option as any })}
+                            />
+                            {option === 'sendstack' && 'Sendstack'}
+                            {option === 'gig' && 'GIG Logistics'}
+                            {option === 'other' && 'Other courier / rider'}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <Label htmlFor="preferredTime" className="text-sm font-medium">Preferred delivery time (Optional)</Label>
+                    <Input
+                      id="preferredTime"
+                      placeholder="e.g. Tomorrow after 2pm"
+                      value={deliveryInfo.preferredTime}
+                      onChange={(e) => setDeliveryInfo({ ...deliveryInfo, preferredTime: e.target.value })}
+                      className="mt-1"
                     />
                   </div>
 
@@ -491,30 +711,24 @@ const Checkout = () => {
                       id="instructions"
                       placeholder="Any special delivery instructions..."
                       value={deliveryInfo.specialInstructions}
-                      onChange={(e) => setDeliveryInfo({...deliveryInfo, specialInstructions: e.target.value})}
+                      onChange={(e) => setDeliveryInfo({ ...deliveryInfo, specialInstructions: e.target.value })}
                       className="w-full min-h-16 px-3 py-2 border border-input bg-background rounded-md text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 mt-1"
                     />
-                  </div>
-
-                  <Label className="mt-4">Delivery Method</Label>
-                  <div className="flex flex-col gap-2 mb-4">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="deliveryMethod"
-                        value="sendstack"
-                        checked={deliveryMethod === "sendstack"}
-                        onChange={() => setDeliveryMethod("sendstack")}
-                      />
-                      Sendstack (Nationwide, Real-time Tracking)
-                    </label>
                   </div>
 
                   <Button 
                     onClick={handleProceedToPayment} 
                     className="w-full h-11"
+                    disabled={isPlacingOrder}
                   >
-                    Proceed to Payment - GH₵ {subtotal.toFixed(2)}
+                    {isPlacingOrder ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating your order...
+                      </>
+                    ) : (
+                      `Proceed to Payment - GH₵ ${subtotal.toFixed(2)}`
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -523,14 +737,23 @@ const Checkout = () => {
         </div>
       </div>
 
-      {showPaymentModal && orderId && (
+      {showPaymentModal && (
         <PaymentModal
           isOpen={showPaymentModal}
           onClose={() => setShowPaymentModal(false)}
           amount={subtotal}
-          orderId={orderId}
-          deliveryInfo={deliveryInfo}
+          orderId={Number(orderId || 0)}
+          deliveryInfo={{ ...deliveryInfo, email: user?.email || deliveryInfo.email || '' }}
+          userEmail={user?.email || ''}
           onPaymentSuccess={handlePaymentSuccess}
+          onPaymentFailure={async () => {
+            if (createdOrderIds.length) {
+              await Promise.all(createdOrderIds.map((id) => deleteOrder(id))).catch(() => {});
+              setCreatedOrderIds([]);
+              setCartItems([]);
+              localStorage.removeItem(getCartStorageKey(user));
+            }
+          }}
         />
       )}
     </div>

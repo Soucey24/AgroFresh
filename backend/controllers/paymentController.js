@@ -1,8 +1,69 @@
 import crypto from 'crypto';
+import axios from 'axios';
 import { supabase } from '../app.js';
+import { notifyPaymentCompleted } from '../services/notificationService.js';
 
-const allowedMethods = new Set(['mtn-momo', 'vodafone-cash', 'airteltigo-money', 'card', 'bank-transfer']);
+const allowedMethods = new Set(['paystack']);
 const terminalStatuses = new Set(['completed', 'failed', 'cancelled', 'refunded']);
+const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
+const PAYSTACK_BASE_URL = process.env.PAYSTACK_BASE_URL || 'https://api.paystack.co';
+
+console.log('[paystack] env loaded', {
+  secretConfigured: Boolean(PAYSTACK_SECRET_KEY),
+  secretPreview: PAYSTACK_SECRET_KEY ? `${PAYSTACK_SECRET_KEY.slice(0, 6)}...${PAYSTACK_SECRET_KEY.slice(-4)}` : 'missing',
+  baseUrl: PAYSTACK_BASE_URL,
+  callbackUrl: process.env.PAYSTACK_CALLBACK_URL || 'not-set'
+});
+
+const normalizePaystackStatus = (status) => {
+	const normalized = String(status || '').toLowerCase();
+	if (['success', 'completed'].includes(normalized)) return 'completed';
+	if (['failed', 'error'].includes(normalized)) return 'failed';
+	if (['pending', 'processing'].includes(normalized)) return 'pending';
+	return 'pending';
+};
+
+const paystackRequest = async ({ method = 'get', url, data = {} }) => {
+	if (!PAYSTACK_SECRET_KEY) {
+		console.error('[paystack] missing secret key before request', { url, payload: data, baseUrl: PAYSTACK_BASE_URL });
+		throw new Error('PAYSTACK_SECRET_KEY is not configured');
+	}
+
+	console.log('[paystack] sending request', {
+		method: method.toUpperCase(),
+		url: `${PAYSTACK_BASE_URL}${url}`,
+		sendPayload: data
+	});
+
+	const response = await axios({
+		method,
+		url: `${PAYSTACK_BASE_URL}${url}`,
+		headers: {
+			Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+			'Content-Type': 'application/json'
+		},
+		data
+	});
+
+	console.log('[paystack] response received', {
+		status: response.status,
+		statusText: response.statusText,
+		body: response.data
+	});
+
+	return response.data;
+};
+
+const verifyPaystackSignature = (payload, signature) => {
+	if (!PAYSTACK_SECRET_KEY) {
+		return true;
+	}
+	if (!signature) {
+		return false;
+	}
+	const digest = crypto.createHmac('sha512', PAYSTACK_SECRET_KEY).update(JSON.stringify(payload)).digest('hex');
+	return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(signature));
+};
 
 const handleError = (res, status, message, details) => {
 	if (details) {
@@ -16,7 +77,7 @@ const generateSessionId = () => crypto.randomBytes(24).toString('hex');
 
 export const createPayment = async (req, res) => {
 	try {
-		const { order_id, amount, payment_method, phone_number } = req.body;
+		const { order_id, amount, payment_method, payment_channel, phone_number, email } = req.body;
 		const buyer_id = req.session.user?.id;
 
 		if (!order_id || !amount || !payment_method || !buyer_id) {
@@ -58,13 +119,63 @@ export const createPayment = async (req, res) => {
 					payment_method,
 					phone_number: phone_number || null,
 					reference_id,
-					status: 'processing'
+					status: 'pending',
+					payment_provider: payment_method === 'paystack' ? 'paystack' : null
 				}
 			])
 			.select()
 			.single();
 
 		if (paymentError) throw paymentError;
+
+		let authorizationUrl = null;
+		let accessCode = null;
+
+		if (payment_method === 'paystack') {
+			const paystackPayload = {
+				email: email || req.session.user?.email || 'customer@agrofresh.local',
+				amount: Math.round(numericAmount * 100),
+				currency: 'GHS',
+				reference: reference_id,
+				callback_url: process.env.PAYSTACK_CALLBACK_URL || `${process.env.FRONTEND_URL || 'http://localhost:8080'}/checkout`,
+				metadata: {
+					order_id,
+					customer_name: req.session.user?.name || 'AgroFresh customer',
+					phone_number: phone_number || '',
+					buyer_id,
+					payment_method
+				}
+			};
+			if (['card', 'bank', 'mobile_money', 'ussd'].includes(payment_channel)) {
+				paystackPayload.channels = [payment_channel];
+			}
+
+			console.log('[paystack] initializing transaction', { payload: paystackPayload, buyer_id, order_id, amount: numericAmount });
+
+			const paystackResponse = await paystackRequest({
+				method: 'post',
+				url: '/transaction/initialize',
+				data: paystackPayload
+			});
+
+			if (!paystackResponse?.status || !paystackResponse?.data?.authorization_url) {
+				throw new Error(paystackResponse?.message || 'Paystack initialization failed');
+			}
+
+			authorizationUrl = paystackResponse.data.authorization_url;
+			accessCode = paystackResponse.data.access_code;
+
+			const { error: updateError } = await supabase
+				.from('payments')
+				.update({
+					payment_provider: 'paystack',
+					transaction_id: accessCode,
+					provider_response: paystackResponse.data,
+					updated_at: new Date().toISOString()
+				})
+				.eq('id', payment.id);
+			if (updateError) throw updateError;
+		}
 
 		const session_id = generateSessionId();
 		const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -87,8 +198,12 @@ export const createPayment = async (req, res) => {
 			order_id,
 			reference_id,
 			session_id,
+			access_code: accessCode,
+			authorization_url: authorizationUrl,
+			public_key: process.env.PAYSTACK_PUBLIC_KEY || null,
 			amount: numericAmount,
-			status: payment.status
+			status: payment.status,
+			provider: payment_method === 'paystack' ? 'paystack' : 'legacy'
 		});
 	} catch (err) {
 		handleError(res, 500, 'Failed to create payment', err.message);
@@ -177,17 +292,28 @@ export const simulatePaymentCompletion = async (req, res) => {
 	}
 };
 
-export const paymentWebhook = async (req, res) => {
+export const verifyPayment = async (req, res) => {
 	try {
-		const { reference_id, transaction_id, status, provider_data } = req.body;
-		if (!reference_id || !status) {
-			return handleError(res, 400, 'reference_id and status are required');
+		const reference = req.params.reference || req.query.reference;
+		if (!reference) {
+			return handleError(res, 400, 'Payment reference is required');
 		}
 
+		const verificationResponse = await paystackRequest({
+			method: 'get',
+			url: `/transaction/verify/${encodeURIComponent(reference)}`
+		});
+
+		if (!verificationResponse?.status) {
+			return handleError(res, 400, verificationResponse?.message || 'Payment verification failed');
+		}
+
+		const eventData = verificationResponse.data || {};
+		const nextStatus = normalizePaystackStatus(eventData.status);
 		const { data: payment, error: paymentFetchError } = await supabase
 			.from('payments')
 			.select('*')
-			.eq('reference_id', reference_id)
+			.eq('reference_id', reference)
 			.single();
 
 		if (paymentFetchError?.code === 'PGRST116') {
@@ -195,31 +321,13 @@ export const paymentWebhook = async (req, res) => {
 		}
 		if (paymentFetchError) throw paymentFetchError;
 
-		const normalized = String(status).toLowerCase();
-		let nextStatus = payment.status;
-		if (['success', 'completed'].includes(normalized)) nextStatus = 'completed';
-		if (['failed', 'error'].includes(normalized)) nextStatus = 'failed';
-		if (normalized === 'cancelled') nextStatus = 'cancelled';
-
 		const now = new Date().toISOString();
-
-		const { error: webhookError } = await supabase.from('payment_webhooks').insert([
-			{
-				payment_id: payment.id,
-				webhook_type: 'status_update',
-				payload: req.body,
-				status: 'processed',
-				processed_at: now
-			}
-		]);
-		if (webhookError) throw webhookError;
-
 		const { error: updatePaymentError } = await supabase
 			.from('payments')
 			.update({
 				status: nextStatus,
-				transaction_id: transaction_id || payment.transaction_id,
-				provider_response: provider_data || null,
+				transaction_id: eventData.reference || payment.transaction_id,
+				provider_response: eventData,
 				completed_at: nextStatus === 'completed' ? now : payment.completed_at,
 				updated_at: now
 			})
@@ -232,9 +340,92 @@ export const paymentWebhook = async (req, res) => {
 				.update({ status: 'paid', updated_at: now })
 				.eq('id', payment.order_id);
 			if (orderError) throw orderError;
+			if (payment.status !== 'completed') {
+				await notifyPaymentCompleted(payment.id);
+			}
 		}
 
-		const sessionState = nextStatus === 'completed' ? 'completed' : nextStatus === 'cancelled' ? 'cancelled' : 'expired';
+		res.json({
+			success: true,
+			payment_id: payment.id,
+			status: nextStatus,
+			reference_id: reference,
+			amount: Number(payment.amount),
+			gateway_response: eventData.gateway_response
+		});
+	} catch (err) {
+		handleError(res, 500, 'Failed to verify payment', err.message);
+	}
+};
+
+export const paymentWebhook = async (req, res) => {
+	try {
+		const paystackSignature = req.headers['x-paystack-signature'];
+		const payload = req.body || {};
+		if (PAYSTACK_SECRET_KEY && paystackSignature && !verifyPaystackSignature(payload, paystackSignature)) {
+			return handleError(res, 401, 'Invalid Paystack signature');
+		}
+
+		const event = payload.event;
+		const eventData = payload.data || {};
+		if (!event || !eventData) {
+			return handleError(res, 400, 'Invalid webhook payload');
+		}
+
+		const reference_id = eventData.reference;
+		if (!reference_id) {
+			return handleError(res, 400, 'Reference is required in webhook payload');
+		}
+
+		const { data: payment, error: paymentFetchError } = await supabase
+			.from('payments')
+			.select('*')
+			.eq('reference_id', reference_id)
+			.single();
+
+		if (paymentFetchError?.code === 'PGRST116') {
+			return res.status(404).json({ success: false, message: 'Payment not found' });
+		}
+		if (paymentFetchError) throw paymentFetchError;
+
+		const nextStatus = normalizePaystackStatus(eventData.status || event);
+		const now = new Date().toISOString();
+
+		const { error: webhookError } = await supabase.from('payment_webhooks').insert([
+			{
+				payment_id: payment.id,
+				webhook_type: event,
+				payload: payload,
+				status: 'processed',
+				processed_at: now
+			}
+		]);
+		if (webhookError) throw webhookError;
+
+		const { error: updatePaymentError } = await supabase
+			.from('payments')
+			.update({
+				status: nextStatus,
+				transaction_id: eventData.reference || payment.transaction_id,
+				provider_response: eventData,
+				completed_at: nextStatus === 'completed' ? now : payment.completed_at,
+				updated_at: now
+			})
+			.eq('id', payment.id);
+		if (updatePaymentError) throw updatePaymentError;
+
+		if (nextStatus === 'completed') {
+			const { error: orderError } = await supabase
+				.from('orders')
+				.update({ status: 'paid', updated_at: now })
+				.eq('id', payment.order_id);
+			if (orderError) throw orderError;
+			if (payment.status !== 'completed') {
+				await notifyPaymentCompleted(payment.id);
+			}
+		}
+
+		const sessionState = nextStatus === 'completed' ? 'completed' : nextStatus === 'failed' ? 'cancelled' : 'expired';
 		const { error: sessionError } = await supabase
 			.from('payment_sessions')
 			.update({ status: sessionState, updated_at: now })
@@ -242,7 +433,7 @@ export const paymentWebhook = async (req, res) => {
 			.eq('status', 'active');
 		if (sessionError) throw sessionError;
 
-		res.json({ success: true, payment_id: payment.id, status: nextStatus });
+		res.json({ success: true, payment_id: payment.id, status: nextStatus, reference_id });
 	} catch (err) {
 		handleError(res, 500, 'Failed to process payment webhook', err.message);
 	}

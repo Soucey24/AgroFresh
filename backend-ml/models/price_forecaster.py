@@ -5,6 +5,27 @@ import math
 class PriceForecaster:
     """Production price forecasting based on seasonality, freshness, and demand patterns."""
 
+    CROP_ALIASES = {
+        'tomato': 'tomato',
+        'tomatoes': 'tomato',
+        'lettuce': 'lettuce',
+        'cabbage': 'lettuce',
+        'yam': 'yam',
+        'yams': 'yam',
+        'maize': 'maize',
+        'corn': 'maize',
+        'pepper': 'pepper',
+        'peppers': 'pepper',
+        'cucumber': 'cucumber',
+        'cucumbers': 'cucumber',
+        'okra': 'okra',
+        'cassava': 'cassava',
+        'plantain': 'maize',
+        'banana': 'maize',
+        'plantains': 'maize',
+        'fresh tomato': 'tomato',
+    }
+
     # Base market prices (GHS per unit) - Ghana context
     BASE_PRICES = {
         'tomato': 2.50,      # per kg
@@ -83,7 +104,11 @@ class PriceForecaster:
         'excellent': 1.0,
         'good': 0.95,
         'fair': 0.80,
-        'expired': 0.30
+        'expired': 0.30,
+        'fresh': 1.0,
+        'review': 0.85,
+        'average': 0.90,
+        'poor': 0.65
     }
 
     def __init__(self):
@@ -104,14 +129,17 @@ class PriceForecaster:
         Returns:
             Dictionary with price forecast
         """
-        if crop_type not in self.BASE_PRICES:
+        normalized_type = self._normalize_crop_type(crop_type)
+        normalized_status = self._normalize_freshness_status(freshness_status)
+
+        if normalized_type not in self.BASE_PRICES:
             raise ValueError(f'Unsupported crop type: {crop_type}')
         
-        if freshness_status not in self.FRESHNESS_IMPACT:
+        if normalized_status not in self.FRESHNESS_IMPACT:
             raise ValueError(f'Invalid freshness status: {freshness_status}')
 
         # Get base price
-        base_price = self.BASE_PRICES[crop_type]
+        base_price = self.BASE_PRICES[normalized_type]
 
         # Calculate forecast date
         forecast_date = datetime.now().date() + timedelta(days=days_ahead)
@@ -124,7 +152,7 @@ class PriceForecaster:
         quality_factor = self._interpolate_quality_factor(quality_score)
 
         # Apply freshness impact
-        freshness_factor = self.FRESHNESS_IMPACT[freshness_status]
+        freshness_factor = self.FRESHNESS_IMPACT[normalized_status]
 
         # Calculate final price
         forecasted_price = base_price * seasonal_factor * quality_factor * freshness_factor
@@ -150,8 +178,30 @@ class PriceForecaster:
             'forecast_date': forecast_date.isoformat(),
             'days_ahead': days_ahead,
             'adjustments': adjustments,
-            'model_version': self.model_version
+            'model_version': self.model_version,
+            'crop_type': normalized_type,
+            'freshness_status': normalized_status
         }
+
+    def _normalize_crop_type(self, crop_type: str) -> str:
+        value = (crop_type or '').strip().lower().replace('-', ' ')
+        if not value:
+            return 'tomato'
+        return self.CROP_ALIASES.get(value, value)
+
+    def _normalize_freshness_status(self, freshness_status: str) -> str:
+        value = (freshness_status or '').strip().lower()
+        mapping = {
+            'excellent': 'excellent',
+            'good': 'good',
+            'fresh': 'fresh',
+            'fair': 'fair',
+            'average': 'average',
+            'review': 'review',
+            'expired': 'expired',
+            'poor': 'poor'
+        }
+        return mapping.get(value, 'good')
 
     def _interpolate_quality_factor(self, quality_score: float) -> float:
         """Interpolate quality factor from curve."""

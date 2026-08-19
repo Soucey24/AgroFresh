@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS market_forecasts (
 
 CREATE INDEX idx_market_forecasts_crop_type ON market_forecasts(crop_type_id);
 CREATE INDEX idx_market_forecasts_region ON market_forecasts(region);
-CREATE INDEX idx_market_forecasts_period START ON market_forecasts(forecast_period_start);
+CREATE INDEX IF NOT EXISTS idx_market_forecasts_period_start ON market_forecasts(forecast_period_start);
 CREATE INDEX idx_market_forecasts_updated ON market_forecasts(updated_at);
 
 -- ============================================
@@ -286,23 +286,15 @@ FOR EACH ROW
 EXECUTE FUNCTION update_crop_predicted_expiry();
 
 -- ============================================
--- Phase 10: Permissions (If Using RLS)
+-- Phase 10: Permissions (RLS not used for this app)
 -- ============================================
 
--- Enable Row Level Security (RLS) for predictions
-ALTER TABLE ai_predictions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE image_analysis ENABLE ROW LEVEL SECURITY;
-ALTER TABLE market_forecasts ENABLE ROW LEVEL SECURITY;
-
--- Policy: Farmers can only see their own crops' predictions
-CREATE POLICY crops_predictions_farmer_policy ON ai_predictions
-  USING (crop_id IN (
-    SELECT id FROM crops WHERE farmer_id = auth.uid()
-  ));
-
--- Policy: Public can see market forecasts
-CREATE POLICY market_forecasts_public_policy ON market_forecasts
-  FOR SELECT USING (TRUE);
+-- This project uses a custom users table with integer IDs and app-level auth,
+-- not Supabase Auth UUIDs. RLS is therefore disabled here to avoid invalid
+-- comparisons such as integer = uuid.
+ALTER TABLE ai_predictions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE image_analysis DISABLE ROW LEVEL SECURITY;
+ALTER TABLE market_forecasts DISABLE ROW LEVEL SECURITY;
 
 -- ============================================
 -- Rollback / Cleanup (If Needed)

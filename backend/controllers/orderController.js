@@ -1,5 +1,7 @@
 import { supabase } from '../app.js';
 import deliveryService from '../services/deliveryService.js';
+import { isFarmerApproved } from '../middleware/auth.js';
+import { notifyOrderCreated, notifyOrderStatusChanged } from '../services/notificationService.js';
 
 const ORDER_STATUSES = new Set([
 	'pending',
@@ -66,7 +68,7 @@ export const createOrder = async (req, res) => {
 
 		const { data: crop, error: cropError } = await supabase
 			.from('crops')
-			.select('id, farmer_id, quantity, available')
+			.select('id, farmer_id, quantity, available, users!crops_farmer_id_fkey(id, role)')
 			.eq('id', crop_id)
 			.single();
 
@@ -74,6 +76,11 @@ export const createOrder = async (req, res) => {
 			return handleError(res, 404, 'Crop not found');
 		}
 		if (cropError) throw cropError;
+
+		const farmerApproved = await isFarmerApproved(crop.farmer_id);
+		if (!farmerApproved) {
+			return handleError(res, 403, 'This farmer account is not approved yet and cannot receive orders.');
+		}
 		if (!crop.available || crop.quantity < qty) {
 			return handleError(res, 400, `Only ${crop.quantity} items available`);
 		}
@@ -114,6 +121,10 @@ export const createOrder = async (req, res) => {
 			.eq('id', crop.id);
 
 		if (cropUpdateError) throw cropUpdateError;
+
+		void notifyOrderCreated(order.id).catch((notificationError) => {
+			console.error('[notifications] order creation SMS failed:', notificationError.message);
+		});
 
 		res.status(201).json(order);
 	} catch (err) {
@@ -213,6 +224,12 @@ export const updateOrder = async (req, res) => {
 					.update({ quantity: Number(crop.quantity) + Number(order.quantity), available: true })
 					.eq('id', order.crop_id);
 			}
+		}
+
+		if (updatePayload.status && updatePayload.status !== order.status) {
+			void notifyOrderStatusChanged(order.id, updatePayload.status).catch((notificationError) => {
+				console.error('[notifications] order status notification failed:', notificationError.message);
+			});
 		}
 
 		res.json(updatedOrder);

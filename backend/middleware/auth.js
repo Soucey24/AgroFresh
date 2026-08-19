@@ -1,3 +1,5 @@
+import { supabase } from '../app.js';
+
 export function requireAuth(req, res, next) {
   if (!req.session.user) {
     return res.status(401).json({ error: 'Not authenticated' });
@@ -22,4 +24,47 @@ export function requireRole(role) {
     }
     next();
   };
-} 
+}
+
+export const getFarmerVerificationStatus = async (userId) => {
+  if (!userId) return 'not_submitted';
+
+  const { data, error } = await supabase
+    .from('user_verifications')
+    .select('status')
+    .eq('user_id', userId)
+    .order('submitted_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error && error.code !== 'PGRST116') {
+    console.warn('Unable to load verification status:', error.message);
+    return 'not_submitted';
+  }
+
+  return data?.status || 'not_submitted';
+};
+
+export const isFarmerApproved = async (userId) => {
+  const status = await getFarmerVerificationStatus(userId);
+  return status === 'approved';
+};
+
+export const requireFarmerApproved = async (req, res, next) => {
+  if (!req.session?.user) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  if (req.session.user.role !== 'farmer') {
+    return next();
+  }
+
+  const approved = await isFarmerApproved(req.session.user.id);
+  if (!approved) {
+    return res.status(403).json({
+      error: 'Your farmer profile is not approved yet. Please wait for admin verification before listing products or receiving orders.'
+    });
+  }
+
+  return next();
+};

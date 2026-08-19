@@ -63,6 +63,7 @@ async function seedAdminIfMissing() {
   const adminEmail = process.env.SEED_ADMIN_EMAIL;
   const adminPassword = process.env.SEED_ADMIN_PASSWORD;
   const adminName = process.env.SEED_ADMIN_NAME || 'Platform Admin';
+  const adminPhone = process.env.SEED_ADMIN_PHONE || null;
 
   if (!adminEmail || !adminPassword) {
     console.log('No SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD provided. Skipping admin seed.');
@@ -93,6 +94,7 @@ async function seedAdminIfMissing() {
       email: adminEmail,
       password_hash,
       role: 'admin',
+      phone: adminPhone,
       status: 'Active'
     }
   ]);

@@ -12,7 +12,7 @@ const Profile = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
   const [editMode, setEditMode] = useState(false);
-  const [form, setForm] = useState({ name: "", location: "", phone: "", bio: "", email: "" });
+  const [form, setForm] = useState({ name: "", location: "", phone: "", bio: "", email: "", payout_method: "", payout_provider: "", payout_account_name: "", payout_account_number: "" });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -29,7 +29,11 @@ const Profile = () => {
         location: profile.location || "",
         phone: profile.phone || "",
         bio: profile.bio || "",
-        email: profile.email || ""
+        email: profile.email || "",
+        payout_method: profile.payout_method || "",
+        payout_provider: profile.payout_provider || "",
+        payout_account_name: profile.payout_account_name || "",
+        payout_account_number: profile.payout_account_number || ""
       });
       setAvatarPreview(profile.avatar ? getImageUrl(profile.avatar) : null);
       setPendingEmail(profile.pending_email || "");
@@ -54,6 +58,12 @@ const Profile = () => {
     formData.append("phone", form.phone);
     formData.append("bio", form.bio);
     formData.append("email", form.email);
+    if (user.role === 'farmer') {
+      formData.append("payout_method", form.payout_method);
+      formData.append("payout_provider", form.payout_provider);
+      formData.append("payout_account_name", form.payout_account_name);
+      formData.append("payout_account_number", form.payout_account_number);
+    }
     if (avatarFile) formData.append("avatar", avatarFile);
     const result = await updateProfile(formData);
     if (!result.error) {
@@ -113,6 +123,29 @@ const Profile = () => {
         </Button>
         <h1 className="text-2xl sm:text-3xl font-bold">My Profile</h1>
       </div>
+
+        {user.role === 'farmer' && (
+          <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-4">
+            <div>
+              <h2 className="font-semibold">Payout account</h2>
+              <p className="text-sm text-muted-foreground">Add the account where AgroFresh should send your earnings.</p>
+            </div>
+            {editMode ? (
+              <>
+                <select name="payout_method" value={form.payout_method} onChange={(event) => setForm({ ...form, payout_method: event.target.value })} className="w-full rounded-md border bg-background p-2">
+                  <option value="">Select payout method</option>
+                  <option value="mobile_money">Mobile Money</option>
+                  <option value="bank">Bank account</option>
+                </select>
+                <Input name="payout_provider" placeholder="Provider or bank name" value={form.payout_provider} onChange={handleChange} />
+                <Input name="payout_account_name" placeholder="Account holder name" value={form.payout_account_name} onChange={handleChange} />
+                <Input name="payout_account_number" placeholder="Wallet or account number" value={form.payout_account_number} onChange={handleChange} />
+              </>
+            ) : (
+              <div className="text-sm space-y-1"><div>Method: {form.payout_method || 'Not set'}</div><div>Provider/bank: {form.payout_provider || 'Not set'}</div><div>Account name: {form.payout_account_name || 'Not set'}</div><div>Account number: {form.payout_account_number || 'Not set'}</div></div>
+            )}
+          </div>
+        )}
       
       {/* Avatar Section */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 mb-6">

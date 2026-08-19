@@ -1,13 +1,84 @@
 import { useEffect, useState } from "react";
 import { listOrders, getCrop, getUser, updateOrder, getProfile, getOrderTracking } from "../api";
 import { getImageUrl } from "../utils/imageUtils";
-import Navigation from "@/components/Navigation";
-import BackgroundSlideshow from "@/components/BackgroundSlideshow";
+import FarmerLayout from "@/components/FarmerLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
+const getDeliveryInfo = (order: any) => {
+  if (!order?.delivery_info) return {};
+  if (typeof order.delivery_info === 'string') {
+    try {
+      return JSON.parse(order.delivery_info);
+    } catch {
+      return {};
+    }
+  }
+  return order.delivery_info;
+};
+
+const getDeliveryMethodLabel = (order: any) => {
+  const info = getDeliveryInfo(order);
+  const method = info?.deliveryMethod || info?.delivery_method || info?.method || order?.delivery_service || 'pickup';
+
+  if (method === 'pickup') return 'Pickup order';
+  if (method === 'farmer-delivery' || method === 'farmer') return 'Self-delivery';
+  if (method === 'company-delivery') return `Company delivery${info?.deliveryService ? ` (${info.deliveryService})` : ''}`;
+  if (method === 'sendstack') return 'Company delivery (Sendstack)';
+  return 'Pickup order';
+};
+
+const getDeliveryStageValue = (order: any) => {
+  const deliveryStatus = (order?.delivery_status || '').toLowerCase();
+  if (deliveryStatus.includes('delivered')) return 'delivered';
+  if (deliveryStatus.includes('transit') || deliveryStatus.includes('shipped')) return 'in_transit';
+  if (order?.status === 'ready') return 'ready';
+  if (order?.status === 'pending') return 'pending';
+  return 'pending';
+};
+
+const downloadFarmerReceipt = (order: any, crop: any, buyer: any) => {
+  const unitPrice = Number(crop?.price || 0);
+  const total = unitPrice * Number(order.quantity || 0);
+  const doc = new jsPDF();
+  doc.setFillColor(32, 139, 75);
+  doc.rect(0, 0, 210, 32, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(22);
+  doc.text('AgroFresh GH', 20, 15);
+  doc.setFontSize(10);
+  doc.text('Farmer order record', 20, 24);
+  doc.setTextColor(24, 48, 36);
+  doc.setFontSize(18);
+  doc.text('Purchase Receipt', 105, 47, { align: 'center' });
+  autoTable(doc, {
+    startY: 58,
+    head: [['Order Information', 'Details']],
+    body: [['Order ID', `#${order.id}`], ['Buyer', buyer?.name || 'Buyer'], ['Product', crop?.name || 'Produce'], ['Quantity', `${order.quantity} ${crop?.unit || 'unit(s)'}`], ['Status', String(order.status || '').toUpperCase()]],
+    margin: { left: 14, right: 14 },
+    headStyles: { fillColor: [32, 139, 75], textColor: [255, 255, 255] },
+    columnStyles: { 0: { cellWidth: 58 }, 1: { cellWidth: 124 } },
+    styles: { fontSize: 10, cellPadding: 4, overflow: 'linebreak' }
+  });
+  autoTable(doc, {
+    startY: (doc as any).lastAutoTable.finalY + 8,
+    head: [['Payment Summary', 'Amount']],
+    body: [['Unit price', `GHS ${unitPrice.toFixed(2)}`], ['Total paid', `GHS ${total.toFixed(2)}`]],
+    margin: { left: 14, right: 14 },
+    headStyles: { fillColor: [32, 139, 75], textColor: [255, 255, 255] },
+    columnStyles: { 0: { cellWidth: 120 }, 1: { cellWidth: 62, halign: 'right' } },
+    styles: { fontSize: 10, cellPadding: 4 }
+  });
+  doc.setTextColor(100, 100, 100);
+  doc.setFontSize(9);
+  doc.text('Keep this digital copy for your records.', 105, 285, { align: 'center' });
+  doc.save(`agrofresh-farmer-order-${order.id}.pdf`);
+};
 
 function DeliveryStatusCard({ order }) {
   const [status, setStatus] = useState(order.delivery_status);
@@ -36,6 +107,21 @@ const FarmerOrders = () => {
   const [updating, setUpdating] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [user, setUser] = useState<any>(null);
+
+  const updateOrderStatus = async (orderId: number, nextStatus: string, nextDeliveryStatus?: string) => {
+    setUpdating(orderId);
+    const payload: any = { status: nextStatus };
+    if (nextDeliveryStatus) payload.delivery_status = nextDeliveryStatus;
+    const result = await updateOrder(orderId, payload);
+    if (!result?.error) {
+      setOrders((prev) => prev.map((item) => item.id === orderId ? {
+        ...item,
+        status: nextStatus,
+        delivery_status: nextDeliveryStatus || item.delivery_status
+      } : item));
+    }
+    setUpdating(null);
+  };
 
   // Helper function to get badge variant based on status
   const getStatusBadgeVariant = (status: string) => {
@@ -101,10 +187,7 @@ const FarmerOrders = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background relative">
-      <BackgroundSlideshow />
-      <div className="relative z-10">
-        <Navigation />
+    <FarmerLayout>
         <div className="container mx-auto px-4 py-4 sm:py-8">
           <div className="bg-card/40 backdrop-blur-sm rounded-lg p-4 sm:p-6 mb-4 sm:mb-8">
             <div className="flex items-center gap-4 mb-2">
@@ -216,40 +299,20 @@ const FarmerOrders = () => {
                     <span className="font-medium">Buyer:</span> {buyerDetails[order.buyer_id]?.name || `ID ${order.buyer_id}`}
                   </div>
                   <div className="text-sm">
-                    <span className="font-medium">Delivery Method:</span> {
-                      (() => {
-                        let info = order.delivery_info;
-                        if (typeof info === 'string') info = JSON.parse(info);
-                        if (info?.deliveryMethod === 'sendstack') return 'Sendstack';
-                        return 'N/A';
-                      })()
-                    }
+                    <span className="font-medium">Delivery Method:</span> {getDeliveryMethodLabel(order)}
                   </div>
                   <DeliveryStatusCard order={order} />
+                  <Button variant="outline" onClick={() => downloadFarmerReceipt(order, cropDetails[order.crop_id], buyerDetails[order.buyer_id])}>Download purchase receipt</Button>
                   <div className="text-sm">
-                    <span className="font-medium">Delivery Address:</span> {
-                      (() => {
-                        let info = order.delivery_info;
-                        if (typeof info === 'string') info = JSON.parse(info);
-                        return info?.address || 'N/A';
-                      })()
-                    }
+                    <span className="font-medium">Delivery Address:</span> {getDeliveryInfo(order)?.address || getDeliveryInfo(order)?.pickupLocation || 'N/A'}
                   </div>
 
-                  {/* Status Update */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Update Status</label>
+                    <label className="text-sm font-medium">Order status</label>
                     <select
                       value={order.status}
                       disabled={updating === order.id}
-                      onChange={async (e) => {
-                        setUpdating(order.id);
-                        const result = await updateOrder(order.id, { status: e.target.value });
-                        if (!result.error) {
-                          setOrders(orders.map(o => o.id === order.id ? { ...o, status: e.target.value } : o));
-                        }
-                        setUpdating(null);
-                      }}
+                      onChange={(e) => updateOrderStatus(order.id, e.target.value)}
                       className="w-full border rounded px-3 py-2 bg-background"
                     >
                       <option value="pending">Pending</option>
@@ -261,6 +324,32 @@ const FarmerOrders = () => {
                       <option value="completed">Completed</option>
                       <option value="paid">Paid</option>
                       <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Delivery stage</label>
+                    <select
+                      value={getDeliveryStageValue(order)}
+                      disabled={updating === order.id}
+                      onChange={(e) => {
+                        const nextValue = e.target.value;
+                        if (nextValue === 'ready') {
+                          updateOrderStatus(order.id, 'ready', 'Ready for pickup');
+                        } else if (nextValue === 'in_transit') {
+                          updateOrderStatus(order.id, 'shipped', 'In Transit');
+                        } else if (nextValue === 'delivered') {
+                          updateOrderStatus(order.id, 'delivered', 'Delivered');
+                        } else {
+                          updateOrderStatus(order.id, 'pending', 'Pending');
+                        }
+                      }}
+                      className="w-full border rounded px-3 py-2 bg-background"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="ready">Ready</option>
+                      <option value="in_transit">In Transit</option>
+                      <option value="delivered">Delivered</option>
                     </select>
                     {updating === order.id && (
                       <p className="text-xs text-muted-foreground">Updating...</p>
@@ -285,6 +374,7 @@ const FarmerOrders = () => {
                     <th className="px-4 py-3 text-left text-sm font-medium">Date</th>
                     <th className="px-4 py-3 text-left text-sm font-medium">Delivery Method</th>
                     <th className="px-4 py-3 text-left text-sm font-medium">Tracking</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">Receipt</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -318,19 +408,12 @@ const FarmerOrders = () => {
                       <td className="px-4 py-3 text-sm">{buyerDetails[order.buyer_id]?.name || `ID ${order.buyer_id}`}</td>
                       <td className="px-4 py-3 text-sm">{order.quantity}</td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col gap-2">
                           <Badge variant={getStatusBadgeVariant(order.status)}>{order.status}</Badge>
                           <select
                             value={order.status}
                             disabled={updating === order.id}
-                            onChange={async (e) => {
-                              setUpdating(order.id);
-                              const result = await updateOrder(order.id, { status: e.target.value });
-                              if (!result.error) {
-                                setOrders(orders.map(o => o.id === order.id ? { ...o, status: e.target.value } : o));
-                              }
-                              setUpdating(null);
-                            }}
+                            onChange={(e) => updateOrderStatus(order.id, e.target.value)}
                             className="border rounded px-2 py-1 bg-background text-sm"
                           >
                             <option value="pending">Pending</option>
@@ -343,25 +426,41 @@ const FarmerOrders = () => {
                             <option value="paid">Paid</option>
                             <option value="cancelled">Cancelled</option>
                           </select>
+                          <select
+                            value={getDeliveryStageValue(order)}
+                            disabled={updating === order.id}
+                            onChange={(e) => {
+                              const nextValue = e.target.value;
+                              if (nextValue === 'ready') {
+                                updateOrderStatus(order.id, 'ready', 'Ready for pickup');
+                              } else if (nextValue === 'in_transit') {
+                                updateOrderStatus(order.id, 'shipped', 'In Transit');
+                              } else if (nextValue === 'delivered') {
+                                updateOrderStatus(order.id, 'delivered', 'Delivered');
+                              } else {
+                                updateOrderStatus(order.id, 'pending', 'Pending');
+                              }
+                            }}
+                            className="border rounded px-2 py-1 bg-background text-sm"
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="ready">Ready</option>
+                            <option value="in_transit">In Transit</option>
+                            <option value="delivered">Delivered</option>
+                          </select>
                           {updating === order.id && (
                             <span className="text-xs text-muted-foreground">Updating...</span>
                           )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm">{new Date(order.created_at).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm">{
-                        (() => {
-                          let info = order.delivery_info;
-                          if (typeof info === 'string') info = JSON.parse(info);
-                          if (info?.deliveryMethod === 'sendstack') return 'Sendstack';
-                          return 'N/A';
-                        })()
-                      }</td>
+                      <td className="px-4 py-3 text-sm">{getDeliveryMethodLabel(order)}</td>
                       <td className="px-4 py-3 text-sm">{
                         order.tracking_url ? (
                           <a href={order.tracking_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Track</a>
                         ) : 'N/A'
                       }</td>
+                      <td className="px-4 py-3 text-sm"><Button size="sm" variant="outline" onClick={() => downloadFarmerReceipt(order, cropDetails[order.crop_id], buyerDetails[order.buyer_id])}>Download</Button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -376,8 +475,7 @@ const FarmerOrders = () => {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </FarmerLayout>
   );
 };
 

@@ -1,12 +1,10 @@
+import 'dotenv/config';
 import express from 'express';
 import session from 'express-session';
 import { createClient } from '@supabase/supabase-js';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
-import pgSession from 'connect-pg-simple';
-import { Pool } from 'pg';
 import authRoutes from './routes/auth.js';
 import cropsRoutes from './routes/crops.js';
 import ordersRoutes from './routes/orders.js';
@@ -16,8 +14,9 @@ import payoutsRoutes from './routes/payouts.js';
 import paymentsRoutes from './routes/payments.js';
 import adminRoutes from './routes/admin.js';
 import webhooksRouter from './routes/webhooks.js';
-
-dotenv.config();
+import otpRoutes from './routes/otp.js';
+import notificationsRoutes from './routes/notifications.js';
+import complaintsRoutes from './routes/complaints.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -44,15 +43,6 @@ export const supabase = createClient(supabaseUrl || 'https://invalid.local', sup
   }
 });
 
-const hasSessionDbConfig = Boolean(
-  process.env.DATABASE_URL ||
-  process.env.PGHOST ||
-  process.env.PGPORT ||
-  process.env.PGUSER ||
-  process.env.PGPASSWORD ||
-  process.env.PGDATABASE
-);
-
 const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'change-this-secret',
   resave: false,
@@ -64,35 +54,6 @@ const sessionConfig = {
     maxAge: 24 * 60 * 60 * 1000
   }
 };
-
-if (hasSessionDbConfig) {
-  const poolConfig = process.env.DATABASE_URL
-    ? {
-        connectionString: process.env.DATABASE_URL,
-        ssl: isProduction ? { rejectUnauthorized: false } : false
-      }
-    : {
-        host: process.env.PGHOST || '127.0.0.1',
-        port: Number(process.env.PGPORT) || 5432,
-        user: process.env.PGUSER || 'postgres',
-        password: process.env.PGPASSWORD || '',
-        database: process.env.PGDATABASE || 'postgres'
-      };
-
-  const pool = new Pool(poolConfig);
-  pool.on('error', (error) => {
-    console.error('Postgres pool error:', error.message);
-  });
-
-  const PgSession = pgSession(session);
-  sessionConfig.store = new PgSession({
-    pool,
-    tableName: 'session',
-    createTableIfMissing: true
-  });
-} else {
-  console.warn('No Postgres session config found. Using in-memory sessions for local development.');
-}
 
 app.use(session(sessionConfig));
 
@@ -129,6 +90,9 @@ app.use('/api/payouts', payoutsRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/webhooks', webhooksRouter);
+app.use('/api', otpRoutes);
+app.use('/api/notifications', notificationsRoutes);
+app.use('/api/complaints', complaintsRoutes);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', environment: process.env.NODE_ENV || 'development' });

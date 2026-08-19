@@ -20,6 +20,10 @@ const sanitizeUser = (user) => ({
 	phone: user.phone,
 	bio: user.bio,
 	avatar: user.avatar,
+	payout_method: user.payout_method,
+	payout_provider: user.payout_provider,
+	payout_account_name: user.payout_account_name,
+	payout_account_number: user.payout_account_number,
 	status: user.status,
 	created_at: user.created_at
 });
@@ -139,12 +143,16 @@ export const updateUser = async (req, res) => {
 			return handleError(res, 403, 'Not authorized to update this user');
 		}
 
-		const { name, location, phone, bio, status, role } = req.body;
+		const { name, location, phone, bio, status, role, payout_method, payout_provider, payout_account_name, payout_account_number } = req.body;
 		const updatePayload = {};
 		if (name !== undefined) updatePayload.name = name;
 		if (location !== undefined) updatePayload.location = location;
 		if (phone !== undefined) updatePayload.phone = phone;
 		if (bio !== undefined) updatePayload.bio = bio;
+		if (current.role === 'farmer' && payout_method !== undefined) updatePayload.payout_method = payout_method;
+		if (current.role === 'farmer' && payout_provider !== undefined) updatePayload.payout_provider = payout_provider;
+		if (current.role === 'farmer' && payout_account_name !== undefined) updatePayload.payout_account_name = payout_account_name;
+		if (current.role === 'farmer' && payout_account_number !== undefined) updatePayload.payout_account_number = payout_account_number;
 		if (req.file) updatePayload.avatar = `/uploads/${req.file.filename}`;
 
 		if (['admin', 'vendor'].includes(current.role)) {
@@ -313,7 +321,34 @@ export const getProfile = async (req, res) => {
 			.single();
 
 		if (error) throw error;
-		res.json(data);
+
+		let verificationStatus = 'not_required';
+		if (data.role === 'farmer') {
+			const { data: verification, error: verificationError } = await supabase
+				.from('user_verifications')
+				.select('status')
+				.eq('user_id', data.id)
+				.order('submitted_at', { ascending: false })
+				.limit(1)
+				.maybeSingle();
+
+			if (verificationError && verificationError.code !== 'PGRST116') {
+				throw verificationError;
+			}
+
+			verificationStatus = verification?.status || 'not_submitted';
+		}
+
+		const profile = {
+			...data,
+			verificationStatus,
+		};
+
+		if (req.session.user) {
+			req.session.user.verificationStatus = verificationStatus;
+		}
+
+		res.json(profile);
 	} catch (err) {
 		handleError(res, 500, 'Failed to fetch profile', err.message);
 	}

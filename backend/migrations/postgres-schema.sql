@@ -4,8 +4,9 @@
 -- Create ENUM types first
 CREATE TYPE user_role AS ENUM ('farmer', 'buyer', 'vendor', 'admin');
 CREATE TYPE user_status AS ENUM ('Active', 'Inactive');
+CREATE TYPE crop_status AS ENUM ('draft', 'active', 'rejected');
 CREATE TYPE order_status AS ENUM ('pending', 'confirmed', 'preparing', 'ready', 'shipped', 'delivered', 'completed', 'paid', 'cancelled');
-CREATE TYPE payment_method AS ENUM ('mtn-momo', 'vodafone-cash', 'airteltigo-money', 'card', 'bank-transfer');
+CREATE TYPE payment_method AS ENUM ('mtn-momo', 'vodafone-cash', 'airteltigo-money', 'card', 'bank-transfer', 'paystack');
 CREATE TYPE payment_status AS ENUM ('pending', 'processing', 'completed', 'failed', 'cancelled', 'refunded');
 CREATE TYPE webhook_status AS ENUM ('pending', 'processed', 'failed');
 CREATE TYPE session_status AS ENUM ('active', 'completed', 'expired', 'cancelled');
@@ -22,6 +23,10 @@ CREATE TABLE IF NOT EXISTS users (
   phone VARCHAR(50),
   bio TEXT,
   avatar VARCHAR(255),
+  payout_method VARCHAR(30),
+  payout_provider VARCHAR(80),
+  payout_account_name VARCHAR(120),
+  payout_account_number VARCHAR(120),
   pending_email VARCHAR(100),
   email_verification_token VARCHAR(255),
   status user_status DEFAULT 'Active',
@@ -39,11 +44,23 @@ CREATE TABLE IF NOT EXISTS crops (
   quantity INT NOT NULL,
   unit VARCHAR(20) DEFAULT 'kg',
   expiry_date DATE,
-  available BOOLEAN DEFAULT TRUE,
+  planting_date DATE,
+  harvest_date_predicted DATE,
+  predicted_expiry DATE,
+  quality_score DECIMAL(5,2) DEFAULT 0,
+  freshness_status VARCHAR(30) DEFAULT 'fresh',
+  last_prediction_run TIMESTAMP WITH TIME ZONE,
+  category VARCHAR(50),
+  status crop_status DEFAULT 'draft' NOT NULL,
+  review_notes TEXT,
+  reviewed_by INT,
+  reviewed_at TIMESTAMP WITH TIME ZONE,
+  available BOOLEAN DEFAULT FALSE,
   farmer_id INT NOT NULL,
   image VARCHAR(255),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (farmer_id) REFERENCES users(id) ON DELETE CASCADE
+  FOREIGN KEY (farmer_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
 -- Create orders table
@@ -119,6 +136,41 @@ CREATE TABLE IF NOT EXISTS payment_sessions (
   FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- Create in-app notifications table
+CREATE TABLE IF NOT EXISTS notifications (
+  id SERIAL PRIMARY KEY,
+  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type VARCHAR(80) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  message TEXT NOT NULL,
+  link VARCHAR(255),
+  read_at TIMESTAMP WITH TIME ZONE NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created
+  ON notifications(user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+  ON notifications(user_id, read_at);
+
+-- Buyer complaints and farmer reports
+CREATE TABLE IF NOT EXISTS complaints (
+  id SERIAL PRIMARY KEY,
+  buyer_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  farmer_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  order_id INT REFERENCES orders(id) ON DELETE SET NULL,
+  category VARCHAR(80) NOT NULL,
+  description TEXT NOT NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'open',
+  admin_notes TEXT,
+  resolved_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_complaints_status_created
+  ON complaints(status, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS payouts (
   id SERIAL PRIMARY KEY,
   farmer_id INT NOT NULL,
@@ -126,6 +178,7 @@ CREATE TABLE IF NOT EXISTS payouts (
   amount DECIMAL(10,2) NOT NULL,
   status VARCHAR(30) DEFAULT 'pending',
   reference_id VARCHAR(255),
+  provider_response JSONB,
   processed_at TIMESTAMP WITH TIME ZONE NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

@@ -1,15 +1,17 @@
 import { useState, useEffect } from "react";
-import { Search, Filter, Eye, Edit, Trash2, Clock } from "lucide-react";
+import { Search, Filter, Eye, Edit, Trash2, Clock, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { getAdminCrops, getCropStats, deleteCrop, predictHarvestForCrop, getCropPredictions, calculateCropFreshness, forecastCropPrice, recommendCropSellingTime } from "../../api";
+import { getAdminCrops, getCropStats, deleteCrop, predictHarvestForCrop, getCropPredictions, calculateCropFreshness, forecastCropPrice, recommendCropSellingTime, reviewCropListing } from "../../api";
 import { getImageUrl } from "../../utils/imageUtils";
+import { toast } from "@/components/ui/sonner";
 
 const Crops = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [crops, setCrops] = useState([]);
   const [cropStats, setCropStats] = useState({
     activeListings: 0,
@@ -46,16 +48,23 @@ const Crops = () => {
     fetchData();
   }, []);
 
-  const filteredCrops = crops.filter(crop =>
-    crop.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    crop.farmer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    crop.location.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredCrops = crops.filter(crop => {
+    const matchesSearch =
+      crop.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      crop.farmer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      crop.location.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "all" || crop.listingStatus === statusFilter || crop.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Active":
         return "bg-primary text-primary-foreground";
+      case "Draft":
+        return "bg-amber-500 text-white";
+      case "Rejected":
+        return "bg-destructive text-destructive-foreground";
       case "Expired":
         return "bg-destructive text-destructive-foreground";
       case "Expiring Soon":
@@ -71,19 +80,69 @@ const Crops = () => {
     return "text-muted-foreground";
   };
 
-  const handleDelete = async (cropId: number) => {
-    if (!window.confirm('Are you sure you want to delete this crop?')) return;
+  const handleReview = async (cropId: number, nextStatus: 'active' | 'rejected') => {
+    const reviewNote = nextStatus === 'active'
+      ? 'Approved by admin review queue.'
+      : 'Rejected by admin review queue. Please update the listing and resubmit.';
+
     try {
-      const res = await deleteCrop(cropId);
-      if (!res.error) {
-        setCrops((prev) => prev.filter((c) => c.id !== cropId));
-        alert('Crop deleted successfully!');
-      } else {
-        alert(res.error || 'Failed to delete crop.');
+      const result = await reviewCropListing(cropId, nextStatus, reviewNote);
+      if (result?.error) {
+        toast.error(result.error || 'Unable to review listing');
+        return;
       }
-    } catch (err) {
-      alert('Failed to delete crop.');
+
+      setCrops((prev) => prev.map((crop) => {
+        if (crop.id !== cropId) return crop;
+        return {
+          ...crop,
+          listingStatus: nextStatus,
+          status: nextStatus === 'active' ? 'Active' : 'Rejected',
+          available: nextStatus === 'active'
+        };
+      }));
+
+      if (nextStatus === 'active') {
+        toast.success('Crop listing approved', {
+          description: 'The listing is now visible to buyers.'
+        });
+      } else {
+        toast.warning('Crop listing rejected', {
+          description: 'The farmer will need to update and resubmit the listing.'
+        });
+      }
+    } catch (error: any) {
+      toast.error(error?.message || 'Unable to review this listing.');
     }
+  };
+
+  const handleDelete = async (cropId: number) => {
+    toast('Are you sure you want to delete this crop?', {
+      description: 'This action cannot be undone.',
+      action: {
+        label: 'Delete',
+        onClick: async () => {
+          try {
+            const res = await deleteCrop(cropId);
+            if (!res.error) {
+              setCrops((prev) => prev.filter((c) => c.id !== cropId));
+              toast.success('Crop deleted', {
+                description: 'The listing has been removed successfully.'
+              });
+            } else {
+              toast.error(res.error || 'Failed to delete crop.');
+            }
+          } catch (err) {
+            toast.error('Failed to delete crop.');
+          }
+        }
+      },
+      cancel: {
+        label: 'Cancel',
+        onClick: () => toast.info('Crop deletion cancelled')
+      },
+      duration: 10000
+    });
   };
 
   const handlePredictHarvest = async (crop: any) => {
@@ -93,14 +152,17 @@ const Crops = () => {
         crop_type: String(crop.name || '').toLowerCase(),
       });
       if (result?.error) {
-        alert(result.error);
+        toast.error(result.error || 'Harvest prediction failed');
         return;
       }
       if (result?.prediction?.estimated_harvest) {
         setPredictionByCrop((prev) => ({ ...prev, [crop.id]: result.prediction.estimated_harvest }));
+        toast.success('Harvest prediction updated', {
+          description: `Estimated harvest: ${result.prediction.estimated_harvest}`
+        });
       }
     } catch (error: any) {
-      alert(error?.message || 'Failed to run prediction');
+      toast.error(error?.message || 'Failed to run prediction');
     } finally {
       setPredictionLoadingByCrop((prev) => ({ ...prev, [crop.id]: false }));
     }
@@ -110,18 +172,19 @@ const Crops = () => {
     try {
       const result = await getCropPredictions(crop.id);
       if (result?.error) {
-        alert(result.error);
+        toast.error(result.error || 'Failed to fetch predictions');
         return;
       }
       const latestPrediction = result?.predictions?.[0];
       const latestAnalysis = result?.image_analysis?.[0];
-      alert([
-        `Crop: ${crop.name}`,
-        latestPrediction ? `Harvest days: ${latestPrediction.predicted_value}` : 'Harvest prediction: none',
-        latestAnalysis ? `Quality score: ${latestAnalysis.quality_score}` : 'Quality analysis: none',
-      ].join('\n'));
+      toast.info(`Crop: ${crop.name}`, {
+        description: [
+          latestPrediction ? `Harvest days: ${latestPrediction.predicted_value}` : 'Harvest prediction: none',
+          latestAnalysis ? `Quality score: ${latestAnalysis.quality_score}` : 'Quality analysis: none',
+        ].join(' • ')
+      });
     } catch (error: any) {
-      alert(error?.message || 'Failed to fetch predictions');
+      toast.error(error?.message || 'Failed to fetch predictions');
     }
   };
 
@@ -150,7 +213,7 @@ const Crops = () => {
         </div>
 
         {/* Search and Filters */}
-        <div className="flex space-x-4">
+        <div className="flex flex-col gap-4 lg:flex-row">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
@@ -160,10 +223,18 @@ const Crops = () => {
               className="pl-10"
             />
           </div>
-          <Button variant="outline" onClick={() => alert('Filter dialog coming soon!')}>
-            <Filter className="h-4 w-4 mr-2" />
-            Filter
-          </Button>
+          <div className="flex gap-2">
+            {['all', 'draft', 'active', 'rejected'].map((status) => (
+              <Button
+                key={status}
+                variant={statusFilter === status ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter(status)}
+              >
+                {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+              </Button>
+            ))}
+          </div>
         </div>
 
         {/* Stats */}
@@ -238,6 +309,19 @@ const Crops = () => {
                       <div className="text-center">
                         <p className="text-sm text-muted-foreground">{crop.location}</p>
                         <Badge className={getStatusColor(crop.status)}>{crop.status}</Badge>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {crop.listingStatus === 'draft' && (
+                          <>
+                            <Button variant="default" size="sm" onClick={() => handleReview(crop.id, 'active')}>
+                              <CheckCircle2 className="h-4 w-4 mr-1" /> Approve
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => handleReview(crop.id, 'rejected')}>
+                              <XCircle className="h-4 w-4 mr-1" /> Reject
+                            </Button>
+                          </>
+                        )}
                       </div>
                       
                       <div className="text-center">

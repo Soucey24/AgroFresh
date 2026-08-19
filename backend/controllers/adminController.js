@@ -1,4 +1,5 @@
 import { supabase } from '../app.js';
+import { notifyVerificationDecision } from '../services/notificationService.js';
 
 const defaultSettings = {
   platformName: 'AgroFresh GH',
@@ -56,6 +57,72 @@ const normalizeSettings = (row) => ({
 });
 
 const sumAmount = (rows) => (rows || []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+export const getPendingVerifications = async (_req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('user_verifications')
+      .select('*, user:users!user_verifications_user_id_fkey(id, name, email, role), reviewer:users!user_verifications_reviewed_by_fkey(id, name, email, role)')
+      .in('status', ['pending', 'rejected'])
+      .order('submitted_at', { ascending: false });
+
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    handleError(res, 500, 'Failed to fetch pending verifications', err.message);
+  }
+};
+
+export const approveFarmerVerification = async (req, res) => {
+  try {
+    const verificationId = Number(req.params.id);
+    const action = req.path.includes('/reject') ? 'rejected' : 'approved';
+    const { review_notes } = req.body || {};
+
+    const { data: verification, error: fetchError } = await supabase
+      .from('user_verifications')
+      .select('*')
+      .eq('id', verificationId)
+      .single();
+
+    if (fetchError?.code === 'PGRST116') {
+      return handleError(res, 404, 'Verification not found');
+    }
+    if (fetchError) throw fetchError;
+
+    const { error: updateError } = await supabase
+      .from('user_verifications')
+      .update({
+        status: action,
+        review_notes: review_notes || null,
+        reviewed_by: req.session.user?.id || null,
+        reviewed_at: new Date().toISOString()
+      })
+      .eq('id', verificationId);
+
+    if (updateError) throw updateError;
+
+    const targetUserId = verification.user_id;
+    if (req.session?.user && req.session.user.id === targetUserId) {
+      req.session.user.verificationStatus = action;
+    }
+
+    void notifyVerificationDecision(targetUserId, action).catch((notificationError) => {
+      console.error('[notifications] verification decision SMS failed:', notificationError.message);
+    });
+
+    res.json({
+      success: true,
+      verificationId,
+      status: action,
+      message: action === 'approved'
+        ? 'Farmer verification approved. They can now list products and receive orders.'
+        : 'Farmer verification rejected.'
+    });
+  } catch (err) {
+    handleError(res, 500, 'Failed to update verification status', err.message);
+  }
+};
 
 export const getDashboardStats = async (_req, res) => {
   try {
@@ -247,6 +314,53 @@ export const getPaymentStats = async (_req, res) => {
   }
 };
 
+export const reviewCropListing = async (req, res) => {
+  try {
+    const cropId = Number(req.params.id);
+    const requestedStatus = String(req.body?.status || '').toLowerCase();
+    const reviewNotes = req.body?.review_notes || null;
+
+    if (!['active', 'rejected'].includes(requestedStatus)) {
+      return handleError(res, 400, 'Status must be active or rejected');
+    }
+
+    const { data: crop, error: fetchError } = await supabase
+      .from('crops')
+      .select('*')
+      .eq('id', cropId)
+      .single();
+
+    if (fetchError?.code === 'PGRST116') {
+      return handleError(res, 404, 'Crop not found');
+    }
+    if (fetchError) throw fetchError;
+
+    const { error: updateError } = await supabase
+      .from('crops')
+      .update({
+        status: requestedStatus,
+        available: requestedStatus === 'active' && Number(crop.quantity || 0) > 0,
+        review_notes: reviewNotes,
+        reviewed_by: req.session.user?.id || null,
+        reviewed_at: new Date().toISOString()
+      })
+      .eq('id', cropId);
+
+    if (updateError) throw updateError;
+
+    res.json({
+      success: true,
+      cropId,
+      status: requestedStatus,
+      message: requestedStatus === 'active'
+        ? 'Crop listing approved and now visible to buyers.'
+        : 'Crop listing rejected and returned to the farmer for edits.'
+    });
+  } catch (err) {
+    handleError(res, 500, 'Failed to review crop listing', err.message);
+  }
+};
+
 export const getAdminCrops = async (_req, res) => {
   try {
     const { data, error } = await supabase
@@ -261,22 +375,28 @@ export const getAdminCrops = async (_req, res) => {
 
     const transformed = (data || []).map((crop) => {
       const expiry = crop.expiry_date ? new Date(crop.expiry_date) : null;
-      let status = 'Active';
-      if (expiry && expiry < today) status = 'Expired';
-      if (expiry && expiry >= today && expiry <= inThreeDays) status = 'Expiring Soon';
+      const listingStatus = crop.status || 'draft';
+      let expiryStatus = 'Active';
+      if (expiry && expiry < today) expiryStatus = 'Expired';
+      if (expiry && expiry >= today && expiry <= inThreeDays) expiryStatus = 'Expiring Soon';
       const days = expiry ? Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : null;
 
       return {
         id: crop.id,
         name: crop.name,
         farmer: crop.farmer?.name || 'Unknown',
-        quantity: `${crop.quantity}kg`,
-        price: `GH₵${Number(crop.price)}/kg`,
-        status,
+        quantity: `${crop.quantity} ${crop.unit || 'kg'}`,
+        price: `GH₵${Number(crop.price)}`,
+        status: listingStatus === 'draft' ? 'Draft' : listingStatus === 'rejected' ? 'Rejected' : 'Active',
+        listingStatus,
+        expiryStatus,
         expiresIn: days === null ? 'N/A' : days < 0 ? 'Expired' : `${days} days`,
         location: crop.farmer?.location || 'Unknown',
         dateAdded: new Date(crop.created_at).toLocaleDateString(),
-        image: crop.image
+        image: crop.image,
+        reviewNotes: crop.review_notes || null,
+        reviewedAt: crop.reviewed_at || null,
+        available: Boolean(crop.available)
       };
     });
 

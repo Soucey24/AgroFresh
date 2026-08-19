@@ -56,7 +56,7 @@ class QualityScorerTests(unittest.TestCase):
         self.assertLessEqual(result['quality_score'], 100.0)
 
     def test_defect_detection_integration(self):
-        good_img = Image.new('RGB', (64, 64), color=(100, 180, 80))
+        good_img = Image.new('RGB', (64, 64), color=(100, 180, 80)) 
         good_result = self.scorer._score(good_img)
         poor_img = Image.new('RGB', (64, 64), color=(100, 100, 100))
         poor_result = self.scorer._score(poor_img)
@@ -132,6 +132,13 @@ class PriceForecasterTests(unittest.TestCase):
         self.assertIn('recommended_selling_date', rec)
         self.assertIn('expected_price', rec)
         self.assertIn('expected_gain', rec)
+
+    def test_alias_and_status_compatibility(self):
+        rec_banana = self.forecaster.forecast_price('banana', 85.0, 'fresh', 3)
+        self.assertGreater(rec_banana['forecasted_price'], 0)
+
+        rec_review = self.forecaster.forecast_price('tomato', 70.0, 'review', 2)
+        self.assertGreater(rec_review['forecasted_price'], 0)
 
 
 if __name__ == '__main__':
