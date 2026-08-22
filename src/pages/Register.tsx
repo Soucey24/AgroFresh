@@ -29,8 +29,9 @@ const Register = () => {
   const [maskedPhone, setMaskedPhone] = useState('');
 
   const isValidGhanaPhone = (value: string) => {
-    const clean = value.replace(/\s+/g, '');
-    return /^(?:\+233|233|0)(?:20|24|26|27|50|54|55|59)\d{7,8}$/.test(clean);
+    const clean = value.replace(/\D/g, '');
+    const localNumber = clean.startsWith('233') ? clean.slice(3) : clean.startsWith('0') ? clean.slice(1) : clean;
+    return /^(?:20|23|24|25|26|27|28|29|50|53|54|55|56|57|58|59)\d{7}$/.test(localNumber);
   };
 
   const handleRegister = async (e: React.FormEvent) => {

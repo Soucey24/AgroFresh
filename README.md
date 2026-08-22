@@ -23,7 +23,7 @@ A full-stack platform with machine learning for crop quality analysis, harvest p
 
 ```bash
 # 1. Clone & install
-git clone https://github.com/Dee-Rock/Agrofresh.git && cd Agrofresh
+git clone https://github.com/Soucey24/AgroFresh.git && cd Agrofresh
 
 # 2. Backend
 cd backend && npm install && npm run dev &
@@ -38,8 +38,8 @@ cd ../src && pnpm install && pnpm dev
 ```
 
 **Access**: 
-- Frontend: http://localhost:5173
-- Backend: http://localhost:3000
+- Frontend: http://localhost:8080
+- Backend: http://localhost:4000
 - ML API: http://localhost:8001
 
 ---
@@ -89,8 +89,8 @@ cd ../src && pnpm install && pnpm dev
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/agrofresh-ghana-market.git
-   cd agrofresh-ghana-market
+   git clone https://github.com/Soucey24/AgroFresh.git
+   cd Agrofresh
    ```
 
 2. **Install dependencies**
@@ -104,17 +104,9 @@ cd ../src && pnpm install && pnpm dev
    npm install
    ```
 
-3. **Set up environment variables**
-   Create a `.env` file in the backend directory with the following:
-   ```
-   DB_HOST=localhost
-   DB_USER=your_username
-   DB_PASS=your_password
-   DB_NAME=agrofresh
-   JWT_SECRET=your_jwt_secret
-   ```
 
-4. **Start the development servers**
+
+3. **Start the development servers**
    ```bash
    # Start backend server
    cd backend
@@ -144,9 +136,6 @@ For any questions or feedback, please contact us at [delalirock5@gmail.com](dela
 ---
 
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
 
 The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 
@@ -154,10 +143,10 @@ Follow these steps:
 
 ```sh
 # Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+git clone https://github.com/Soucey24/AgroFresh.git
 
 # Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+cd Agrofresh
 
 # Step 3: Install the necessary dependencies.
 npm i
@@ -189,15 +178,3 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/d5ef4a0f-e801-4992-b7ef-8e25e4b770a3) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
