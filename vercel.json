@@ -1,13 +1,6 @@
 {
-  "services": {
-    "frontend": {
-      "framework": "vite",
-      "root": "."
-    },
-    "backend": {
-      "entrypoint": "backend",
-      "root": "backend"
-      
-    }
-  }
+  "framework": "vite",
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "dist",
+  "installCommand": "pnpm install"
 }
