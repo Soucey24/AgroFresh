@@ -1,7 +1,6 @@
 {
   "services": {
     "frontend": {
-      "routePrefix": "/",
       "framework": "vite"
     },
     "backend": {
