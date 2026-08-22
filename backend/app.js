@@ -60,6 +60,7 @@ app.use(session(sessionConfig));
 const allowedOrigins = new Set([
   process.env.FRONTEND_URL,
   'https://agrofresh-theta.vercel.app',
+  'https://agro-fresh-seven.vercel.app',
   'http://localhost:3000',
   'http://localhost:8080',
   'http://localhost:5173'
@@ -68,7 +69,8 @@ const allowedOrigins = new Set([
 app.use(cors({
   origin(origin, callback) {
     const isCodespacesPreview = /^https:\/\/[a-z0-9-]+\.app\.github\.dev$/i.test(origin || '');
-    if (!origin || allowedOrigins.has(origin) || (!isProduction && isCodespacesPreview)) {
+    const isVercelPreview = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin || '');
+    if (!origin || allowedOrigins.has(origin) || isVercelPreview || (!isProduction && isCodespacesPreview)) {
       callback(null, true);
       return;
     }
