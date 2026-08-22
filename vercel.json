@@ -5,8 +5,8 @@
       "root": "frontend"
     },
     "backend": {
-      "entrypoint": "backend",
-      "routePrefix": "/_/backend"
+      "entrypoint": "backend"
+      
     }
   }
 }
