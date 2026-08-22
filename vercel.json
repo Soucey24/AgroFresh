@@ -6,7 +6,7 @@
     },
     "backend": {
       "entrypoint": "backend",
-      "root": "/_/backend"
+      "root": "backend"
       
     }
   }
