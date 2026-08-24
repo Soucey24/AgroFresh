@@ -125,6 +125,9 @@ const Login = () => {
                     required
                   />
                 </div>
+                <Link to="/forgot-password" className="mt-2 inline-block text-sm text-primary hover:underline">
+                  Forgot password?
+                </Link>
               </div>
               </> : <>
                 <div className="rounded-md bg-primary/10 p-3 text-sm text-primary">A verification code was sent to {maskedPhone}.</div>
@@ -152,7 +155,6 @@ const Login = () => {
             )}
 
             <div className="pt-4 text-center">
-              {!otpStep && <Link to="/forgot-password" className="block text-sm text-primary hover:underline">Forgot password?</Link>}
               <p className="text-sm text-muted-foreground">
                 Don't have an account?{" "}
                 <Link to="/register" className="text-primary hover:underline font-medium">

@@ -808,9 +808,10 @@ const Farmers = () => {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <h3 className="font-medium text-sm truncate">{crop.name}</h3>
-                          <div className="flex items-center space-x-1">
+                        <div className="mb-3 flex items-center justify-between gap-2">
+                          <h3 className="min-w-0 truncate font-medium text-sm">{crop.name}</h3>
+                        </div>
+                        <div className="mb-3 grid grid-cols-5 gap-1">
                             <Button variant="ghost" size="sm" onClick={() => setViewCrop(crop)} className="h-8 w-8 p-0">
                               <Eye className="h-3 w-3" />
                             </Button>
@@ -874,7 +875,6 @@ const Farmers = () => {
                                 <TrendingUp className="h-3 w-3" />
                               </Button>
                             </Link>
-                          </div>
                         </div>
                         <div className="text-xs text-muted-foreground space-y-1">
                           <div>Category: {crop.category}</div>
