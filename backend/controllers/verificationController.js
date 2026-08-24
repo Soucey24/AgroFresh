@@ -16,8 +16,8 @@ const isValidGhanaPhone = (value) => {
 };
 
 const isValidGhanaCardNumber = (value) => {
-  const card = String(value || '').replace(/\s+/g, '');
-  return /^GHA[-]?\d{9,13}$/i.test(card) || /^\d{9,13}$/.test(card);
+  const card = String(value || '').trim().toUpperCase().replace(/[\s-]/g, '');
+  return /^GHA\d{10}$/.test(card) || /^\d{9,13}$/.test(card);
 };
 
 const createStorageEntry = async (supabaseClient, bucketName, file) => {
