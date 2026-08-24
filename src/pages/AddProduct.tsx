@@ -459,10 +459,10 @@ const AddProduct = () => {
 
               {step === 3 && (
                 <div className="space-y-6">
-                  <div className="flex flex-col gap-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-primary">ML quality check</p>
-                      <p className="break-words text-sm text-muted-foreground">The system evaluates freshness and quality before listing.</p>
+                  <div className="flex min-w-0 flex-col gap-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 space-y-1">
+                      <p className="break-words text-sm font-medium text-primary">ML quality check</p>
+                      <p className="break-words text-sm leading-5 text-muted-foreground">The system evaluates freshness and quality before listing.</p>
                     </div>
                     <Button type="button" onClick={runMlAnalysis} disabled={analyzing} className="w-full shrink-0 sm:w-auto">
                       {analyzing ? (
@@ -478,7 +478,7 @@ const AddProduct = () => {
                   </div>
 
                   {mlResult.qualityScore > 0 ? (
-                    <div className="grid min-w-0 gap-4 sm:grid-cols-2 md:grid-cols-3">
+                    <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
                       <div className="min-w-0 rounded-2xl border border-border bg-card p-4">
                         <p className="text-sm text-muted-foreground">Quality score</p>
                         <p className="mt-2 text-3xl font-bold">{mlResult.qualityScore}%</p>
@@ -494,10 +494,10 @@ const AddProduct = () => {
 
                       <div className="min-w-0 sm:col-span-2 md:col-span-3 rounded-2xl border border-border bg-card p-4">
                         <p className="text-sm text-muted-foreground">ML result</p>
-                        <div className="mt-3 flex flex-wrap items-center gap-3">
-                          <Badge className="bg-green-600/10 text-green-700 dark:text-green-300">Grade {mlResult.grade}</Badge>
-                          <Badge variant="secondary">Suggested price: {mlResult.suggestedPrice}</Badge>
-                          <Badge variant="secondary">Best timing: {mlResult.recommendedTiming}</Badge>
+                        <div className="mt-3 flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                          <Badge className="max-w-full whitespace-normal break-words bg-green-600/10 text-green-700 dark:text-green-300">Grade {mlResult.grade}</Badge>
+                          <Badge variant="secondary" className="max-w-full whitespace-normal break-words">Suggested price: {mlResult.suggestedPrice}</Badge>
+                          <Badge variant="secondary" className="max-w-full whitespace-normal break-words">Best timing: {mlResult.recommendedTiming}</Badge>
                         </div>
                         <p className="mt-4 break-words text-sm text-muted-foreground">{mlResult.message}</p>
                       </div>
