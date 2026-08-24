@@ -11,7 +11,7 @@ export function getImageUrl(imagePath: string | null | undefined): string | null
   }
   
   // For local uploads, use the backend URL since images are served from there
-  const backendUrl = 'http://localhost:4000';
+  const backendUrl = 'https://agrofresh-2uom.onrender.com';
   return `${backendUrl}${imagePath}`;
 }
 
