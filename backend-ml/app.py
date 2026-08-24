@@ -25,6 +25,11 @@ app.include_router(health.router, prefix='/api', tags=['health'])
 app.include_router(predictions.router, prefix='/api/ml', tags=['predictions'])
 
 
+@app.get('/')
+async def root():
+    return {'service': 'AgroFresh ML', 'status': 'ok'}
+
+
 @app.on_event('startup')
 async def startup_event():
     logger.info('ML service starting up')

@@ -44,6 +44,8 @@ Set these environment variables in the host dashboard:
 NODE_ENV=production
 PORT=4000
 FRONTEND_URL=https://your-app.vercel.app
+ML_SERVICE_URL=https://agrofresh-ml.onrender.com
+ML_SERVICE_TIMEOUT=30000
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
 SESSION_SECRET=use-a-long-random-secret
@@ -83,6 +85,22 @@ Verify:
 ```text
 https://your-ml-domain.com/api/health
 ```
+
+The deployed Node backend must use the ML service's public URL, not `http://localhost:8001`:
+
+```env
+ML_SERVICE_URL=https://agrofresh-ml.onrender.com
+ML_SERVICE_TIMEOUT=30000
+```
+
+After adding or changing this variable, redeploy the Node backend. Test the ML service directly at:
+
+```text
+https://agrofresh-ml.onrender.com/
+https://agrofresh-ml.onrender.com/api/health
+```
+
+The root URL returns a small service-status response. The `/api/health` URL is the canonical health check.
 
 Update the backend ML service URL if the backend environment uses a remote ML URL.
 
@@ -188,6 +206,7 @@ Replace local development values:
 
 ```env
 FRONTEND_URL=http://localhost:8080
+ML_SERVICE_URL=http://localhost:8001
 PAYSTACK_CALLBACK_URL=http://localhost:4000/api/payments/webhook
 VITE_API_URL=
 ```
@@ -196,6 +215,7 @@ With deployed values:
 
 ```env
 FRONTEND_URL=https://your-app.vercel.app
+ML_SERVICE_URL=https://agrofresh-ml.onrender.com
 PAYSTACK_CALLBACK_URL=https://your-api-domain.com/api/payments/webhook
 VITE_API_URL=https://your-api-domain.com
 ```

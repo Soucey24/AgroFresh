@@ -33,6 +33,7 @@ const FarmerVerification = () => {
   const [loading, setLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraFacingMode, setCameraFacingMode] = useState<'user' | 'environment'>('user');
   const [error, setError] = useState('');
   const { toast } = useToast();
 
@@ -46,7 +47,7 @@ const FarmerVerification = () => {
     return () => {
       stopCamera();
     };
-  }, [cameraActive, step]);
+  }, [cameraActive, step, cameraFacingMode]);
 
 
   const isValidGhanaPhone = (value: string) => {
@@ -66,7 +67,7 @@ const FarmerVerification = () => {
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: { ideal: 'environment' },
+          facingMode: { ideal: cameraFacingMode },
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
@@ -92,6 +93,11 @@ const FarmerVerification = () => {
       stream.getTracks().forEach((track) => track.stop());
       videoRef.current.srcObject = null;
     }
+  };
+
+  const switchCamera = () => {
+    stopCamera();
+    setCameraFacingMode((current) => current === 'user' ? 'environment' : 'user');
   };
 
   const takePhoto = () => {
@@ -273,6 +279,15 @@ const FarmerVerification = () => {
                         onClick={takePhoto}
                       >
                         <Camera className="h-8 w-8 mr-2" /> Take Photo Now
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full h-12"
+                        onClick={switchCamera}
+                      >
+                        <Camera className="h-5 w-5 mr-2" />
+                        Switch to {cameraFacingMode === 'user' ? 'back' : 'front'} camera
                       </Button>
                     </div>
                   )}
