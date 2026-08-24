@@ -646,8 +646,16 @@ const AddProduct = () => {
                 <div className="flex items-center gap-3">
                   {step < 5 ? (
                     <Button onClick={handleNext} disabled={loading}>
-                      {step === 1 ? "Save draft and continue" : "Continue"}
-                      <ArrowRight className="ml-2 h-4 w-4" />
+                      {loading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving draft...
+                        </>
+                      ) : (
+                        <>
+                          {step === 1 ? "Save draft and continue" : "Continue"}
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </>
+                      )}
                     </Button>
                   ) : (
                     <Button onClick={handlePublish} disabled={loading} className="bg-green-600 text-white hover:bg-green-700">

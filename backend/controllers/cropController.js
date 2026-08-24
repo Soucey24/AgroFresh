@@ -207,7 +207,7 @@ export const createCrop = async (req, res) => {
     let predictedHarvestDate = harvest_date_predicted || null;
     let predictedExpiryDate = null;
 
-    if (planting_date && !predictedHarvestDate) {
+    if (planting_date && !predictedHarvestDate && normalizedStatus !== 'draft') {
       const harvestPrediction = await MLService.predictHarvest(cropType, planting_date, region);
       if (harvestPrediction?.status === 'success' && harvestPrediction.data?.estimated_harvest) {
         predictedHarvestDate = harvestPrediction.data.estimated_harvest;
