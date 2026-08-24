@@ -4,6 +4,7 @@ import session from 'express-session';
 import { createClient } from '@supabase/supabase-js';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
 import cropsRoutes from './routes/crops.js';
@@ -28,6 +29,8 @@ if (isProduction) {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const uploadsDirectory = path.join(__dirname, 'uploads');
+fs.mkdirSync(uploadsDirectory, { recursive: true });
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
@@ -81,7 +84,7 @@ app.use(cors({
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(uploadsDirectory));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/crops', cropsRoutes);
