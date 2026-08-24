@@ -152,6 +152,7 @@ const Login = () => {
             )}
 
             <div className="pt-4 text-center">
+              {!otpStep && <Link to="/forgot-password" className="block text-sm text-primary hover:underline">Forgot password?</Link>}
               <p className="text-sm text-muted-foreground">
                 Don't have an account?{" "}
                 <Link to="/register" className="text-primary hover:underline font-medium">

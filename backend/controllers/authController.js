@@ -258,6 +258,58 @@ export const verifyLoginOtp = async (req, res) => {
   }
 };
 
+export const requestPasswordReset = async (req, res) => {
+  try {
+    const email = String(req.body.email || '').trim().toLowerCase();
+    if (!email) return handleError(res, 400, 'Email is required');
+    const { data: user, error } = await supabase.from('users').select('id, phone').eq('email', email).maybeSingle();
+    if (error) throw error;
+    if (!user || !user.phone) return handleError(res, 400, 'No account with a phone number was found for this email');
+
+    const phone = normalizeLoginPhone(user.phone);
+    const otpCode = String(Math.floor(100000 + Math.random() * 900000));
+    const { error: otpError } = await supabase.from('phone_verifications').insert([{
+      user_id: user.id,
+      phone,
+      otp_code: otpCode,
+      expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      status: 'pending'
+    }]);
+    if (otpError) throw otpError;
+    await sendSms({ recipient: { phone }, message: `Your AgroFresh password reset code is ${otpCode}. It expires in 5 minutes.` });
+    req.session.pendingPasswordReset = { userId: user.id, phone };
+    res.json({ requiresOtp: true, phone: `${phone.slice(0, 7)}****${phone.slice(-2)}` });
+  } catch (err) {
+    if (err.message?.includes('Arkesel SMS credit')) return handleError(res, 402, 'Password reset SMS is temporarily unavailable', err.message);
+    handleError(res, 500, 'Failed to start password reset', err.message);
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const pending = req.session.pendingPasswordReset;
+    const otpCode = String(req.body.otpCode || '').trim();
+    const newPassword = String(req.body.newPassword || '');
+    if (!pending || !otpCode || !newPassword) return handleError(res, 400, 'OTP and new password are required');
+    if (newPassword.length < 8) return handleError(res, 400, 'New password must be at least 8 characters long');
+    const { data: verification, error } = await supabase.from('phone_verifications').select('*')
+      .eq('user_id', pending.userId).eq('phone', pending.phone).eq('status', 'pending')
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (error) throw error;
+    if (!verification) return handleError(res, 400, 'No active password reset code found');
+    if (new Date(verification.expires_at) < new Date()) return handleError(res, 400, 'Password reset code has expired');
+    if (String(verification.otp_code) !== otpCode) return handleError(res, 400, 'Invalid password reset code');
+    const password_hash = await bcrypt.hash(newPassword, 12);
+    const { error: updateError } = await supabase.from('users').update({ password_hash }).eq('id', pending.userId);
+    if (updateError) throw updateError;
+    await supabase.from('phone_verifications').update({ status: 'verified', verified_at: new Date().toISOString() }).eq('id', verification.id);
+    delete req.session.pendingPasswordReset;
+    res.json({ success: true, message: 'Password reset successfully' });
+  } catch (err) {
+    handleError(res, 500, 'Failed to reset password', err.message);
+  }
+};
+
 export const logout = async (req, res) => {
   try {
     if (req.session.user) {

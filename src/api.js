@@ -116,6 +116,16 @@ export async function resendLoginOtp(email, password) {
   return res.json();
 }
 
+export async function requestPasswordReset(email) {
+  const res = await fetch(`${API_BASE}/api/auth/password-reset/request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ email }) });
+  return res.json();
+}
+
+export async function resetPassword(otpCode, newPassword) {
+  const res = await fetch(`${API_BASE}/api/auth/password-reset/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ otpCode, newPassword }) });
+  return res.json();
+}
+
 export async function sendOtp(phone, userId = null) {
   const res = await fetch(`${API_BASE}/api/otp/send`, {
     method: 'POST',
