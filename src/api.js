@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = import.meta.env.PROD ? '' : (import.meta.env.VITE_API_URL || '');
 
 export async function getNotifications() {
   const res = await fetch(`${API_BASE}/api/notifications`, { credentials: 'include' });
