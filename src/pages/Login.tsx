@@ -43,7 +43,7 @@ const Login = () => {
   const finishLogin = (result: any) => {
     toast({ title: 'Signed in', description: 'Welcome back!' });
     if (result.role === "farmer") {
-      if (result.verificationStatus === 'not_submitted' || result.verificationStatus === 'pending' || result.verificationStatus === 'rejected') {
+      if (result.verificationStatus === 'not_submitted' || result.verificationStatus === 'rejected') {
         navigate(`/verify-farmer?id=${result.id}`);
       } else {
         navigate("/farmers");
