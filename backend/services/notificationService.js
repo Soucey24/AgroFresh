@@ -117,14 +117,21 @@ export const sendSms = async ({ recipient, message }) => {
   if (!recipient.phone) return { sent: false, reason: 'recipient_phone_missing' };
 
   try {
-    await axios.post(ARKESEL_ENDPOINT, {
-      sender: config.smsSender,
-      message,
-      recipients: [recipient.phone]
-    }, {
-      headers: { 'api-key': config.smsApiKey, 'Content-Type': 'application/json' },
-      timeout: 15000
-    });
+    try {
+      await axios.post(ARKESEL_ENDPOINT, {
+        sender: config.smsSender,
+        message,
+        recipients: [recipient.phone]
+      }, {
+        headers: { 'api-key': config.smsApiKey, 'Content-Type': 'application/json' },
+        timeout: 15000
+      });
+    } catch (error) {
+      const status = error.response?.status;
+      if (status === 402) throw new Error('Arkesel SMS credit is insufficient. Top up Arkesel to send verification codes.');
+      if (status === 401 || status === 403) throw new Error('Arkesel rejected the SMS request. Check ARKESEL_API_KEY and ARKESEL_SENDER.');
+      throw new Error(`Arkesel SMS delivery failed${status ? ` (${status})` : ''}.`);
+    }
   } catch (error) {
     if (error.response?.status === 402) {
       throw new Error('Arkesel SMS credit is unavailable. Top up the Arkesel account linked to ARKESEL_API_KEY.');

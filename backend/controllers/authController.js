@@ -281,6 +281,8 @@ export const requestPasswordReset = async (req, res) => {
     res.json({ requiresOtp: true, phone: `${phone.slice(0, 7)}****${phone.slice(-2)}` });
   } catch (err) {
     if (err.message?.includes('Arkesel SMS credit')) return handleError(res, 402, 'Password reset SMS is temporarily unavailable', err.message);
+    if (err.message?.includes('Arkesel rejected') || err.message?.includes('Arkesel SMS delivery')) return handleError(res, 502, 'Password reset SMS could not be sent', err.message);
+    if (err.code === '42P01' || err.code === 'PGRST205' || err.message?.includes('phone_verifications')) return handleError(res, 500, 'Password reset is not configured. Run the OTP database migration in Supabase.', err.message);
     handleError(res, 500, 'Failed to start password reset', err.message);
   }
 };
