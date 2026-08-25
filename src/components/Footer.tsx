@@ -48,15 +48,15 @@ const Footer = () => {
             <div className="space-y-2 sm:space-y-3">
               <div className="flex items-center space-x-2 sm:space-x-3">
                 <Phone className="h-4 w-4 text-primary flex-shrink-0" />
-                <span className="text-secondary-foreground/80 text-sm sm:text-base">+233 20 123 4567</span>
+                <span className="text-secondary-foreground/80 text-sm sm:text-base">+233 26 4250 730</span>
               </div>
               <div className="flex items-center space-x-2 sm:space-x-3">
                 <Mail className="h-4 w-4 text-primary flex-shrink-0" />
-                <span className="text-secondary-foreground/80 text-sm sm:text-base">hello@agrofresh.gh</span>
+                <span className="text-secondary-foreground/80 text-sm sm:text-base">agrofresh@gmail.com</span>
               </div>
               <div className="flex items-center space-x-2 sm:space-x-3">
                 <MapPin className="h-4 w-4 text-primary flex-shrink-0" />
-                <span className="text-secondary-foreground/80 text-sm sm:text-base">Accra, Ghana</span>
+                <span className="text-secondary-foreground/80 text-sm sm:text-base">Ho, Ghana</span>
               </div>
             </div>
           </div>
@@ -65,7 +65,7 @@ const Footer = () => {
         {/* Bottom Bar */}
         <div className="border-t border-secondary-foreground/20 mt-6 sm:mt-8 pt-6 sm:pt-8 flex flex-col sm:flex-row justify-between items-center space-y-3 sm:space-y-0">
           <div className="text-secondary-foreground/60 text-xs sm:text-sm text-center sm:text-left">
-            © 2025 AgroFresh GH. All rights reserved.
+            © 2026 AgroFresh GH. All rights reserved.
           </div>
           <div className="flex flex-wrap justify-center sm:justify-end space-x-4 sm:space-x-6 text-xs sm:text-sm">
             <a href="#" className="text-secondary-foreground/60 hover:text-secondary-foreground transition-colors">Privacy Policy</a>
