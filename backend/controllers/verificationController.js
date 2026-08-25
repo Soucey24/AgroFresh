@@ -25,7 +25,8 @@ export const startDiditVerification = async (req, res) => {
   try {
     const userId = Number(req.params.id);
     if (!req.session.user || req.session.user.id !== userId) return handleError(res, 403, 'You can only verify your own account');
-    const callbackUrl = process.env.DIDIT_CALLBACK_URL || `${process.env.FRONTEND_URL || 'http://localhost:8080'}/verify-farmer?id=${userId}`;
+    const callbackBase = process.env.DIDIT_CALLBACK_URL || `${process.env.FRONTEND_URL || 'http://localhost:8080'}/verify-farmer`;
+    const callbackUrl = `${callbackBase}${callbackBase.includes('?') ? '&' : '?'}id=${userId}`;
     if (process.env.NODE_ENV === 'production' && callbackUrl.includes('localhost')) {
       return handleError(res, 500, 'DIDIT_CALLBACK_URL must be set to the deployed Vercel verification URL in production');
     }

@@ -7,6 +7,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://agrofresh-2uom.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
