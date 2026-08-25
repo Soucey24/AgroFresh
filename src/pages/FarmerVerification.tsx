@@ -20,10 +20,6 @@ const FarmerVerification = () => {
   const [step, setStep] = useState(1);
   const [phone, setPhone] = useState(prefilledPhone);
   const [ghanaCardNumber, setGhanaCardNumber] = useState('');
-  const [ghanaCardFront, setGhanaCardFront] = useState<File | null>(null);
-  const [ghanaCardBack, setGhanaCardBack] = useState<File | null>(null);
-  const [cardFrontPreview, setCardFrontPreview] = useState('');
-  const [cardBackPreview, setCardBackPreview] = useState('');
   const [diditSessionId, setDiditSessionId] = useState('');
   const [diditUrl, setDiditUrl] = useState('');
   const [diditCompleted, setDiditCompleted] = useState(false);
@@ -138,9 +134,9 @@ const FarmerVerification = () => {
 
   const goNext = () => {
     if (step === 1) {
-      if (!diditCompleted && (!ghanaCardFront || !ghanaCardBack)) return setError('Start Didit verification or upload the front and back of your Ghana Card');
+      if (!diditCompleted) return setError('Please complete Didit verification before continuing');
     } else if (step === 2) {
-      if (!diditCompleted && !photoBlob) return setError('Complete Didit verification or take a selfie');
+      if (!diditCompleted) return setError('Please complete Didit face verification before continuing');
     } else if (step === 3) {
       if (!fdaRegistrationNumber || !fdaDocument || !yearsFarming || !cropsProduced) return setError('Please complete your FDA, farming history, and crop details');
     }
@@ -161,7 +157,7 @@ const FarmerVerification = () => {
     e.preventDefault();
     setError('');
     if (!userId) return setError('Missing user id');
-    if ((!diditCompleted && (!ghanaCardFront || !ghanaCardBack || !photoBlob)) || (diditCompleted && !diditSessionId) || !fdaDocument || !fdaRegistrationNumber || !yearsFarming || !cropsProduced) {
+    if (!diditCompleted || !diditSessionId || !fdaDocument || !fdaRegistrationNumber || !yearsFarming || !cropsProduced) {
       return setError('Please complete all steps');
     }
 
@@ -170,8 +166,6 @@ const FarmerVerification = () => {
       const form = new FormData();
       form.append('user_id', String(userId || ''));
       form.append('phone', phone);
-      if (ghanaCardFront) form.append('ghana_card_front', ghanaCardFront);
-      if (ghanaCardBack) form.append('ghana_card_back', ghanaCardBack);
       if (diditSessionId) form.append('didit_session_id', diditSessionId);
       form.append('fda_document', fdaDocument);
       form.append('fda_registration_number', fdaRegistrationNumber.trim());
@@ -181,7 +175,7 @@ const FarmerVerification = () => {
       form.append('region', locationDetails.region || '');
       form.append('district', locationDetails.district || '');
       form.append('town_village', locationDetails.townVillage || '');
-      form.append('photo', photoBlob, 'farmer_photo.jpg');
+      if (photoBlob) form.append('photo', photoBlob, 'farmer_photo.jpg');
 
       const res = await createFarmerVerification(userId, form);
       if (res.error) {
@@ -250,9 +244,9 @@ const FarmerVerification = () => {
                   <div className="flex items-center gap-3">
                     <IdCard className="h-8 w-8 text-purple-500" />
                     <div>
-                      <h3 className="text-xl font-semibold">Ghana Card images</h3>
+                      <h3 className="text-xl font-semibold">Secure identity verification</h3>
                       <p className="text-sm text-muted-foreground">
-                        Upload clear images of both sides of your Ghana Card.
+                        Complete the Didit identity check below. It includes Ghana Card and face verification.
                       </p>
                     </div>
                   </div>
@@ -265,18 +259,11 @@ const FarmerVerification = () => {
                       <Button type="button" variant={diditCompleted ? 'default' : 'outline'} className="w-full" onClick={() => setDiditCompleted(true)}>{diditCompleted ? 'Didit verification completed' : 'I completed verification'}</Button>
                     </>}
                   </div>
-                  <p className="text-center text-xs text-muted-foreground">You may use the secure Didit flow above or the manual upload fields below.</p>
-                    <Label htmlFor="card-front">Front of Ghana Card (manual option)</Label>
-                  <Input id="card-front" type="file" accept="image/*" onChange={(e) => { const file = e.target.files?.[0] || null; setGhanaCardFront(file); setCardFrontPreview(file ? URL.createObjectURL(file) : ''); }} />
-                  {cardFrontPreview && <img src={cardFrontPreview} alt="Ghana Card front preview" className="max-h-48 w-full rounded-lg border object-contain" />}
-                    <Label htmlFor="card-back">Back of Ghana Card (manual option)</Label>
-                  <Input id="card-back" type="file" accept="image/*" onChange={(e) => { const file = e.target.files?.[0] || null; setGhanaCardBack(file); setCardBackPreview(file ? URL.createObjectURL(file) : ''); }} />
-                  {cardBackPreview && <img src={cardBackPreview} alt="Ghana Card back preview" className="max-h-48 w-full rounded-lg border object-contain" />}
                   {/* Voice guidance removed */}
                 </div>
               )}
 
-              {/* Step 2: Take Photo */}
+              {/* Step 2: Didit face verification */}
               {step === 2 && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 mb-4">
@@ -284,67 +271,14 @@ const FarmerVerification = () => {
                     <div>
                       <h3 className="text-xl font-semibold">Your Photo</h3>
                       <p className="text-sm text-muted-foreground">
-                        Take a clear photo of your face
+                        Didit face verification
                       </p>
                     </div>
                   </div>
 
-                  {!cameraActive && !photoPreview && (
-                    <Button
-                      type="button"
-                      className="w-full h-24 text-lg font-semibold bg-green-600 hover:bg-green-700"
-                      onClick={() => {
-                        setCameraActive(true);
-                      }}
-                    >
-                      <Camera className="h-8 w-8 mr-2" /> Open Camera
-                    </Button>
-                  )}
-
-                  {cameraActive && (
-                    <div className="space-y-3">
-                      <div className="relative bg-black rounded-lg overflow-hidden">
-                        <video
-                          ref={videoRef}
-                          autoPlay
-                          playsInline
-                          className="w-full aspect-video"
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        className="w-full h-16 text-lg font-semibold bg-green-600 hover:bg-green-700"
-                        onClick={takePhoto}
-                      >
-                        <Camera className="h-8 w-8 mr-2" /> Take Photo Now
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full h-12"
-                        onClick={switchCamera}
-                      >
-                        <Camera className="h-5 w-5 mr-2" />
-                        Switch to {cameraFacingMode === 'user' ? 'back' : 'front'} camera
-                      </Button>
-                    </div>
-                  )}
-
-                  {photoPreview && (
-                    <div className="space-y-3">
-                      <div className="relative bg-black rounded-lg overflow-hidden">
-                        <img src={photoPreview} alt="Your photo" className="w-full aspect-video object-cover" />
-                        <div className="absolute top-2 right-2 bg-green-600 text-white px-2 py-1 rounded-full text-sm font-semibold flex items-center gap-1">
-                          <Check className="h-4 w-4" /> Saved
-                        </div>
-                      </div>
-                      <Button type="button" variant="outline" className="w-full h-12" onClick={retakePhoto}>
-                        <Camera className="h-5 w-5 mr-2" /> Take Another Photo
-                      </Button>
-                    </div>
-                  )}
-
-                  <canvas ref={canvasRef} className="hidden" />
+                  <div className={`rounded-lg border p-4 text-sm ${diditCompleted ? 'border-green-300 bg-green-50 text-green-800' : 'border-amber-300 bg-amber-50 text-amber-800'}`}>
+                    {diditCompleted ? 'Didit completed the face, liveness, and identity checks.' : 'Complete the Didit verification in Step 1 to continue.'}
+                  </div>
                 </div>
               )}
 
