@@ -13,12 +13,15 @@ import { useToast } from '@/hooks/use-toast';
 const Register = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    name: "",
+    first_name: "",
+    surname: "",
+    other_names: "",
     email: "",
     password: "",
     confirmPassword: "",
     userType: "",
-    location: ""
+    location: "",
+    digital_address: ""
   });
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
@@ -45,6 +48,10 @@ const Register = () => {
       setError("Passwords do not match.");
       return;
     }
+    if (!formData.first_name || !formData.surname) {
+      setError("First name and surname are required.");
+      return;
+    }
     if (!phone) {
       setError("Please enter your phone number before continuing.");
       return;
@@ -55,7 +62,7 @@ const Register = () => {
     }
     // Call backend API
     setLoading(true);
-    const result = await register({ ...formData, phone });
+    const result = await register({ ...formData, name: `${formData.first_name} ${formData.other_names} ${formData.surname}`.replace(/\s+/g, ' ').trim(), phone });
     setLoading(false);
     if (result.error) {
       setError(result.error);
@@ -134,19 +141,21 @@ const Register = () => {
               ) : (
                 <>
               <div>
-                <Label htmlFor="name">Full Name</Label>
+                <Label htmlFor="first_name">First name</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    id="name"
-                    placeholder="Enter your full name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    id="first_name"
+                    placeholder="Enter your first name"
+                    value={formData.first_name}
+                    onChange={(e) => setFormData({...formData, first_name: e.target.value})}
                     className="pl-10"
                     required
                   />
                 </div>
               </div>
+              <div><Label htmlFor="surname">Surname</Label><Input id="surname" placeholder="Enter your surname" value={formData.surname} onChange={(e) => setFormData({...formData, surname: e.target.value})} required /></div>
+              <div><Label htmlFor="other_names">Other names (optional)</Label><Input id="other_names" placeholder="Other names" value={formData.other_names} onChange={(e) => setFormData({...formData, other_names: e.target.value})} /></div>
               <div>
                 <Label htmlFor="email">Email</Label>
                 <div className="relative">
@@ -197,14 +206,14 @@ const Register = () => {
               </div>
 
               <div>
-                <Label htmlFor="location">Location</Label>
+                <Label htmlFor="digital_address">Digital address</Label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    id="location"
-                    placeholder="City, Region"
-                    value={formData.location}
-                    onChange={(e) => setFormData({...formData, location: e.target.value})}
+                    id="digital_address"
+                    placeholder="GhanaPost GPS digital address"
+                    value={formData.digital_address}
+                    onChange={(e) => setFormData({...formData, digital_address: e.target.value, location: e.target.value})}
                     className="pl-10"
                     required
                   />

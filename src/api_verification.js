@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = import.meta.env.PROD ? '' : (import.meta.env.VITE_API_URL || '');
 
 export async function createFarmerVerification(userId, formData) {
   if (!userId) {
@@ -23,6 +23,12 @@ export async function createFarmerVerification(userId, formData) {
   }
 
   return body;
+}
+
+export async function startDiditVerification(userId) {
+  const res = await fetch(`${API_BASE}/api/users/${userId}/didit-session`, { method: 'POST', credentials: 'include' });
+  const body = await res.json().catch(() => ({}));
+  return res.ok ? body : { error: body.error || `Request failed (${res.status})` };
 }
 
 export default { createFarmerVerification };

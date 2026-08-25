@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MapPin, Camera, IdCard, MapPinPlus, Check, ChevronRight, X, Loader2 } from 'lucide-react';
 import BackgroundSlideshow from '@/components/BackgroundSlideshow';
-import { createFarmerVerification } from '../api_verification';
+import { createFarmerVerification, startDiditVerification } from '../api_verification';
 import { useToast } from '@/hooks/use-toast';
 
 const FarmerVerification = () => {
@@ -20,6 +20,17 @@ const FarmerVerification = () => {
   const [step, setStep] = useState(1);
   const [phone, setPhone] = useState(prefilledPhone);
   const [ghanaCardNumber, setGhanaCardNumber] = useState('');
+  const [ghanaCardFront, setGhanaCardFront] = useState<File | null>(null);
+  const [ghanaCardBack, setGhanaCardBack] = useState<File | null>(null);
+  const [cardFrontPreview, setCardFrontPreview] = useState('');
+  const [cardBackPreview, setCardBackPreview] = useState('');
+  const [diditSessionId, setDiditSessionId] = useState('');
+  const [diditUrl, setDiditUrl] = useState('');
+  const [diditCompleted, setDiditCompleted] = useState(false);
+  const [fdaDocument, setFdaDocument] = useState<File | null>(null);
+  const [fdaRegistrationNumber, setFdaRegistrationNumber] = useState('');
+  const [yearsFarming, setYearsFarming] = useState('');
+  const [cropsProduced, setCropsProduced] = useState('');
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>('');
   const [associationAddress, setAssociationAddress] = useState('');
@@ -127,13 +138,11 @@ const FarmerVerification = () => {
 
   const goNext = () => {
     if (step === 1) {
-      if (!ghanaCardNumber) return setError('Please enter your Ghana card number');
+      if (!diditCompleted && (!ghanaCardFront || !ghanaCardBack)) return setError('Start Didit verification or upload the front and back of your Ghana Card');
     } else if (step === 2) {
-      if (!photoBlob) return setError('Please take a photo');
+      if (!diditCompleted && !photoBlob) return setError('Complete Didit verification or take a selfie');
     } else if (step === 3) {
-      if (!associationAddress) return setError('Please enter your association address');
-    } else if (step === 4) {
-      if (!exactLocation.trim()) return setError('Please type the exact farm location');
+      if (!fdaRegistrationNumber || !fdaDocument || !yearsFarming || !cropsProduced) return setError('Please complete your FDA, farming history, and crop details');
     }
     setError('');
     setStep(step + 1);
@@ -152,11 +161,8 @@ const FarmerVerification = () => {
     e.preventDefault();
     setError('');
     if (!userId) return setError('Missing user id');
-    if (!ghanaCardNumber || !photoBlob || !associationAddress) {
+    if ((!diditCompleted && (!ghanaCardFront || !ghanaCardBack || !photoBlob)) || (diditCompleted && !diditSessionId) || !fdaDocument || !fdaRegistrationNumber || !yearsFarming || !cropsProduced) {
       return setError('Please complete all steps');
-    }
-    if (!exactLocation.trim()) {
-      return setError('Please type the exact farm location before submitting');
     }
 
     setLoading(true);
@@ -164,9 +170,14 @@ const FarmerVerification = () => {
       const form = new FormData();
       form.append('user_id', String(userId || ''));
       form.append('phone', phone);
-      form.append('ghana_card_number', ghanaCardNumber);
+      if (ghanaCardFront) form.append('ghana_card_front', ghanaCardFront);
+      if (ghanaCardBack) form.append('ghana_card_back', ghanaCardBack);
+      if (diditSessionId) form.append('didit_session_id', diditSessionId);
+      form.append('fda_document', fdaDocument);
+      form.append('fda_registration_number', fdaRegistrationNumber.trim());
+      form.append('years_farming', yearsFarming);
+      form.append('crops_produced', cropsProduced.trim());
       form.append('farmers_association_address', associationAddress.trim());
-      form.append('location_text', exactLocation.trim());
       form.append('region', locationDetails.region || '');
       form.append('district', locationDetails.district || '');
       form.append('town_village', locationDetails.townVillage || '');
@@ -195,6 +206,24 @@ const FarmerVerification = () => {
     }
   };
 
+  const handleStartDidit = async () => {
+    if (!userId) return setError('Missing user id');
+    setLoading(true);
+    setError('');
+    try {
+      const result = await startDiditVerification(Number(userId));
+      if (result.error || !result.verificationUrl) throw new Error(result.error || 'Didit did not return a verification URL');
+      setDiditSessionId(result.sessionId);
+      setDiditUrl(result.verificationUrl);
+      setDiditCompleted(false);
+      toast({ title: 'Verification started', description: 'Complete the secure identity check below.' });
+    } catch (error: any) {
+      setError(error.message || 'Unable to start identity verification');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background relative flex items-center justify-center p-4">
       <BackgroundSlideshow />
@@ -202,13 +231,13 @@ const FarmerVerification = () => {
         <Card className="bg-card/40 backdrop-blur-sm border-border/50">
           <CardHeader className="text-center border-b">
             <div className="mb-2 text-sm font-medium text-muted-foreground">
-              Step {step} of 4
+              Step {step} of 3
             </div>
             <CardTitle className="text-3xl">Farmer Verification</CardTitle>
             <div className="mt-2 h-1 w-full bg-muted rounded-full overflow-hidden">
               <div
                 className="h-full bg-green-500 transition-all duration-300"
-                style={{ width: `${(step / 4) * 100}%` }}
+                style={{ width: `${(step / 3) * 100}%` }}
               />
             </div>
           </CardHeader>
@@ -221,19 +250,28 @@ const FarmerVerification = () => {
                   <div className="flex items-center gap-3">
                     <IdCard className="h-8 w-8 text-purple-500" />
                     <div>
-                      <h3 className="text-xl font-semibold">Ghana Card Number</h3>
+                      <h3 className="text-xl font-semibold">Ghana Card images</h3>
                       <p className="text-sm text-muted-foreground">
-                        Found on your ID card (e.g., GHA-123456789-0)
+                        Upload clear images of both sides of your Ghana Card.
                       </p>
                     </div>
                   </div>
-                  <Input
-                    value={ghanaCardNumber}
-                    onChange={(e) => setGhanaCardNumber(e.target.value.toUpperCase())}
-                    placeholder="GHA-123456789-0"
-                    className="text-lg p-3 h-12 font-mono"
-                    autoFocus
-                  />
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
+                    <p className="font-medium text-primary">Use secure Didit verification</p>
+                    <p className="text-sm text-muted-foreground">Didit will guide you through Ghana Card capture, selfie, liveness, and face checks inside this page.</p>
+                    {!diditUrl && <Button type="button" onClick={handleStartDidit} disabled={loading} className="w-full">{loading ? 'Starting verification...' : 'Start secure verification'}</Button>}
+                    {diditUrl && <>
+                      <iframe title="Didit identity verification" src={diditUrl} className="h-[560px] w-full rounded-lg border bg-background" allow="camera; microphone" />
+                      <Button type="button" variant={diditCompleted ? 'default' : 'outline'} className="w-full" onClick={() => setDiditCompleted(true)}>{diditCompleted ? 'Didit verification completed' : 'I completed verification'}</Button>
+                    </>}
+                  </div>
+                  <p className="text-center text-xs text-muted-foreground">You may use the secure Didit flow above or the manual upload fields below.</p>
+                    <Label htmlFor="card-front">Front of Ghana Card (manual option)</Label>
+                  <Input id="card-front" type="file" accept="image/*" onChange={(e) => { const file = e.target.files?.[0] || null; setGhanaCardFront(file); setCardFrontPreview(file ? URL.createObjectURL(file) : ''); }} />
+                  {cardFrontPreview && <img src={cardFrontPreview} alt="Ghana Card front preview" className="max-h-48 w-full rounded-lg border object-contain" />}
+                    <Label htmlFor="card-back">Back of Ghana Card (manual option)</Label>
+                  <Input id="card-back" type="file" accept="image/*" onChange={(e) => { const file = e.target.files?.[0] || null; setGhanaCardBack(file); setCardBackPreview(file ? URL.createObjectURL(file) : ''); }} />
+                  {cardBackPreview && <img src={cardBackPreview} alt="Ghana Card back preview" className="max-h-48 w-full rounded-lg border object-contain" />}
                   {/* Voice guidance removed */}
                 </div>
               )}
@@ -310,57 +348,29 @@ const FarmerVerification = () => {
                 </div>
               )}
 
-              {/* Step 3: Association Address */}
+              {/* Step 3: FDA and farming history */}
               {step === 3 && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
-                    <MapPinPlus className="h-8 w-8 text-orange-500" />
+                    <IdCard className="h-8 w-8 text-orange-500" />
                     <div>
-                      <h3 className="text-xl font-semibold">Farmers Association</h3>
+                      <h3 className="text-xl font-semibold">Farm and FDA details</h3>
                       <p className="text-sm text-muted-foreground">
-                        Name and address of your farmer group
+                        Tell us what you farm and upload your FDA certificate.
                       </p>
                     </div>
                   </div>
-                  <Input
-                    value={associationAddress}
-                    onChange={(e) => setAssociationAddress(e.target.value)}
-                    placeholder="e.g., Ejisu Farmers Association, Kumasi"
-                    className="text-lg p-3 h-12"
-                    autoFocus
-                  />
+                  <Label htmlFor="fda-number">FDA registration number</Label>
+                  <Input id="fda-number" value={fdaRegistrationNumber} onChange={(e) => setFdaRegistrationNumber(e.target.value)} placeholder="FDA registration number" />
+                  <Label htmlFor="fda-document">FDA certificate/document</Label>
+                  <Input id="fda-document" type="file" accept="image/*,.pdf" onChange={(e) => setFdaDocument(e.target.files?.[0] || null)} />
+                  <Label htmlFor="years-farming">Years farming</Label>
+                  <Input id="years-farming" type="number" min="0" value={yearsFarming} onChange={(e) => setYearsFarming(e.target.value)} />
+                  <Label htmlFor="crops-produced">Crops produced</Label>
+                  <Input id="crops-produced" value={cropsProduced} onChange={(e) => setCropsProduced(e.target.value)} placeholder="e.g. maize, tomatoes, cassava" />
+                  <Label htmlFor="association">Farmers association (optional)</Label>
+                  <Input id="association" value={associationAddress} onChange={(e) => setAssociationAddress(e.target.value)} placeholder="Optional association name and address" />
                   {/* Voice guidance removed */}
-                </div>
-              )}
-
-              {/* Step 4: Location */}
-              {step === 4 && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 mb-4">
-                    <MapPin className="h-8 w-8 text-red-500" />
-                    <div>
-                      <h3 className="text-xl font-semibold">Exact Farm Location</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Type the precise location of the farm or business area
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="exact-location">Exact location</Label>
-                    <Input
-                      id="exact-location"
-                      value={exactLocation}
-                      onChange={(e) => setExactLocation(e.target.value)}
-                      placeholder="e.g. Besease, Bosome Freho District, Eastern Region, Ghana"
-                      className="text-base p-3 h-12"
-                      autoFocus
-                    />
-                  </div>
-
-                  <p className="text-sm text-muted-foreground">
-                    This should be the exact address or farm location as it should appear for buyers and delivery teams.
-                  </p>
                 </div>
               )}
 
@@ -380,7 +390,7 @@ const FarmerVerification = () => {
                   </Button>
                 )}
 
-                {step < 4 ? (
+                {step < 3 ? (
                   <Button
                     type="button"
                     className="flex-1 h-12 text-base font-semibold bg-blue-600 hover:bg-blue-700"

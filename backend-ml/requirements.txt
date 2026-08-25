@@ -10,4 +10,7 @@ pandas
 scikit-learn
 joblib
 python-multipart
+torch
+yolov5
+opencv-python
 

@@ -12,14 +12,17 @@ CREATE TYPE webhook_status AS ENUM ('pending', 'processed', 'failed');
 CREATE TYPE session_status AS ENUM ('active', 'completed', 'expired', 'cancelled');
 CREATE TYPE backup_frequency AS ENUM ('hourly', 'daily', 'weekly', 'monthly');
 
--- Create users table
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
+  first_name VARCHAR(80),
+  surname VARCHAR(80),
+  other_names VARCHAR(120),
   email VARCHAR(100) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   role user_role NOT NULL,
   location VARCHAR(100),
+  digital_address VARCHAR(120),
   phone VARCHAR(50),
   bio TEXT,
   avatar VARCHAR(255),

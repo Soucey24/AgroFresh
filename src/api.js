@@ -81,12 +81,12 @@ export async function verifyLoginOtp(otpCode) {
   return res.json();
 }
 
-export async function register({ name, email, password, userType, location, phone }) {
+export async function register({ name, first_name, surname, other_names, email, password, userType, location, digital_address, phone }) {
   const res = await fetch(`${API_BASE}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ name, email, password, role: userType, location, phone }),
+    body: JSON.stringify({ name, first_name, surname, other_names, email, password, role: userType, location, digital_address, phone }),
   });
   return res.json();
 }

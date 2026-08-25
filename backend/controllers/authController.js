@@ -18,7 +18,7 @@ const normalizeLoginPhone = (value) => {
 
 export const register = async (req, res) => {
   try {
-    const { name, email, password, role, location, phone } = req.body;
+    const { name, first_name, surname, other_names, email, password, role, location, digital_address, phone } = req.body;
 
     // Validation
     if (!name || !email || !password || !role) {
@@ -51,16 +51,21 @@ export const register = async (req, res) => {
 
     // Hash password
     const password_hash = await bcrypt.hash(password, 10);
+    const displayName = name || [first_name, other_names, surname].filter(Boolean).join(' ').trim();
 
     // Insert user
     const { data: user, error: insertError } = await supabase
       .from('users')
       .insert([{
-        name,
+        name: displayName,
+        first_name: first_name || null,
+        surname: surname || null,
+        other_names: other_names || null,
         email,
         password_hash,
         role,
         location: location || null,
+        digital_address: digital_address || null,
         phone: phone || null,
         status: 'Active'
       }])

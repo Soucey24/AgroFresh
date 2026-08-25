@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { notifyVerificationSubmitted } from '../services/notificationService.js';
 import { supabase } from '../app.js';
+import { createDiditSession, getDiditDecision, verifyFarmerIdentity } from '../services/diditService.js';
 
 const handleError = (res, status, message, details) => {
   console.error(`[${status}] ${message}`, details);
@@ -18,6 +19,22 @@ const isValidGhanaPhone = (value) => {
 const isValidGhanaCardNumber = (value) => {
   const card = String(value || '').trim().toUpperCase().replace(/[\s-]/g, '');
   return /^GHA\d{10}$/.test(card) || /^\d{9,13}$/.test(card);
+};
+
+export const startDiditVerification = async (req, res) => {
+  try {
+    const userId = Number(req.params.id);
+    if (!req.session.user || req.session.user.id !== userId) return handleError(res, 403, 'You can only verify your own account');
+    const callbackUrl = process.env.DIDIT_CALLBACK_URL || `${process.env.FRONTEND_URL || 'http://localhost:8080'}/verify-farmer?id=${userId}`;
+    if (process.env.NODE_ENV === 'production' && callbackUrl.includes('localhost')) {
+      return handleError(res, 500, 'DIDIT_CALLBACK_URL must be set to the deployed Vercel verification URL in production');
+    }
+    const result = await createDiditSession({ userId, callbackUrl });
+    req.session.diditVerification = { userId, sessionId: result.session_id };
+    res.json({ sessionId: result.session_id, verificationUrl: result.url || result.verification_url || result.session_url });
+  } catch (err) {
+    handleError(res, 502, 'Unable to start Didit verification', err.message);
+  }
 };
 
 const createStorageEntry = async (supabaseClient, bucketName, file) => {
@@ -64,7 +81,14 @@ export const requestVerification = async (req, res) => {
       return handleError(res, 403, 'You can only submit verification for your own account');
     }
 
-    let phone = req.body.phone || req.session?.user?.phone || null;
+    const { data: applicant, error: applicantError } = await supabase
+      .from('users')
+      .select('id, name, first_name, surname, other_names, phone, digital_address')
+      .eq('id', userId)
+      .single();
+    if (applicantError) throw applicantError;
+
+    let phone = req.body.phone || req.session?.user?.phone || applicant.phone || null;
     if (!phone) {
       const { data: userRecord, error: userError } = await supabase
         .from('users')
@@ -79,40 +103,37 @@ export const requestVerification = async (req, res) => {
 
     const farm_name = req.body.farm_name || null;
     const farmers_association_address = req.body.farmers_association_address || null;
-    const ghana_card_number = req.body.ghana_card_number || null;
-    const location_text = req.body.location_text || req.body.exact_location || null;
+    const fda_registration_number = req.body.fda_registration_number || null;
+    const years_farming = req.body.years_farming ? Number(req.body.years_farming) : null;
+    const crops_produced = req.body.crops_produced || null;
+    const location_text = req.body.location_text || req.body.exact_location || applicant.digital_address || null;
+    const diditSessionId = req.body.didit_session_id || req.session.diditVerification?.sessionId;
     const region = req.body.region || null;
     const district = req.body.district || null;
     const town_village = req.body.town_village || null;
     const latitude = req.body.latitude ? Number(req.body.latitude) : null;
     const longitude = req.body.longitude ? Number(req.body.longitude) : null;
 
-    if (!farmers_association_address || !ghana_card_number || !location_text) {
-      return handleError(res, 400, 'Exact farm location, association address, and Ghana card number are required');
+    if (!fda_registration_number || !Number.isInteger(years_farming) || years_farming < 0 || !crops_produced) {
+      return handleError(res, 400, 'FDA registration number, years farming, and crops produced are required');
     }
 
     if (phone && !isValidGhanaPhone(phone)) {
       return handleError(res, 400, 'Phone number must be a valid Ghana mobile number (e.g. 0241234567 or +233241234567)');
     }
 
-    if (!isValidGhanaCardNumber(ghana_card_number)) {
-      return handleError(res, 400, 'Ghana card number must look like a valid card number');
-    }
-
     const trimmedAssociationAddress = String(farmers_association_address || '').trim();
-    if (!trimmedAssociationAddress) {
-      return handleError(res, 400, 'Please provide a valid association name or association address');
-    }
-
-    // Accept realistic addresses and names without forcing an arbitrary 6-character minimum.
     const normalizedAssociationAddress = trimmedAssociationAddress;
 
     const uploaded = [];
     let photoUpload = null;
 
     const photoFile = req.files?.photo?.[0] || null;
+    const cardFrontFile = req.files?.ghana_card_front?.[0] || null;
+    const cardBackFile = req.files?.ghana_card_back?.[0] || null;
+    const fdaDocumentFile = req.files?.fda_document?.[0] || null;
     const documentFiles = req.files?.documents || [];
-    const allFiles = [photoFile, ...documentFiles].filter(Boolean);
+    const allFiles = [photoFile, cardFrontFile, cardBackFile, fdaDocumentFile, ...documentFiles].filter(Boolean);
 
     // Try uploading to Supabase Storage if available
     if (supabase && allFiles.length) {
@@ -141,16 +162,33 @@ export const requestVerification = async (req, res) => {
       };
     }
 
-    if (!photoUpload) {
+    if (!photoUpload && !diditSessionId) {
       return handleError(res, 400, 'Farmer photo is required');
     }
+    if (!fdaDocumentFile) return handleError(res, 400, 'FDA certificate is required');
+
+    let diditCheck = { configured: false, status: 'manual_review', requestId: null, result: null };
+    try {
+      if (diditSessionId) {
+        if (req.session.diditVerification?.userId !== userId || req.session.diditVerification?.sessionId !== diditSessionId) return handleError(res, 403, 'Invalid Didit verification session');
+        const decision = await getDiditDecision(diditSessionId);
+        const decisionStatus = String(decision.status || '').toLowerCase();
+        diditCheck = { configured: true, status: decisionStatus === 'approved' ? 'approved' : decisionStatus === 'declined' ? 'declined' : 'manual_review', requestId: diditSessionId, result: decision };
+      } else {
+        diditCheck = await verifyFarmerIdentity({ user: applicant, cardFrontFile, cardBackFile, selfieFile: photoFile });
+      }
+    } catch (providerError) {
+      console.error('Didit identity verification failed:', providerError.message);
+      return handleError(res, 502, `Identity verification failed: ${providerError.message}`, providerError.message);
+    }
+    if (diditCheck.status === 'declined') return handleError(res, 400, 'Identity verification failed. Ensure the card images are clear and the name matches your account.');
+    if (diditCheck.status === 'duplicate') return handleError(res, 409, 'This face is already linked to a farmer account.');
 
     const submission = {
       user_id: userId,
       phone,
       farm_name,
-      farmers_association_address: normalizedAssociationAddress,
-      ghana_card_number,
+      farmers_association_address: normalizedAssociationAddress || null,
       location_text,
       region,
       district,
@@ -159,6 +197,15 @@ export const requestVerification = async (req, res) => {
       longitude: longitude !== null && !Number.isNaN(longitude) ? longitude : null,
       photo_url: photoUpload.url,
       documents: uploaded,
+      ghana_card_front_url: cardFrontFile ? uploaded.find((file) => file.name === cardFrontFile.originalname)?.url || `/uploads/${cardFrontFile.filename}` : null,
+      ghana_card_back_url: cardBackFile ? uploaded.find((file) => file.name === cardBackFile.originalname)?.url || `/uploads/${cardBackFile.filename}` : null,
+      years_farming,
+      crops_produced,
+      fda_registration_number,
+      fda_document_url: uploaded.find((file) => file.name === fdaDocumentFile?.originalname)?.url || (fdaDocumentFile ? `/uploads/${fdaDocumentFile.filename}` : null),
+      didit_request_id: diditCheck.requestId,
+      didit_status: diditCheck.status,
+      didit_result: diditCheck.result,
       status: 'pending',
       submitted_at: new Date().toISOString()
     };
