@@ -186,7 +186,12 @@ export const requestVerification = async (req, res) => {
       });
       return res.json({ success: true, id: data.id });
     } catch (err) {
-      console.warn('Could not insert into user_verifications, falling back to local file', err.message);
+      console.warn('Could not insert into user_verifications, falling back to local file', {
+        message: err.message,
+        code: err.code,
+        details: err.details,
+        hint: err.hint
+      });
       // ensure data dir
       const dataDir = path.resolve(process.cwd(), 'backend', 'data');
       if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });

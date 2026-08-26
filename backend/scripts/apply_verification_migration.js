@@ -46,6 +46,10 @@ CREATE INDEX IF NOT EXISTS idx_user_verifications_submitted_at ON user_verificat
 
 ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS identity_name VARCHAR(200);
 ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS name_match_status VARCHAR(20);
+ALTER TABLE user_verifications ALTER COLUMN phone DROP NOT NULL;
+ALTER TABLE user_verifications ALTER COLUMN farmers_association_address DROP NOT NULL;
+ALTER TABLE user_verifications ALTER COLUMN ghana_card_number DROP NOT NULL;
+ALTER TABLE user_verifications ALTER COLUMN photo_url DROP NOT NULL;
 `;
 
 async function run() {

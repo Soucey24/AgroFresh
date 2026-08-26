@@ -82,3 +82,8 @@ CREATE TABLE IF NOT EXISTS user_verifications (
 CREATE INDEX IF NOT EXISTS idx_user_verifications_user_id ON user_verifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_verifications_status ON user_verifications(status);
 CREATE INDEX IF NOT EXISTS idx_user_verifications_submitted_at ON user_verifications(submitted_at);
+
+ALTER TABLE user_verifications ALTER COLUMN phone DROP NOT NULL;
+ALTER TABLE user_verifications ALTER COLUMN farmers_association_address DROP NOT NULL;
+ALTER TABLE user_verifications ALTER COLUMN ghana_card_number DROP NOT NULL;
+ALTER TABLE user_verifications ALTER COLUMN photo_url DROP NOT NULL;
