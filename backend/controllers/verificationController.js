@@ -108,7 +108,8 @@ export const requestVerification = async (req, res) => {
     const years_farming = req.body.years_farming ? Number(req.body.years_farming) : null;
     const crops_produced = req.body.crops_produced || null;
     const location_text = req.body.location_text || req.body.exact_location || applicant.digital_address || null;
-    const diditSessionId = req.body.didit_session_id || req.session.diditVerification?.sessionId;
+    // Custom capture uses the standalone Didit APIs; do not reuse an old hosted-session ID.
+    const diditSessionId = req.body.didit_session_id || null;
     const region = req.body.region || null;
     const district = req.body.district || null;
     const town_village = req.body.town_village || null;
