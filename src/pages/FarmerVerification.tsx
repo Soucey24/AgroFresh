@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { MapPin, Camera, IdCard, MapPinPlus, Check, ChevronRight, X, Loader2 } from 'lucide-react';
 import BackgroundSlideshow from '@/components/BackgroundSlideshow';
 import { createFarmerVerification, startDiditVerification } from '../api_verification';
+import { getProfile } from '@/api';
 import { useToast } from '@/hooks/use-toast';
 
 const FarmerVerification = () => {
@@ -21,7 +22,6 @@ const FarmerVerification = () => {
   const [phone, setPhone] = useState(prefilledPhone);
   const [ghanaCardNumber, setGhanaCardNumber] = useState('');
   const [diditSessionId, setDiditSessionId] = useState('');
-  const [diditUrl, setDiditUrl] = useState('');
   const [diditCompleted, setDiditCompleted] = useState(false);
   const [fdaDocument, setFdaDocument] = useState<File | null>(null);
   const [fdaRegistrationNumber, setFdaRegistrationNumber] = useState('');
@@ -46,6 +46,23 @@ const FarmerVerification = () => {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    let mounted = true;
+
+    getProfile().then((profile) => {
+      if (mounted && profile?.verificationStatus === 'approved') {
+        navigate('/farmers', { replace: true });
+      }
+    }).catch((profileError) => {
+      console.error('Could not load farmer verification status:', profileError);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, [navigate, userId]);
 
   // Didit redirects to this route, either in the iframe or as the top-level page.
   useEffect(() => {
@@ -240,9 +257,8 @@ const FarmerVerification = () => {
       const result = await startDiditVerification(Number(userId));
       if (result.error || !result.verificationUrl) throw new Error(result.error || 'Didit did not return a verification URL');
       setDiditSessionId(result.sessionId);
-      setDiditUrl(result.verificationUrl);
       setDiditCompleted(false);
-      toast({ title: 'Verification started', description: 'Complete the secure identity check below.' });
+      window.location.assign(result.verificationUrl);
     } catch (error: any) {
       setError(error.message || 'Unable to start identity verification');
     } finally {
@@ -284,11 +300,8 @@ const FarmerVerification = () => {
                   </div>
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
                     <p className="font-medium text-primary">Use secure Didit verification</p>
-                    <p className="text-sm text-muted-foreground">Didit will guide you through Ghana Card capture, selfie, liveness, and face checks inside this page.</p>
-                    {!diditUrl && <Button type="button" onClick={handleStartDidit} disabled={loading} className="w-full">{loading ? 'Starting verification...' : 'Start secure verification'}</Button>}
-                    {diditUrl && <>
-                      <iframe title="Didit identity verification" src={diditUrl} className="h-[560px] w-full rounded-lg border bg-background" allow="camera; microphone" />
-                    </>}
+                    <p className="text-sm text-muted-foreground">Continue securely on this device using its camera. You will return here automatically when finished.</p>
+                    <Button type="button" onClick={handleStartDidit} disabled={loading} className="w-full">{loading ? 'Starting verification...' : 'Continue on this device'}</Button>
                   </div>
                   {/* Voice guidance removed */}
                 </div>
