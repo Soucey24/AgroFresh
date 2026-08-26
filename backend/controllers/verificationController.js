@@ -204,7 +204,11 @@ export const requestVerification = async (req, res) => {
       void notifyVerificationSubmitted(userId).catch((notificationError) => {
         console.error('[notifications] verification submission SMS failed:', notificationError.message);
       });
-      return res.json({ success: true, fallback: true, path: outPath });
+      return res.status(503).json({
+        error: 'Verification was not saved to the database. Please try again later.',
+        fallback: true,
+        path: outPath
+      });
     }
   } catch (err) {
     handleError(res, 500, 'Verification submission failed', err.message);

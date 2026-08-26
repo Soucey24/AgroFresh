@@ -206,9 +206,8 @@ const FarmerVerification = () => {
         setError(res.error || 'Verification submission failed');
         toast({ title: 'Verification failed', description: res.error || 'Submission failed' });
       } else if (res.fallback) {
-        // Saved to local file because DB or storage unavailable
-        toast({ title: 'Saved locally', description: `Verification saved to server fallback: ${res.path || 'server'}` });
-        setTimeout(() => navigate('/farmers'), 1400);
+        setError('Verification was not saved to the database. Please try again or contact support.');
+        toast({ title: 'Verification not submitted', description: 'The database could not save your verification.' });
       } else if (res.success) {
         setDiditCompleted(true);
         toast({ title: 'Verification submitted', description: 'Your identity was checked and your application is pending review.' });
