@@ -15,8 +15,6 @@ const isValidGhanaPhone = (value) => {
   return /^(?:\+233|233|0)(?:20|24|26|27|50|54|55|59)\d{7,8}$/.test(phone);
 };
 
-const normalizeIdentityName = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-
 const createStorageEntry = async (supabaseClient, bucketName, file) => {
   const buffer = fs.readFileSync(file.path);
   const key = `verifications/${file.userId}/${Date.now()}_${file.originalname}`;
@@ -84,7 +82,6 @@ export const requestVerification = async (req, res) => {
     const farm_name = req.body.farm_name || null;
     const farmers_association_address = req.body.farmers_association_address || null;
     const fda_registration_number = String(req.body.fda_registration_number || '').trim();
-    const identity_name = String(req.body.identity_name || '').trim();
     const years_farming = req.body.years_farming === undefined || req.body.years_farming === '' ? null : Number(req.body.years_farming);
     const crops_produced = String(req.body.crops_produced || '').trim();
     const location_text = req.body.location_text || req.body.exact_location || applicant.digital_address || null;
@@ -95,7 +92,6 @@ export const requestVerification = async (req, res) => {
     const longitude = req.body.longitude ? Number(req.body.longitude) : null;
 
     const missingFields = [];
-    if (!identity_name) missingFields.push('full name on Ghana Card');
     if (!fda_registration_number) missingFields.push('FDA registration number');
     if (!Number.isInteger(years_farming) || years_farming < 0) missingFields.push('years farming');
     if (!crops_produced) missingFields.push('crops produced');
@@ -150,10 +146,6 @@ export const requestVerification = async (req, res) => {
     if (!photoUpload) return handleError(res, 400, 'Farmer photo is required');
     if (!fdaDocumentFile) return handleError(res, 400, 'FDA certificate is required');
 
-    const accountName = normalizeIdentityName([applicant.first_name, applicant.other_names, applicant.surname].filter(Boolean).join(' ') || applicant.name);
-    const submittedIdentityName = normalizeIdentityName(identity_name);
-    const nameMatchStatus = accountName && submittedIdentityName && (accountName === submittedIdentityName || accountName.includes(submittedIdentityName) || submittedIdentityName.includes(accountName)) ? 'matched' : 'mismatch';
-
     const submission = {
       user_id: userId,
       phone,
@@ -169,8 +161,6 @@ export const requestVerification = async (req, res) => {
       documents: uploaded,
       ghana_card_front_url: cardFrontFile ? uploaded.find((file) => file.name === cardFrontFile.originalname)?.url || `/uploads/${cardFrontFile.filename}` : null,
       ghana_card_back_url: cardBackFile ? uploaded.find((file) => file.name === cardBackFile.originalname)?.url || `/uploads/${cardBackFile.filename}` : null,
-      identity_name,
-      name_match_status: nameMatchStatus,
       years_farming,
       crops_produced,
       fda_registration_number,
