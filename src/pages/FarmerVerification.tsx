@@ -40,6 +40,7 @@ const FarmerVerification = () => {
   const [loading, setLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [cameraFacingMode, setCameraFacingMode] = useState<'user' | 'environment'>('user');
   const [error, setError] = useState('');
   const { toast } = useToast();
@@ -125,7 +126,10 @@ const FarmerVerification = () => {
   };
 
   const takePhoto = () => {
-    if (!canvasRef.current || !videoRef.current) return;
+    if (!canvasRef.current || !videoRef.current || !cameraReady || !videoRef.current.videoWidth || !videoRef.current.videoHeight) {
+      setError('Camera is still starting. Please wait a moment and try again.');
+      return;
+    }
     const context = canvasRef.current.getContext('2d');
     if (!context) return;
     canvasRef.current.width = videoRef.current.videoWidth;
@@ -135,6 +139,7 @@ const FarmerVerification = () => {
       if (blob) {
         setPhotoBlob(blob);
         setPhotoPreview(canvasRef.current!.toDataURL('image/jpeg'));
+        setCameraReady(false);
         setCameraActive(false);
         stopCamera();
       }
@@ -144,6 +149,7 @@ const FarmerVerification = () => {
   const retakePhoto = () => {
     setPhotoBlob(null);
     setPhotoPreview('');
+    setCameraReady(false);
     setCameraActive(true);
   };
 
@@ -153,7 +159,7 @@ const FarmerVerification = () => {
     if (step === 1) {
       if (!ghanaCardFront || !ghanaCardBack) return setError('Please upload clear images of the front and back of your Ghana Card');
     } else if (step === 2) {
-      if (!photoBlob) return setError('Please capture or select a clear selfie before continuing');
+      if (!photoBlob) return setError('Please capture a clear selfie before continuing');
     } else if (step === 3) {
       if (!fdaRegistrationNumber || !fdaDocument || !yearsFarming || !cropsProduced) return setError('Please complete your FDA, farming history, and crop details');
     }
@@ -277,23 +283,19 @@ const FarmerVerification = () => {
                   </div>
 
                   <p className="text-sm text-muted-foreground">Take a clear selfie in good lighting. Didit will check the selfie against your Ghana Card and perform liveness checks when you submit.</p>
-                  {!cameraActive && !photoPreview && <Button type="button" onClick={() => setCameraActive(true)} className="w-full">Open camera</Button>}
+                  {!cameraActive && !photoPreview && <Button type="button" onClick={() => { setError(''); setCameraReady(false); setCameraActive(true); }} className="w-full">Open camera</Button>}
                   {cameraActive && <div className="space-y-3">
-                    <video ref={videoRef} className="w-full rounded-lg border bg-black" autoPlay playsInline muted />
+                    <div className="mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-full border-4 border-green-500 bg-black shadow-lg">
+                      <video ref={videoRef} className="h-full w-full object-cover" autoPlay playsInline muted onCanPlay={() => setCameraReady(true)} />
+                    </div>
+                    <p className="text-center text-sm text-muted-foreground">{cameraReady ? 'Center your face inside the circle.' : 'Starting camera...'}</p>
                     <div className="flex gap-3">
-                      <Button type="button" onClick={takePhoto} className="flex-1">Take selfie</Button>
+                      <Button type="button" onClick={takePhoto} disabled={!cameraReady} className="flex-1">Take selfie</Button>
                       <Button type="button" variant="outline" onClick={() => setCameraActive(false)}>Cancel</Button>
                     </div>
                   </div>}
-                  {!cameraActive && <>
-                    <Label htmlFor="selfie">Or select a selfie</Label>
-                    <Input id="selfie" type="file" accept="image/*" capture="user" onChange={(e) => {
-                      const file = e.target.files?.[0] || null;
-                      setPhotoBlob(file);
-                      setPhotoPreview(file ? URL.createObjectURL(file) : '');
-                    }} />
-                  </>}
                   {photoPreview && <img src={photoPreview} alt="Selfie preview" className="max-h-64 w-full rounded-lg object-cover" />}
+                  <canvas ref={canvasRef} className="hidden" />
                 </div>
               )}
 
