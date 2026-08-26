@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS user_verifications (
   farm_name VARCHAR(200),
   farmers_association_address TEXT,
   ghana_card_number VARCHAR(50),
+  identity_name VARCHAR(200),
+  name_match_status VARCHAR(20),
   ghana_card_front_url TEXT,
   ghana_card_back_url TEXT,
   location_text TEXT,

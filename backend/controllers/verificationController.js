@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import { notifyVerificationSubmitted } from '../services/notificationService.js';
 import { supabase } from '../app.js';
-import { createDiditSession, getDiditDecision, verifyFarmerIdentity } from '../services/diditService.js';
 
 const handleError = (res, status, message, details) => {
   console.error(`[${status}] ${message}`, details);
@@ -21,22 +20,7 @@ const isValidGhanaCardNumber = (value) => {
   return /^GHA\d{10}$/.test(card) || /^\d{9,13}$/.test(card);
 };
 
-export const startDiditVerification = async (req, res) => {
-  try {
-    const userId = Number(req.params.id);
-    if (!req.session.user || req.session.user.id !== userId) return handleError(res, 403, 'You can only verify your own account');
-    const callbackBase = process.env.DIDIT_CALLBACK_URL || `${process.env.FRONTEND_URL || 'http://localhost:8080'}/verify-farmer`;
-    const callbackUrl = `${callbackBase}${callbackBase.includes('?') ? '&' : '?'}id=${userId}`;
-    if (process.env.NODE_ENV === 'production' && callbackUrl.includes('localhost')) {
-      return handleError(res, 500, 'DIDIT_CALLBACK_URL must be set to the deployed Vercel verification URL in production');
-    }
-    const result = await createDiditSession({ userId, callbackUrl });
-    req.session.diditVerification = { userId, sessionId: result.session_id };
-    res.json({ sessionId: result.session_id, verificationUrl: result.url || result.verification_url || result.session_url });
-  } catch (err) {
-    handleError(res, 502, 'Unable to start Didit verification', err.message);
-  }
-};
+const normalizeIdentityName = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const createStorageEntry = async (supabaseClient, bucketName, file) => {
   const buffer = fs.readFileSync(file.path);
@@ -105,19 +89,19 @@ export const requestVerification = async (req, res) => {
     const farm_name = req.body.farm_name || null;
     const farmers_association_address = req.body.farmers_association_address || null;
     const fda_registration_number = req.body.fda_registration_number || null;
+    const ghana_card_number = req.body.ghana_card_number || null;
+    const identity_name = String(req.body.identity_name || '').trim();
     const years_farming = req.body.years_farming ? Number(req.body.years_farming) : null;
     const crops_produced = req.body.crops_produced || null;
     const location_text = req.body.location_text || req.body.exact_location || applicant.digital_address || null;
-    // Custom capture uses the standalone Didit APIs; do not reuse an old hosted-session ID.
-    const diditSessionId = req.body.didit_session_id || null;
     const region = req.body.region || null;
     const district = req.body.district || null;
     const town_village = req.body.town_village || null;
     const latitude = req.body.latitude ? Number(req.body.latitude) : null;
     const longitude = req.body.longitude ? Number(req.body.longitude) : null;
 
-    if (!fda_registration_number || !Number.isInteger(years_farming) || years_farming < 0 || !crops_produced) {
-      return handleError(res, 400, 'FDA registration number, years farming, and crops produced are required');
+    if (!identity_name || !ghana_card_number || !isValidGhanaCardNumber(ghana_card_number) || !fda_registration_number || !Number.isInteger(years_farming) || years_farming < 0 || !crops_produced) {
+      return handleError(res, 400, 'Full name, Ghana Card number, FDA registration number, years farming, and crops produced are required');
     }
 
     if (phone && !isValidGhanaPhone(phone)) {
@@ -164,27 +148,12 @@ export const requestVerification = async (req, res) => {
       };
     }
 
-    if (!photoUpload && !diditSessionId) {
-      return handleError(res, 400, 'Farmer photo is required');
-    }
+    if (!photoUpload) return handleError(res, 400, 'Farmer photo is required');
     if (!fdaDocumentFile) return handleError(res, 400, 'FDA certificate is required');
 
-    let diditCheck = { configured: false, status: 'manual_review', requestId: null, result: null };
-    try {
-      if (diditSessionId) {
-        if (req.session.diditVerification?.userId !== userId || req.session.diditVerification?.sessionId !== diditSessionId) return handleError(res, 403, 'Invalid Didit verification session');
-        const decision = await getDiditDecision(diditSessionId);
-        const decisionStatus = String(decision.status || '').toLowerCase();
-        diditCheck = { configured: true, status: decisionStatus === 'approved' ? 'approved' : decisionStatus === 'declined' ? 'declined' : 'manual_review', requestId: diditSessionId, result: decision };
-      } else {
-        diditCheck = await verifyFarmerIdentity({ user: applicant, cardFrontFile, cardBackFile, selfieFile: photoFile });
-      }
-    } catch (providerError) {
-      console.error('Didit identity verification failed:', providerError.message);
-      return handleError(res, 502, `Identity verification failed: ${providerError.message}`, providerError.message);
-    }
-    if (diditCheck.status === 'declined') return handleError(res, 400, 'Identity verification failed. Ensure the card images are clear and the name matches your account.');
-    if (diditCheck.status === 'duplicate') return handleError(res, 409, 'This face is already linked to a farmer account.');
+    const accountName = normalizeIdentityName([applicant.first_name, applicant.other_names, applicant.surname].filter(Boolean).join(' ') || applicant.name);
+    const submittedIdentityName = normalizeIdentityName(identity_name);
+    const nameMatchStatus = accountName && submittedIdentityName && (accountName === submittedIdentityName || accountName.includes(submittedIdentityName) || submittedIdentityName.includes(accountName)) ? 'matched' : 'mismatch';
 
     const submission = {
       user_id: userId,
@@ -201,13 +170,16 @@ export const requestVerification = async (req, res) => {
       documents: uploaded,
       ghana_card_front_url: cardFrontFile ? uploaded.find((file) => file.name === cardFrontFile.originalname)?.url || `/uploads/${cardFrontFile.filename}` : null,
       ghana_card_back_url: cardBackFile ? uploaded.find((file) => file.name === cardBackFile.originalname)?.url || `/uploads/${cardBackFile.filename}` : null,
+      ghana_card_number,
+      identity_name,
+      name_match_status: nameMatchStatus,
       years_farming,
       crops_produced,
       fda_registration_number,
       fda_document_url: uploaded.find((file) => file.name === fdaDocumentFile?.originalname)?.url || (fdaDocumentFile ? `/uploads/${fdaDocumentFile.filename}` : null),
-      didit_request_id: diditCheck.requestId,
-      didit_status: diditCheck.status,
-      didit_result: diditCheck.result,
+      didit_request_id: null,
+      didit_status: null,
+      didit_result: null,
       status: 'pending',
       submitted_at: new Date().toISOString()
     };

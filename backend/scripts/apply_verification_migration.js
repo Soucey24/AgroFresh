@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS user_verifications (
 CREATE INDEX IF NOT EXISTS idx_user_verifications_user_id ON user_verifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_verifications_status ON user_verifications(status);
 CREATE INDEX IF NOT EXISTS idx_user_verifications_submitted_at ON user_verifications(submitted_at);
+
+ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS identity_name VARCHAR(200);
+ALTER TABLE user_verifications ADD COLUMN IF NOT EXISTS name_match_status VARCHAR(20);
 `;
 
 async function run() {
