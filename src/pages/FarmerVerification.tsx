@@ -47,6 +47,38 @@ const FarmerVerification = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Didit redirects to this route, either in the iframe or as the top-level page.
+  useEffect(() => {
+    const callbackParams = new URLSearchParams(search);
+    const callbackStatus = callbackParams.get('status') || callbackParams.get('verification_status') || callbackParams.get('decision');
+    const callbackSessionId = callbackParams.get('session_id') || callbackParams.get('sessionId');
+    const normalizedStatus = callbackStatus?.toLowerCase();
+    const completeDiditVerification = (sessionId?: string) => {
+      if (sessionId) setDiditSessionId(sessionId);
+      setDiditCompleted(true);
+      setError('');
+      setStep(2);
+      toast({ title: 'Didit verification completed', description: 'Continue with your farmer details.' });
+    };
+
+    const handleDiditMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.data?.type !== 'didit-verification-complete') return;
+      completeDiditVerification(event.data.sessionId);
+    };
+
+    window.addEventListener('message', handleDiditMessage);
+    if (['approved', 'success', 'completed', 'pass', 'passed'].includes(normalizedStatus || '')) {
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'didit-verification-complete', sessionId: callbackSessionId }, window.location.origin);
+      }
+      completeDiditVerification(callbackSessionId || undefined);
+    } else if (['declined', 'failed', 'rejected', 'error', 'fail'].includes(normalizedStatus || '')) {
+      setError('Didit verification was not approved. Please try again.');
+    }
+
+    return () => window.removeEventListener('message', handleDiditMessage);
+  }, [search, toast]);
+
   // Camera setup & cleanup
   useEffect(() => {
     if (!cameraActive || step !== 2) return;
@@ -256,7 +288,6 @@ const FarmerVerification = () => {
                     {!diditUrl && <Button type="button" onClick={handleStartDidit} disabled={loading} className="w-full">{loading ? 'Starting verification...' : 'Start secure verification'}</Button>}
                     {diditUrl && <>
                       <iframe title="Didit identity verification" src={diditUrl} className="h-[560px] w-full rounded-lg border bg-background" allow="camera; microphone" />
-                      <Button type="button" variant={diditCompleted ? 'default' : 'outline'} className="w-full" onClick={() => setDiditCompleted(true)}>{diditCompleted ? 'Didit verification completed' : 'I completed verification'}</Button>
                     </>}
                   </div>
                   {/* Voice guidance removed */}
