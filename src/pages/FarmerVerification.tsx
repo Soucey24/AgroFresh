@@ -247,12 +247,12 @@ const FarmerVerification = () => {
                     <div>
                       <h3 className="text-xl font-semibold">Secure identity verification</h3>
                       <p className="text-sm text-muted-foreground">
-                        Complete the Didit identity check below. It includes Ghana Card and face verification.
+                        Verify your identity with your Ghana Card and a selfie on this device.
                       </p>
                     </div>
                   </div>
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
-                    <p className="font-medium text-primary">Identity documents</p>
+                    <p className="font-medium text-primary">Ghana Card verification</p>
                     <p className="text-sm text-muted-foreground">Upload clear images of both sides of your Ghana Card. AgroFresh sends them securely to Didit for verification.</p>
                     <Label htmlFor="ghana-card-front">Ghana Card front</Label>
                     <Input id="ghana-card-front" type="file" accept="image/*" onChange={(e) => setGhanaCardFront(e.target.files?.[0] || null)} />
