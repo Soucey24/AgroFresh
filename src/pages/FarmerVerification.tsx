@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MapPin, Camera, IdCard, MapPinPlus, Check, ChevronRight, X, Loader2 } from 'lucide-react';
 import BackgroundSlideshow from '@/components/BackgroundSlideshow';
-import { createFarmerVerification, startDiditVerification } from '../api_verification';
+import { createFarmerVerification } from '../api_verification';
 import { getProfile } from '@/api';
 import { useToast } from '@/hooks/use-toast';
 
@@ -20,8 +20,8 @@ const FarmerVerification = () => {
   // Wizard state
   const [step, setStep] = useState(1);
   const [phone, setPhone] = useState(prefilledPhone);
-  const [ghanaCardNumber, setGhanaCardNumber] = useState('');
-  const [diditSessionId, setDiditSessionId] = useState('');
+  const [ghanaCardFront, setGhanaCardFront] = useState<File | null>(null);
+  const [ghanaCardBack, setGhanaCardBack] = useState<File | null>(null);
   const [diditCompleted, setDiditCompleted] = useState(false);
   const [fdaDocument, setFdaDocument] = useState<File | null>(null);
   const [fdaRegistrationNumber, setFdaRegistrationNumber] = useState('');
@@ -63,38 +63,6 @@ const FarmerVerification = () => {
       mounted = false;
     };
   }, [navigate, userId]);
-
-  // Didit redirects to this route, either in the iframe or as the top-level page.
-  useEffect(() => {
-    const callbackParams = new URLSearchParams(search);
-    const callbackStatus = callbackParams.get('status') || callbackParams.get('verification_status') || callbackParams.get('decision');
-    const callbackSessionId = callbackParams.get('session_id') || callbackParams.get('sessionId');
-    const normalizedStatus = callbackStatus?.toLowerCase();
-    const completeDiditVerification = (sessionId?: string) => {
-      if (sessionId) setDiditSessionId(sessionId);
-      setDiditCompleted(true);
-      setError('');
-      setStep(2);
-      toast({ title: 'Didit verification completed', description: 'Continue with your farmer details.' });
-    };
-
-    const handleDiditMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin || event.data?.type !== 'didit-verification-complete') return;
-      completeDiditVerification(event.data.sessionId);
-    };
-
-    window.addEventListener('message', handleDiditMessage);
-    if (['approved', 'success', 'completed', 'pass', 'passed'].includes(normalizedStatus || '')) {
-      if (window.parent !== window) {
-        window.parent.postMessage({ type: 'didit-verification-complete', sessionId: callbackSessionId }, window.location.origin);
-      }
-      completeDiditVerification(callbackSessionId || undefined);
-    } else if (['declined', 'failed', 'rejected', 'error', 'fail'].includes(normalizedStatus || '')) {
-      setError('Didit verification was not approved. Please try again.');
-    }
-
-    return () => window.removeEventListener('message', handleDiditMessage);
-  }, [search, toast]);
 
   // Camera setup & cleanup
   useEffect(() => {
@@ -183,9 +151,9 @@ const FarmerVerification = () => {
 
   const goNext = () => {
     if (step === 1) {
-      if (!diditCompleted) return setError('Please complete Didit verification before continuing');
+      if (!ghanaCardFront || !ghanaCardBack) return setError('Please upload clear images of the front and back of your Ghana Card');
     } else if (step === 2) {
-      if (!diditCompleted) return setError('Please complete Didit face verification before continuing');
+      if (!photoBlob) return setError('Please capture or select a clear selfie before continuing');
     } else if (step === 3) {
       if (!fdaRegistrationNumber || !fdaDocument || !yearsFarming || !cropsProduced) return setError('Please complete your FDA, farming history, and crop details');
     }
@@ -206,7 +174,7 @@ const FarmerVerification = () => {
     e.preventDefault();
     setError('');
     if (!userId) return setError('Missing user id');
-    if (!diditCompleted || !diditSessionId || !fdaDocument || !fdaRegistrationNumber || !yearsFarming || !cropsProduced) {
+    if (!ghanaCardFront || !ghanaCardBack || !photoBlob || !fdaDocument || !fdaRegistrationNumber || !yearsFarming || !cropsProduced) {
       return setError('Please complete all steps');
     }
 
@@ -215,7 +183,8 @@ const FarmerVerification = () => {
       const form = new FormData();
       form.append('user_id', String(userId || ''));
       form.append('phone', phone);
-      if (diditSessionId) form.append('didit_session_id', diditSessionId);
+      form.append('ghana_card_front', ghanaCardFront);
+      form.append('ghana_card_back', ghanaCardBack);
       form.append('fda_document', fdaDocument);
       form.append('fda_registration_number', fdaRegistrationNumber.trim());
       form.append('years_farming', yearsFarming);
@@ -235,7 +204,8 @@ const FarmerVerification = () => {
         toast({ title: 'Saved locally', description: `Verification saved to server fallback: ${res.path || 'server'}` });
         setTimeout(() => navigate('/farmers'), 1400);
       } else if (res.success) {
-        toast({ title: 'Verification submitted', description: 'Your verification is pending review' });
+        setDiditCompleted(true);
+        toast({ title: 'Verification submitted', description: 'Your identity was checked and your application is pending review.' });
         setTimeout(() => navigate('/farmers'), 1200);
       } else {
         // Unexpected response
@@ -244,23 +214,6 @@ const FarmerVerification = () => {
       }
     } catch (err: any) {
       setError(err?.message || 'Submission error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleStartDidit = async () => {
-    if (!userId) return setError('Missing user id');
-    setLoading(true);
-    setError('');
-    try {
-      const result = await startDiditVerification(Number(userId));
-      if (result.error || !result.verificationUrl) throw new Error(result.error || 'Didit did not return a verification URL');
-      setDiditSessionId(result.sessionId);
-      setDiditCompleted(false);
-      window.location.assign(result.verificationUrl);
-    } catch (error: any) {
-      setError(error.message || 'Unable to start identity verification');
     } finally {
       setLoading(false);
     }
@@ -299,9 +252,12 @@ const FarmerVerification = () => {
                     </div>
                   </div>
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
-                    <p className="font-medium text-primary">Use secure Didit verification</p>
-                    <p className="text-sm text-muted-foreground">Continue securely on this device using its camera. You will return here automatically when finished.</p>
-                    <Button type="button" onClick={handleStartDidit} disabled={loading} className="w-full">{loading ? 'Starting verification...' : 'Continue on this device'}</Button>
+                    <p className="font-medium text-primary">Identity documents</p>
+                    <p className="text-sm text-muted-foreground">Upload clear images of both sides of your Ghana Card. AgroFresh sends them securely to Didit for verification.</p>
+                    <Label htmlFor="ghana-card-front">Ghana Card front</Label>
+                    <Input id="ghana-card-front" type="file" accept="image/*" onChange={(e) => setGhanaCardFront(e.target.files?.[0] || null)} />
+                    <Label htmlFor="ghana-card-back">Ghana Card back</Label>
+                    <Input id="ghana-card-back" type="file" accept="image/*" onChange={(e) => setGhanaCardBack(e.target.files?.[0] || null)} />
                   </div>
                   {/* Voice guidance removed */}
                 </div>
@@ -320,9 +276,24 @@ const FarmerVerification = () => {
                     </div>
                   </div>
 
-                  <div className={`rounded-lg border p-4 text-sm ${diditCompleted ? 'border-green-300 bg-green-50 text-green-800' : 'border-amber-300 bg-amber-50 text-amber-800'}`}>
-                    {diditCompleted ? 'Didit completed the face, liveness, and identity checks.' : 'Complete the Didit verification in Step 1 to continue.'}
-                  </div>
+                  <p className="text-sm text-muted-foreground">Take a clear selfie in good lighting. Didit will check the selfie against your Ghana Card and perform liveness checks when you submit.</p>
+                  {!cameraActive && !photoPreview && <Button type="button" onClick={() => setCameraActive(true)} className="w-full">Open camera</Button>}
+                  {cameraActive && <div className="space-y-3">
+                    <video ref={videoRef} className="w-full rounded-lg border bg-black" autoPlay playsInline muted />
+                    <div className="flex gap-3">
+                      <Button type="button" onClick={takePhoto} className="flex-1">Take selfie</Button>
+                      <Button type="button" variant="outline" onClick={() => setCameraActive(false)}>Cancel</Button>
+                    </div>
+                  </div>}
+                  {!cameraActive && <>
+                    <Label htmlFor="selfie">Or select a selfie</Label>
+                    <Input id="selfie" type="file" accept="image/*" capture="user" onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      setPhotoBlob(file);
+                      setPhotoPreview(file ? URL.createObjectURL(file) : '');
+                    }} />
+                  </>}
+                  {photoPreview && <img src={photoPreview} alt="Selfie preview" className="max-h-64 w-full rounded-lg object-cover" />}
                 </div>
               )}
 
