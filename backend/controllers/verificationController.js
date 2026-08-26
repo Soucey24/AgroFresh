@@ -15,11 +15,6 @@ const isValidGhanaPhone = (value) => {
   return /^(?:\+233|233|0)(?:20|24|26|27|50|54|55|59)\d{7,8}$/.test(phone);
 };
 
-const isValidGhanaCardNumber = (value) => {
-  const card = String(value || '').trim().toUpperCase().replace(/[\s-]/g, '');
-  return /^GHA\d{10}$/.test(card) || /^\d{9,13}$/.test(card);
-};
-
 const normalizeIdentityName = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const createStorageEntry = async (supabaseClient, bucketName, file) => {
@@ -88,11 +83,10 @@ export const requestVerification = async (req, res) => {
 
     const farm_name = req.body.farm_name || null;
     const farmers_association_address = req.body.farmers_association_address || null;
-    const fda_registration_number = req.body.fda_registration_number || null;
-    const ghana_card_number = req.body.ghana_card_number || null;
+    const fda_registration_number = String(req.body.fda_registration_number || '').trim();
     const identity_name = String(req.body.identity_name || '').trim();
-    const years_farming = req.body.years_farming ? Number(req.body.years_farming) : null;
-    const crops_produced = req.body.crops_produced || null;
+    const years_farming = req.body.years_farming === undefined || req.body.years_farming === '' ? null : Number(req.body.years_farming);
+    const crops_produced = String(req.body.crops_produced || '').trim();
     const location_text = req.body.location_text || req.body.exact_location || applicant.digital_address || null;
     const region = req.body.region || null;
     const district = req.body.district || null;
@@ -100,8 +94,13 @@ export const requestVerification = async (req, res) => {
     const latitude = req.body.latitude ? Number(req.body.latitude) : null;
     const longitude = req.body.longitude ? Number(req.body.longitude) : null;
 
-    if (!identity_name || !ghana_card_number || !isValidGhanaCardNumber(ghana_card_number) || !fda_registration_number || !Number.isInteger(years_farming) || years_farming < 0 || !crops_produced) {
-      return handleError(res, 400, 'Full name, Ghana Card number, FDA registration number, years farming, and crops produced are required');
+    const missingFields = [];
+    if (!identity_name) missingFields.push('full name on Ghana Card');
+    if (!fda_registration_number) missingFields.push('FDA registration number');
+    if (!Number.isInteger(years_farming) || years_farming < 0) missingFields.push('years farming');
+    if (!crops_produced) missingFields.push('crops produced');
+    if (missingFields.length) {
+      return handleError(res, 400, `${missingFields.join(', ')} ${missingFields.length === 1 ? 'is' : 'are'} required`);
     }
 
     if (phone && !isValidGhanaPhone(phone)) {
@@ -170,7 +169,6 @@ export const requestVerification = async (req, res) => {
       documents: uploaded,
       ghana_card_front_url: cardFrontFile ? uploaded.find((file) => file.name === cardFrontFile.originalname)?.url || `/uploads/${cardFrontFile.filename}` : null,
       ghana_card_back_url: cardBackFile ? uploaded.find((file) => file.name === cardBackFile.originalname)?.url || `/uploads/${cardBackFile.filename}` : null,
-      ghana_card_number,
       identity_name,
       name_match_status: nameMatchStatus,
       years_farming,

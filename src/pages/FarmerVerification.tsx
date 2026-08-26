@@ -22,7 +22,6 @@ const FarmerVerification = () => {
   const [phone, setPhone] = useState(prefilledPhone);
   const [ghanaCardFront, setGhanaCardFront] = useState<File | null>(null);
   const [ghanaCardBack, setGhanaCardBack] = useState<File | null>(null);
-  const [ghanaCardNumber, setGhanaCardNumber] = useState('');
   const [identityName, setIdentityName] = useState('');
   const [diditCompleted, setDiditCompleted] = useState(false);
   const [fdaDocument, setFdaDocument] = useState<File | null>(null);
@@ -159,7 +158,7 @@ const FarmerVerification = () => {
 
   const goNext = () => {
     if (step === 1) {
-      if (!identityName || !ghanaCardNumber || !ghanaCardFront || !ghanaCardBack) return setError('Please enter your Ghana Card name and number and upload both card images');
+      if (!identityName || !ghanaCardFront || !ghanaCardBack) return setError('Please enter your name and upload both Ghana Card images');
     } else if (step === 2) {
       if (!photoBlob) return setError('Please capture a clear selfie before continuing');
     } else if (step === 3) {
@@ -182,7 +181,7 @@ const FarmerVerification = () => {
     e.preventDefault();
     setError('');
     if (!userId) return setError('Missing user id');
-    if (!identityName || !ghanaCardNumber || !ghanaCardFront || !ghanaCardBack || !photoBlob || !fdaDocument || !fdaRegistrationNumber || !yearsFarming || !cropsProduced) {
+    if (!identityName || !ghanaCardFront || !ghanaCardBack || !photoBlob || !fdaDocument || !fdaRegistrationNumber || !yearsFarming || !cropsProduced) {
       return setError('Please complete all steps');
     }
 
@@ -193,7 +192,6 @@ const FarmerVerification = () => {
       form.append('phone', phone);
       form.append('ghana_card_front', ghanaCardFront);
       form.append('ghana_card_back', ghanaCardBack);
-      form.append('ghana_card_number', ghanaCardNumber.trim());
       form.append('identity_name', identityName.trim());
       form.append('fda_document', fdaDocument);
       form.append('fda_registration_number', fdaRegistrationNumber.trim());
@@ -263,11 +261,9 @@ const FarmerVerification = () => {
                   </div>
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
                     <p className="font-medium text-primary">Ghana Card verification</p>
-                    <p className="text-sm text-muted-foreground">Enter the details shown on your Ghana Card and upload clear images of both sides. AgroFresh will compare the name with your account and review the images.</p>
+                    <p className="text-sm text-muted-foreground">Enter the name shown on your Ghana Card and upload clear images of both sides. AgroFresh will compare the name with your account and review the images.</p>
                     <Label htmlFor="identity-name">Full name on Ghana Card</Label>
                     <Input id="identity-name" value={identityName} onChange={(e) => setIdentityName(e.target.value)} placeholder="Name exactly as shown on card" />
-                    <Label htmlFor="ghana-card-number">Ghana Card number</Label>
-                    <Input id="ghana-card-number" value={ghanaCardNumber} onChange={(e) => setGhanaCardNumber(e.target.value)} placeholder="GHA-000000000-0" />
                     <Label htmlFor="ghana-card-front">Ghana Card front</Label>
                     <Input id="ghana-card-front" type="file" accept="image/*" onChange={(e) => setGhanaCardFront(e.target.files?.[0] || null)} />
                     <Label htmlFor="ghana-card-back">Ghana Card back</Label>
