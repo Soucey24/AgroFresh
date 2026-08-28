@@ -153,12 +153,18 @@ const Verifications = () => {
                     {application.photo_url ? (
                       <div className="rounded-lg border border-border/50 p-3">
                         <p className="mb-3 text-xs uppercase tracking-wide text-muted-foreground">Profile Photo</p>
-                        <img
-                          src={application.photo_url}
-                          alt="Farmer verification photo"
-                          className="h-52 w-full cursor-zoom-in rounded-lg object-cover border border-border/50"
+                        <button
+                          type="button"
+                          className="block w-full max-w-[220px] overflow-hidden rounded-lg border border-border/50 bg-muted/20 text-left"
                           onClick={() => setPreviewImage({ url: application.photo_url, name: 'Farmer verification photo' })}
-                        />
+                          aria-label="View farmer verification photo"
+                        >
+                          <img
+                            src={application.photo_url}
+                            alt="Farmer verification photo"
+                            className="aspect-square w-full cursor-zoom-in object-cover"
+                          />
+                        </button>
                       </div>
                     ) : null}
 
@@ -178,13 +184,13 @@ const Verifications = () => {
                                   <img
                                     src={doc.url}
                                     alt={documentName}
-                                    className="h-48 w-full cursor-zoom-in object-contain bg-background p-2"
+                                    className="aspect-[4/3] w-full cursor-zoom-in object-contain bg-background p-2"
                                     onClick={() => setPreviewImage({ url: doc.url, name: documentName })}
                                   />
                                 ) : isPdf && doc.url ? (
-                                  <iframe title={documentName} src={doc.url} className="h-48 w-full bg-background" />
+                                  <iframe title={documentName} src={doc.url} className="aspect-[4/3] w-full bg-background" />
                                 ) : (
-                                  <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
+                                  <div className="flex aspect-[4/3] flex-col items-center justify-center gap-2 text-muted-foreground">
                                     <FileText className="h-10 w-10" />
                                     <span className="text-xs">Preview unavailable</span>
                                   </div>
