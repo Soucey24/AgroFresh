@@ -3,6 +3,7 @@ import { Clock3, FileText, MapPin, Phone, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { approveFarmerVerification, getPendingFarmerVerifications, rejectFarmerVerification } from "@/api";
 
@@ -10,6 +11,7 @@ const Verifications = () => {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<number | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
 
   const fetchApplications = async () => {
     setLoading(true);
@@ -154,7 +156,8 @@ const Verifications = () => {
                         <img
                           src={application.photo_url}
                           alt="Farmer verification photo"
-                          className="h-52 w-full rounded-lg object-cover border border-border/50"
+                          className="h-52 w-full cursor-zoom-in rounded-lg object-cover border border-border/50"
+                          onClick={() => setPreviewImage({ url: application.photo_url, name: 'Farmer verification photo' })}
                         />
                       </div>
                     ) : null}
@@ -172,7 +175,12 @@ const Verifications = () => {
                               <div key={`${documentName}-${index}`} className="overflow-hidden rounded-lg border border-border/50 bg-muted/20">
                                 <div className="border-b border-border/50 px-3 py-2 text-sm font-medium truncate" title={documentName}>{documentName}</div>
                                 {isImage && doc.url ? (
-                                  <img src={doc.url} alt={documentName} className="h-48 w-full object-contain bg-background p-2" />
+                                  <img
+                                    src={doc.url}
+                                    alt={documentName}
+                                    className="h-48 w-full cursor-zoom-in object-contain bg-background p-2"
+                                    onClick={() => setPreviewImage({ url: doc.url, name: documentName })}
+                                  />
                                 ) : isPdf && doc.url ? (
                                   <iframe title={documentName} src={doc.url} className="h-48 w-full bg-background" />
                                 ) : (
@@ -184,6 +192,18 @@ const Verifications = () => {
                               </div>
                             );
                           })}
+                          <Dialog open={Boolean(previewImage)} onOpenChange={(open) => !open && setPreviewImage(null)}>
+                            <DialogContent className="max-w-5xl p-4">
+                              <DialogTitle>{previewImage?.name || 'Image preview'}</DialogTitle>
+                              {previewImage && (
+                                <img
+                                  src={previewImage.url}
+                                  alt={previewImage.name}
+                                  className="max-h-[75vh] w-full object-contain"
+                                />
+                              )}
+                            </DialogContent>
+                          </Dialog>
                         </div>
                       </div>
                     ) : null}
