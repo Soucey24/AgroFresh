@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Clock3, MapPin, Phone, ShieldCheck, XCircle } from "lucide-react";
+import { Clock3, FileText, MapPin, Phone, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -121,16 +121,6 @@ const Verifications = () => {
                         <p className="mt-1 font-medium flex items-center gap-2"><Phone className="h-4 w-4 text-primary" /> {application.phone || '—'}</p>
                       </div>
 
-                      <div className="rounded-lg border border-border/50 p-3">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Ghana Card</p>
-                        <p className="mt-1 font-medium">{application.ghana_card_number || '—'}</p>
-                      </div>
-
-                      <div className="rounded-lg border border-border/50 p-3">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Farm Name</p>
-                        <p className="mt-1 font-medium">{application.farm_name || '—'}</p>
-                      </div>
-
                       <div className="rounded-lg border border-border/50 p-3 md:col-span-2 xl:col-span-2">
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">Association / Place</p>
                         <p className="mt-1 font-medium flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" /> {application.farmers_association_address || application.location_text || '—'}</p>
@@ -139,8 +129,14 @@ const Verifications = () => {
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="rounded-lg border border-border/50 p-3">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Farm and crop details</p>
+                        <p className="mt-1 font-medium">Crops: {application.crops_produced || '—'}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">Years farming: {application.years_farming ?? '—'} · FDA: {application.fda_registration_number || '—'}</p>
+                      </div>
+
+                      <div className="rounded-lg border border-border/50 p-3">
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">Location</p>
-                        <p className="mt-1 font-medium">{application.location_text || '—'}</p>
+                        <p className="mt-1 font-medium">{[application.region, application.district, application.town_village].filter(Boolean).join(', ') || application.location_text || '—'}</p>
                         <p className="mt-2 text-sm text-muted-foreground">
                           Lat: {application.latitude ?? '—'} · Lng: {application.longitude ?? '—'}
                         </p>
@@ -166,18 +162,28 @@ const Verifications = () => {
                     {docs.length > 0 ? (
                       <div className="rounded-lg border border-border/50 p-3">
                         <p className="mb-3 text-xs uppercase tracking-wide text-muted-foreground">Supporting Documents</p>
-                        <div className="flex flex-wrap gap-2">
-                          {docs.map((doc, index) => (
-                            <a
-                              key={`${doc.name || 'doc'}-${index}`}
-                              href={doc.url || '#'}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="rounded-md border border-border/50 bg-muted/30 px-3 py-2 text-sm hover:bg-muted/60"
-                            >
-                              {doc.name || `Document ${index + 1}`}
-                            </a>
-                          ))}
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                          {docs.map((doc, index) => {
+                            const documentName = doc.name || `Document ${index + 1}`;
+                            const isImage = /^image\//i.test(doc.mimeType || doc.mimetype || '') || /\.(jpe?g|png|webp|gif)$/i.test(documentName);
+                            const isPdf = /\.pdf$/i.test(documentName) || doc.mimeType === 'application/pdf' || doc.mimetype === 'application/pdf';
+
+                            return (
+                              <div key={`${documentName}-${index}`} className="overflow-hidden rounded-lg border border-border/50 bg-muted/20">
+                                <div className="border-b border-border/50 px-3 py-2 text-sm font-medium truncate" title={documentName}>{documentName}</div>
+                                {isImage && doc.url ? (
+                                  <img src={doc.url} alt={documentName} className="h-48 w-full object-contain bg-background p-2" />
+                                ) : isPdf && doc.url ? (
+                                  <iframe title={documentName} src={doc.url} className="h-48 w-full bg-background" />
+                                ) : (
+                                  <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
+                                    <FileText className="h-10 w-10" />
+                                    <span className="text-xs">Preview unavailable</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     ) : null}
