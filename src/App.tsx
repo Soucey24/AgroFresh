@@ -24,6 +24,7 @@ import BuyerOrders from "./pages/BuyerOrders";
 import FarmerOrders from "./pages/FarmerOrders";
 import Settings from "./pages/admin/Settings";
 import Verifications from "./pages/admin/Verifications";
+import Reports from "./pages/admin/Reports";
 import FarmerInsights from "./pages/FarmerInsights";
 import FarmerVerification from "./pages/FarmerVerification";
 import FarmerQuickActionPage from "./pages/FarmerQuickActionPage";
@@ -55,6 +56,7 @@ const App = () => (
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/verifications" element={<Verifications />} />
+          <Route path="/admin/reports" element={<Reports />} />
           <Route path="/admin/crops" element={<AdminCrops />} />
           <Route path="/admin/orders" element={<AdminOrders />} />
           <Route path="/admin/payments" element={<AdminPayments />} />

@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   ShieldCheck,
+  FileBarChart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -33,6 +34,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/admin/users", icon: Users, label: "Users" },
     { href: "/admin/verifications", icon: ShieldCheck, label: "Approvals" },
+    { href: "/admin/reports", icon: FileBarChart, label: "Reports" },
     { href: "/admin/crops", icon: Package, label: "Crops" },
     { href: "/admin/orders", icon: ShoppingCart, label: "Orders" },
     { href: "/admin/payments", icon: CreditCard, label: "Payments" },
