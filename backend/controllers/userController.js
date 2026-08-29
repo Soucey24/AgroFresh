@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { supabase } from '../app.js';
+import { uploadToSupabaseStorage, getStorageFallbackUrl } from '../services/storageService.js';
 
 const allowedRoles = new Set(['farmer', 'buyer', 'vendor', 'admin']);
 
@@ -153,7 +154,10 @@ export const updateUser = async (req, res) => {
 		if (current.role === 'farmer' && payout_provider !== undefined) updatePayload.payout_provider = payout_provider;
 		if (current.role === 'farmer' && payout_account_name !== undefined) updatePayload.payout_account_name = payout_account_name;
 		if (current.role === 'farmer' && payout_account_number !== undefined) updatePayload.payout_account_number = payout_account_number;
-		if (req.file) updatePayload.avatar = `/uploads/${req.file.filename}`;
+		if (req.file) {
+			const storageResult = await uploadToSupabaseStorage(req.file, 'avatars');
+			updatePayload.avatar = storageResult?.url || getStorageFallbackUrl(req.file);
+		}
 
 		if (['admin', 'vendor'].includes(current.role)) {
 			if (status !== undefined) updatePayload.status = status;
@@ -218,7 +222,8 @@ export const uploadAvatar = async (req, res) => {
 		if (!req.session.user) return handleError(res, 401, 'Not authenticated');
 		if (!req.file) return handleError(res, 400, 'No file uploaded');
 
-		const avatarPath = `/uploads/${req.file.filename}`;
+		const storageResult = await uploadToSupabaseStorage(req.file, 'avatars');
+		const avatarPath = storageResult?.url || getStorageFallbackUrl(req.file);
 		const { error } = await supabase
 			.from('users')
 			.update({ avatar: avatarPath })

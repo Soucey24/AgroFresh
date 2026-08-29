@@ -2,6 +2,7 @@ import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { uploadToSupabaseStorage, getStorageFallbackUrl } from '../services/storageService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,7 +21,11 @@ const storage = multer.diskStorage({
 
 export const upload = multer({ storage });
 
-export const uploadFile = (req, res) => {
+export const uploadFile = async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  res.json({ filename: req.file.filename, url: `/uploads/${req.file.filename}` });
+
+  const storageResult = await uploadToSupabaseStorage(req.file, 'uploads');
+  const imageUrl = storageResult?.url || getStorageFallbackUrl(req.file);
+
+  res.json({ filename: req.file.filename, url: imageUrl });
 }; 

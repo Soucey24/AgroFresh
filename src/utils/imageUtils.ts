@@ -13,7 +13,13 @@ export function getImageUrl(imagePath: string | null | undefined): string | null
     return normalizedPath;
   }
 
-  const backendBase = (import.meta.env.VITE_API_URL || 'https://agrofresh-2uom.onrender.com').replace(/\/+$/, '');
+  const backendBase = (() => {
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
+      return import.meta.env.VITE_API_URL;
+    }
+    return 'https://agrofresh-2uom.onrender.com';
+  })().replace(/\/+$/, '');
+
   const safePath = normalizedPath.replace(/\\/g, '/').replace(/^\/+/, '');
 
   if (!safePath) return null;

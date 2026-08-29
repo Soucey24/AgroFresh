@@ -2,6 +2,7 @@ import { supabase } from '../app.js';
 import MLService from '../services/mlService.js';
 import { isFarmerApproved } from '../middleware/auth.js';
 import { notifyCropDecision, notifyCropSubmitted } from '../services/notificationService.js';
+import { uploadToSupabaseStorage, getStorageFallbackUrl } from '../services/storageService.js';
 
 const handleError = (res, status, message, details) => {
   console.error(`[${status}] ${message}`, details);
@@ -194,7 +195,8 @@ export const createCrop = async (req, res) => {
 
     let image = null;
     if (req.file) {
-      image = `/uploads/${req.file.filename}`;
+      const storageResult = await uploadToSupabaseStorage(req.file, 'crops');
+      image = storageResult?.url || getStorageFallbackUrl(req.file);
     } else if (req.body.image) {
       image = req.body.image;
     }
@@ -375,7 +377,8 @@ export const updateCrop = async (req, res) => {
 
     let image = null;
     if (req.file) {
-      image = `/uploads/${req.file.filename}`;
+      const storageResult = await uploadToSupabaseStorage(req.file, 'crops');
+      image = storageResult?.url || getStorageFallbackUrl(req.file);
     } else if (req.body.image) {
       image = req.body.image;
     }
