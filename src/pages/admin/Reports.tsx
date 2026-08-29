@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import AdminLayout from "@/components/admin/AdminLayout";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   getCropStats,
   getDashboardStats,
@@ -98,6 +100,69 @@ const Reports = () => {
     URL.revokeObjectURL(url);
   };
 
+  const exportPdfReport = () => {
+    if (!report) return;
+
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text("AgroFresh System Report", 14, 18);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 26);
+
+    const summaryRows = [
+      ["Metric", "Value"],
+      ["Total Users", numberValue(report.dashboard.totalUsers)],
+      ["Active Listings", numberValue(report.dashboard.activeListings)],
+      ["Orders Today", numberValue(report.dashboard.ordersToday)],
+      ["Completed Revenue", moneyValue(report.payments.completed.amount)],
+      ["Total Payments", numberValue(report.payments.totalPayments)],
+      ["Completed Orders", numberValue(report.orders.completed)],
+      ["Pending Orders", numberValue(report.orders.pending)],
+      ["In Transit Orders", numberValue(report.orders.inTransit)],
+      ["Cancelled Orders", numberValue(report.orders.cancelled)],
+      ["Pending Approvals", numberValue(report.approvals.length)],
+      ["Expiring Listings", numberValue(report.crops.expiringSoon)],
+      ["Expired Listings", numberValue(report.crops.expired)],
+    ];
+
+    autoTable(doc, {
+      head: [summaryRows[0]],
+      body: summaryRows.slice(1),
+      startY: 32,
+      theme: "grid",
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [32, 139, 75] },
+    });
+
+    const userRoleRows = Object.entries(userCounts).map(([role, count]) => [role, numberValue(count)]);
+    const activityRows = report.activity.slice(0, 5).map((item) => [item.action || "Activity", item.name || "-", item.created_at ? new Date(item.created_at).toLocaleDateString() : "-"]);
+
+    const finalY = (doc as any).lastAutoTable?.finalY || 32;
+    doc.setFontSize(12);
+    doc.text("User Breakdown", 14, finalY + 12);
+    autoTable(doc, {
+      head: [["Role", "Count"]],
+      body: userRoleRows.length ? userRoleRows : [["No data", "0"]],
+      startY: finalY + 18,
+      theme: "grid",
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [32, 139, 75] },
+    });
+
+    const activityY = (doc as any).lastAutoTable?.finalY || finalY + 18;
+    doc.text("Recent Activity", 14, activityY + 12);
+    autoTable(doc, {
+      head: [["Activity", "Name", "Date"]],
+      body: activityRows.length ? activityRows : [["No activity", "-", "-"]],
+      startY: activityY + 18,
+      theme: "grid",
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [32, 139, 75] },
+    });
+
+    doc.save(`agrofresh-system-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
   const userCounts = report?.users.reduce((counts: Record<string, number>, user: ReportUser) => {
     const role = user.role || "unknown";
     counts[role] = (counts[role] || 0) + 1;
@@ -124,7 +189,7 @@ const Reports = () => {
       <div className="space-y-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div><h1 className="text-3xl font-bold">System Reports</h1><p className="text-muted-foreground">A live operational view of users, listings, orders, payments, and approvals.</p></div>
-          <div className="flex gap-2"><Button variant="outline" onClick={loadReport}><RefreshCw className="mr-2 h-4 w-4" /> Refresh</Button><Button onClick={exportReport}><Download className="mr-2 h-4 w-4" /> Export CSV</Button></div>
+          <div className="flex gap-2"><Button variant="outline" onClick={loadReport}><RefreshCw className="mr-2 h-4 w-4" /> Refresh</Button><Button variant="secondary" onClick={exportReport}><Download className="mr-2 h-4 w-4" /> Export CSV</Button><Button onClick={exportPdfReport}><Download className="mr-2 h-4 w-4" /> Export PDF</Button></div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
