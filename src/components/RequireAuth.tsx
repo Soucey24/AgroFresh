@@ -7,6 +7,7 @@ type Props = { children: React.ReactElement };
 export default function RequireAuth({ children }: Props) {
   const [loading, setLoading] = useState(true);
   const [authed, setAuthed] = useState(false);
+  const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -20,6 +21,11 @@ export default function RequireAuth({ children }: Props) {
       })
       .catch((error) => {
         console.error('[guard] auth check failed', error);
+        // Check if error is password change required
+        if (error?.response?.status === 403 && error?.response?.data?.code === 'PASSWORD_CHANGE_REQUIRED') {
+          setNeedsPasswordChange(true);
+          setAuthed(false);
+        }
       })
       .finally(() => {
         if (mounted) {
@@ -33,6 +39,7 @@ export default function RequireAuth({ children }: Props) {
   }, []);
 
   if (loading) return <div className="p-6">Checking authentication...</div>;
+  if (needsPasswordChange) return <Navigate to="/change-password" replace />;
   if (!authed) return <Navigate to="/login" replace />;
   return children;
 }

@@ -8,12 +8,29 @@ const ORDER_STATUSES = new Set([
 	'confirmed',
 	'preparing',
 	'ready',
+	'packed',
 	'shipped',
+	'dispatched',
 	'delivered',
 	'completed',
 	'paid',
 	'cancelled'
 ]);
+
+// State machine: valid transitions for order statuses
+const STATE_TRANSITIONS = {
+	pending: ['confirmed', 'cancelled'],
+	confirmed: ['preparing', 'cancelled'],
+	preparing: ['ready', 'cancelled'],
+	ready: ['packed', 'cancelled'],
+	packed: ['dispatched', 'shipped', 'cancelled'],
+	shipped: ['delivered', 'cancelled'],
+	dispatched: ['delivered', 'cancelled'],
+	delivered: ['completed'],
+	completed: [],
+	paid: [],
+	cancelled: []
+};
 
 const handleError = (res, status, message, details) => {
 	if (details) {
@@ -26,6 +43,75 @@ const canAccessOrder = (user, order) => {
 	if (!user || !order) return false;
 	if (user.role === 'admin' || user.role === 'vendor') return true;
 	return user.id === order.buyer_id || user.id === order.farmer_id;
+};
+
+const canTransitionOrder = (user) => {
+	// Only operations staff and admin can transition orders through states
+	return user && ['admin', 'operations'].includes(user.role);
+};
+
+const isValidTransition = (currentStatus, newStatus) => {
+	if (currentStatus === newStatus) return true; // Same status is ok
+	const allowedTransitions = STATE_TRANSITIONS[currentStatus] || [];
+	return allowedTransitions.includes(newStatus);
+};
+
+const createPayoutForOrder = async (order) => {
+	try {
+		// Get payment info to determine if buyer has paid
+		const { data: payment } = await supabase
+			.from('payments')
+			.select('id, amount, status')
+			.eq('order_id', order.id)
+			.eq('status', 'completed')
+			.maybeSingle();
+
+		if (!payment) {
+			console.warn(`[payout] No completed payment found for order ${order.id}`);
+			return null;
+		}
+
+		// Check if payout already exists for this order
+		const { data: existing } = await supabase
+			.from('payouts')
+			.select('id, status')
+			.eq('order_id', order.id)
+			.in('status', ['pending', 'processing', 'paid'])
+			.maybeSingle();
+
+		if (existing) {
+			console.log(`[payout] Payout already exists for order ${order.id}`);
+			return existing;
+		}
+
+		// Create new payout
+		const reference_id = `PO-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+		const { data: payout, error } = await supabase
+			.from('payouts')
+			.insert([
+				{
+					farmer_id: order.farmer_id,
+					order_id: order.id,
+					amount: payment.amount,
+					status: 'pending',
+					reference_id,
+					provider_response: null
+				}
+			])
+			.select()
+			.single();
+
+		if (error) {
+			console.error('[payout] Failed to create payout:', error);
+			return null;
+		}
+
+		console.log(`[payout] Created payout ${payout.id} for order ${order.id}`);
+		return payout;
+	} catch (err) {
+		console.error('[payout] Error creating payout:', err.message);
+		return null;
+	}
 };
 
 export const listOrders = async (req, res) => {
@@ -54,7 +140,7 @@ export const listOrders = async (req, res) => {
 
 export const createOrder = async (req, res) => {
 	try {
-		const { crop_id, quantity, delivery_info, deliveryMethod, delivery_address } = req.body;
+		const { crop_id, quantity, delivery_info, deliveryMethod, delivery_method, delivery_address } = req.body;
 		const buyer_id = req.session.user?.id;
 
 		if (!crop_id || !quantity || !buyer_id) {
@@ -89,9 +175,13 @@ export const createOrder = async (req, res) => {
 		if (delivery_info) {
 			parsedDeliveryInfo = typeof delivery_info === 'string' ? JSON.parse(delivery_info) : delivery_info;
 		}
-		if (!parsedDeliveryInfo && deliveryMethod) {
-			parsedDeliveryInfo = { deliveryMethod };
+		if (!parsedDeliveryInfo && (deliveryMethod || delivery_method)) {
+			parsedDeliveryInfo = { deliveryMethod: deliveryMethod || delivery_method };
 		}
+
+		const normalizedDeliveryMethod = (deliveryMethod || delivery_method || parsedDeliveryInfo?.deliveryMethod || parsedDeliveryInfo?.delivery_method || 'collection-point');
+		const normalizedDeliveryAddress = delivery_address || parsedDeliveryInfo?.address || parsedDeliveryInfo?.pickupLocation || null;
+		const normalizedDeliveryService = parsedDeliveryInfo?.deliveryService || normalizedDeliveryMethod;
 
 		const { data: order, error: orderError } = await supabase
 			.from('orders')
@@ -101,8 +191,10 @@ export const createOrder = async (req, res) => {
 					farmer_id: crop.farmer_id,
 					crop_id,
 					quantity: qty,
-					delivery_info: parsedDeliveryInfo,
-					delivery_address: delivery_address || null,
+					delivery_info: { ...parsedDeliveryInfo, deliveryMethod: normalizedDeliveryMethod, delivery_method: normalizedDeliveryMethod, deliveryService: normalizedDeliveryService },
+					delivery_address: normalizedDeliveryAddress,
+					delivery_service: normalizedDeliveryService,
+					delivery_status: 'pending',
 					status: 'pending'
 				}
 			])
@@ -160,7 +252,7 @@ export const updateOrder = async (req, res) => {
 	try {
 		const user = req.session.user;
 		const orderId = Number(req.params.id);
-		const { status, quantity, delivery_status, tracking_number, tracking_url } = req.body;
+		const { status, quantity, delivery_status, tracking_number, tracking_url, delivery_service, delivery_method, delivery_address } = req.body;
 
 		const { data: order, error: fetchError } = await supabase
 			.from('orders')
@@ -177,11 +269,23 @@ export const updateOrder = async (req, res) => {
 			return handleError(res, 403, 'Not authorized to update this order');
 		}
 
-		const updatePayload = {};
-		if (status !== undefined) {
+		// Validate state transitions - operations/admin only
+		if (status !== undefined && status !== order.status) {
+			if (!canTransitionOrder(user)) {
+				return handleError(res, 403, 'Only operations staff and admin can transition order statuses');
+			}
+
 			if (!ORDER_STATUSES.has(status)) {
 				return handleError(res, 400, 'Invalid order status');
 			}
+
+			if (!isValidTransition(order.status, status)) {
+				return handleError(res, 400, `Invalid transition from ${order.status} to ${status}. Valid transitions: ${STATE_TRANSITIONS[order.status]?.join(', ') || 'none'}`);
+			}
+		}
+
+		const updatePayload = {};
+		if (status !== undefined) {
 			updatePayload.status = status;
 		}
 
@@ -196,9 +300,12 @@ export const updateOrder = async (req, res) => {
 		if (delivery_status !== undefined) updatePayload.delivery_status = delivery_status;
 		if (tracking_number !== undefined) updatePayload.tracking_number = tracking_number;
 		if (tracking_url !== undefined) updatePayload.tracking_url = tracking_url;
+		if (delivery_service !== undefined) updatePayload.delivery_service = delivery_service;
+		if (delivery_method !== undefined) updatePayload.delivery_method = delivery_method;
+		if (delivery_address !== undefined) updatePayload.delivery_address = delivery_address;
 		updatePayload.updated_at = new Date().toISOString();
 
-		if (Object.keys(updatePayload).length === 1) {
+		if (Object.keys(updatePayload).length === 1 && !updatePayload.updated_at) {
 			return handleError(res, 400, 'No valid fields provided to update');
 		}
 
@@ -211,6 +318,7 @@ export const updateOrder = async (req, res) => {
 
 		if (updateError) throw updateError;
 
+		// Handle cancelled orders - restore crop quantity
 		if (order.status !== 'cancelled' && updatePayload.status === 'cancelled') {
 			const { data: crop } = await supabase
 				.from('crops')
@@ -226,6 +334,14 @@ export const updateOrder = async (req, res) => {
 			}
 		}
 
+		// Auto-create payout when order is delivered
+		if (order.status !== 'delivered' && updatePayload.status === 'delivered') {
+			void createPayoutForOrder(updatedOrder).catch((err) => {
+				console.error('[payout] Failed to create payout on delivery:', err.message);
+			});
+		}
+
+		// Send status change notification
 		if (updatePayload.status && updatePayload.status !== order.status) {
 			void notifyOrderStatusChanged(order.id, updatePayload.status).catch((notificationError) => {
 				console.error('[notifications] order status notification failed:', notificationError.message);

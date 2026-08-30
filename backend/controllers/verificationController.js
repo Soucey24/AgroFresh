@@ -1,6 +1,16 @@
 import fs from 'fs';
 import path from 'path';
 import { notifyVerificationSubmitted } from '../services/notificationService.js';
+import {
+  verifyFaceMatch,
+  updateVerificationStatus,
+  getUnverifiedOperationsStaff,
+  getUnverifiedFarmers,
+  getVerificationStats,
+  rejectVerification,
+  hasRequiredDocuments,
+  getUserVerificationInfo,
+} from '../services/faceVerification.js';
 import { supabase } from '../app.js';
 
 const handleError = (res, status, message, details) => {
@@ -188,6 +198,312 @@ export const requestVerification = async (req, res) => {
     } catch (err) {
       console.warn('Could not insert into user_verifications, falling back to local file', {
         message: err.message,
+      });
+      return res.status(500).json({ error: 'Failed to submit verification' });
+    }
+  } catch (err) {
+    handleError(res, 500, 'Failed to request verification', err.message);
+  }
+};
+
+// ============================================
+// Face Verification Endpoints (New)
+// ============================================
+
+/**
+ * Verify a user by comparing ghana card photo with face photo
+ * POST /api/verification/verify/:userId
+ */
+export const verifyUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { manualApproval = false } = req.body;
+    const admin = req.session.user;
+
+    if (!admin || admin.role !== 'admin') {
+      return handleError(res, 403, 'Only admin can verify users');
+    }
+
+    // Get user verification info
+    const userInfo = await getUserVerificationInfo(Number(userId));
+    if (!userInfo) {
+      return handleError(res, 404, 'User not found');
+    }
+
+    // Check if user has all required documents
+    const docCheck = await hasRequiredDocuments(Number(userId));
+    if (!docCheck.complete) {
+      return handleError(res, 400, 'User missing required documents', docCheck);
+    }
+
+    let verificationResult = { approved: false };
+
+    // If manual approval is requested, skip face verification
+    if (manualApproval) {
+      verificationResult = {
+        approved: true,
+        method: 'manual_admin_approval',
+        note: 'Approved by admin without automated verification',
+      };
+    } else {
+      // Perform automated face match verification
+      const faceMatch = await verifyFaceMatch(
+        userInfo.ghana_card_photo,
+        userInfo.face_photo
+      );
+
+      if (faceMatch.error) {
+        // ML service not available - mark as pending manual review
+        return res.status(202).json({
+          status: 'pending_manual_review',
+          message: 'ML service unavailable. Please manually review this user.',
+          userId,
+          error: faceMatch.error,
+        });
+      }
+
+      verificationResult = {
+        approved: faceMatch.match,
+        confidence: faceMatch.confidence,
+        liveness_detected: faceMatch.liveness_detected,
+        method: 'automated_face_matching',
+      };
+    }
+
+    // Update user verification status
+    if (verificationResult.approved) {
+      const updated = await updateVerificationStatus(
+        Number(userId),
+        'approved',
+        `Verified on ${new Date().toISOString()} - ${verificationResult.method}`
+      );
+
+      return res.json({
+        status: 'approved',
+        user: {
+          id: updated.id,
+          name: updated.name,
+          email: updated.email,
+          role: updated.role,
+          verification_status: updated.verification_status,
+        },
+        verification: verificationResult,
+      });
+    } else {
+      return res.status(400).json({
+        status: 'verification_failed',
+        message: 'Face verification failed. Photos do not match or liveness not detected.',
+        verification: verificationResult,
+        userId,
+      });
+    }
+  } catch (err) {
+    handleError(res, 500, 'Failed to verify user', err.message);
+  }
+};
+
+/**
+ * Reject a user's verification
+ * POST /api/verification/reject/:userId
+ */
+export const rejectUserVerification = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { reason } = req.body;
+    const admin = req.session.user;
+
+    if (!admin || admin.role !== 'admin') {
+      return handleError(res, 403, 'Only admin can reject verifications');
+    }
+
+    const rejectionReason = reason || 'Rejected by admin';
+    const updated = await rejectVerification(Number(userId), rejectionReason);
+
+    res.json({
+      status: 'rejected',
+      user: {
+        id: updated.id,
+        name: updated.name,
+        email: updated.email,
+        verification_status: updated.verification_status,
+      },
+      rejection_reason: rejectionReason,
+    });
+  } catch (err) {
+    handleError(res, 500, 'Failed to reject verification', err.message);
+  }
+};
+
+/**
+ * Get unverified operations staff or farmers
+ * GET /api/verification/unverified?role=operations
+ */
+export const getUnverifiedUsers = async (req, res) => {
+  try {
+    const { role = 'operations' } = req.query;
+    const admin = req.session.user;
+
+    if (!admin || admin.role !== 'admin') {
+      return handleError(res, 403, 'Only admin can view unverified users');
+    }
+
+    let users = [];
+    if (role === 'operations') {
+      users = await getUnverifiedOperationsStaff();
+    } else if (role === 'farmer') {
+      users = await getUnverifiedFarmers();
+    } else {
+      return handleError(res, 400, 'Invalid role. Must be operations or farmer');
+    }
+
+    res.json({ role, count: users.length, users });
+  } catch (err) {
+    handleError(res, 500, 'Failed to fetch unverified users', err.message);
+  }
+};
+
+/**
+ * Get verification stats
+ * GET /api/verification/stats
+ */
+export const getVerificationStatusStats = async (req, res) => {
+  try {
+    const admin = req.session.user;
+
+    if (!admin || admin.role !== 'admin') {
+      return handleError(res, 403, 'Only admin can view verification stats');
+    }
+
+    const stats = await getVerificationStats();
+    res.json(stats);
+  } catch (err) {
+    handleError(res, 500, 'Failed to get verification stats', err.message);
+  }
+};
+
+/**
+ * Get verification info for a specific user
+ * GET /api/verification/user/:userId
+ */
+export const getUserVerification = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const admin = req.session.user;
+
+    if (!admin || admin.role !== 'admin') {
+      return handleError(res, 403, 'Only admin can view verification details');
+    }
+
+    const userInfo = await getUserVerificationInfo(Number(userId));
+    if (!userInfo) {
+      return handleError(res, 404, 'User not found');
+    }
+
+    res.json({
+      id: userInfo.id,
+      name: userInfo.name,
+      email: userInfo.email,
+      phone: userInfo.phone,
+      role: userInfo.role,
+      verification_status: userInfo.verification_status,
+      verification_notes: userInfo.verification_notes,
+      verified_at: userInfo.verified_at,
+      has_ghana_card: !!userInfo.ghana_card_photo,
+      has_face_photo: !!userInfo.face_photo,
+      ghana_card_preview: userInfo.ghana_card_photo ? 'Available' : 'Not uploaded',
+      face_photo_preview: userInfo.face_photo ? 'Available' : 'Not uploaded',
+    });
+  } catch (err) {
+    handleError(res, 500, 'Failed to get user verification info', err.message);
+  }
+};
+
+/**
+ * Bulk verify unverified operations staff or farmers
+ * POST /api/verification/bulk-verify
+ */
+export const bulkApproveVerification = async (req, res) => {
+  try {
+    const { userIds = [] } = req.body;
+    const admin = req.session.user;
+
+    if (!admin || admin.role !== 'admin') {
+      return handleError(res, 403, 'Only admin can bulk approve verifications');
+    }
+
+    if (!userIds.length) {
+      return handleError(res, 400, 'No user IDs provided');
+    }
+
+    const results = {
+      approved: [],
+      failed: [],
+    };
+
+    for (const userId of userIds) {
+      try {
+        const updated = await updateVerificationStatus(
+          Number(userId),
+          'approved',
+          `Bulk approved by admin on ${new Date().toISOString()}`
+        );
+        results.approved.push({
+          id: updated.id,
+          name: updated.name,
+          email: updated.email,
+        });
+      } catch (err) {
+        results.failed.push({
+          userId,
+          error: err.message,
+        });
+      }
+    }
+
+    res.json({
+      total_processed: userIds.length,
+      approved_count: results.approved.length,
+      failed_count: results.failed.length,
+      results,
+    });
+  } catch (err) {
+    handleError(res, 500, 'Failed to bulk approve verifications', err.message);
+  }
+};
+
+    };
+
+    for (const userId of userIds) {
+      try {
+        const updated = await updateVerificationStatus(
+          Number(userId),
+          'approved',
+          `Bulk approved by admin on ${new Date().toISOString()}`
+        );
+        results.approved.push({
+          id: updated.id,
+          name: updated.name,
+          email: updated.email,
+        });
+      } catch (err) {
+        results.failed.push({
+          userId,
+          error: err.message,
+        });
+      }
+    }
+
+    res.json({
+      total_processed: userIds.length,
+      approved_count: results.approved.length,
+      failed_count: results.failed.length,
+      results,
+    });
+  } catch (err) {
+    handleError(res, 500, 'Failed to bulk approve verifications', err.message);
+  }
+};
+
         code: err.code,
         details: err.details,
         hint: err.hint

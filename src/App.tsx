@@ -20,6 +20,7 @@ import AdminCrops from "./pages/admin/Crops";
 import AdminOrders from "./pages/admin/Orders";
 import AdminPayments from "./pages/admin/Payments";
 import Payouts from "./pages/admin/Payouts";
+import Operations from "./pages/admin/Operations";
 import BuyerOrders from "./pages/BuyerOrders";
 import FarmerOrders from "./pages/FarmerOrders";
 import Settings from "./pages/admin/Settings";
@@ -30,6 +31,7 @@ import FarmerVerification from "./pages/FarmerVerification";
 import FarmerQuickActionPage from "./pages/FarmerQuickActionPage";
 import OrderConfirmation from "./pages/OrderConfirmation";
 import Profile from "./pages/Profile";
+import ChangePassword from "./pages/ChangePassword";
 import DeliveryTracking from './pages/DeliveryTracking';
 
 const queryClient = new QueryClient();
@@ -44,6 +46,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/change-password" element={<RequireAuth><ChangePassword /></RequireAuth>} />
           <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
           <Route path="/farmers" element={<RequireAuth><Farmers /></RequireAuth>} />
@@ -61,6 +64,7 @@ const App = () => (
           <Route path="/admin/orders" element={<AdminOrders />} />
           <Route path="/admin/payments" element={<AdminPayments />} />
           <Route path="/admin/payouts" element={<Payouts />} />
+          <Route path="/admin/operations" element={<Operations />} />
           <Route path="/admin/settings" element={<Settings />} />
           <Route path="/buyer-orders" element={<BuyerOrders />} />
           <Route path="/farmer-orders" element={<FarmerOrders />} />

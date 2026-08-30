@@ -50,6 +50,31 @@ export const isFarmerApproved = async (userId) => {
   return status === 'approved';
 };
 
+/**
+ * Middleware to check if user needs to change password on first login
+ * Returns 403 with specific error if password hasn't been changed
+ */
+export function checkPasswordChangeRequired(req, res, next) {
+  const user = req.session.user;
+  
+  // Skip check for change-password endpoint itself and login/logout
+  const allowedPaths = ['/api/users/change-password', '/logout', '/login'];
+  if (allowedPaths.includes(req.path)) {
+    return next();
+  }
+
+  if (user && user.password_changed === false) {
+    return res.status(403).json({
+      error: 'Password change required',
+      code: 'PASSWORD_CHANGE_REQUIRED',
+      message: 'You must change your password before accessing this resource'
+    });
+  }
+
+  next();
+}
+};
+
 export const requireFarmerApproved = async (req, res, next) => {
   if (!req.session?.user) {
     return res.status(401).json({ error: 'Not authenticated' });

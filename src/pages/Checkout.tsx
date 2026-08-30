@@ -31,7 +31,7 @@ interface DeliveryInfo {
   pickupLocation: string;
   specialInstructions: string;
   preferredTime: string;
-  deliveryMethod: "pickup" | "farmer-delivery" | "company-delivery" | "";
+  deliveryMethod: "collection-point" | "home-delivery" | "business-delivery" | "pickup" | "farmer-delivery" | "company-delivery" | "";
   deliveryService: "sendstack" | "gig" | "farmer" | "other" | "";
 }
 
@@ -66,7 +66,7 @@ const Checkout = () => {
   const [receiptData, setReceiptData] = useState(null);
   const [trackingInfo, setTrackingInfo] = useState(null);
   const [showTracking, setShowTracking] = useState(false);
-  const [deliveryMethod, setDeliveryMethod] = useState<"pickup" | "farmer-delivery" | "company-delivery" | "">("");
+  const [deliveryMethod, setDeliveryMethod] = useState<"collection-point" | "home-delivery" | "business-delivery" | "pickup" | "farmer-delivery" | "company-delivery" | "">("");
 
   const getCartStorageKey = (currentUser?: { id?: number | string } | null) =>
     currentUser?.id ? `cart_${currentUser.id}` : 'cart_guest';
@@ -179,7 +179,9 @@ const Checkout = () => {
       return;
     }
 
-    if (deliveryMethod === "pickup") {
+    const normalizedMethod = deliveryMethod === "collection-point" ? "pickup" : deliveryMethod === "home-delivery" ? "company-delivery" : deliveryMethod === "business-delivery" ? "company-delivery" : deliveryMethod;
+
+    if (normalizedMethod === "pickup") {
       if (!deliveryInfo.pickupLocation) {
         toast({
           title: "Pickup location required",
@@ -197,7 +199,7 @@ const Checkout = () => {
         });
         return;
       }
-      if (deliveryMethod === "company-delivery" && !deliveryInfo.deliveryService) {
+      if (normalizedMethod === "company-delivery" && !deliveryInfo.deliveryService) {
         toast({
           title: "Delivery company required",
           description: "Please choose a delivery company or courier.",
@@ -210,11 +212,12 @@ const Checkout = () => {
     const provisionalOrderIds: number[] = [];
 
     try {
+      const normalizedDeliveryMethod = deliveryMethod === "collection-point" ? "pickup" : deliveryMethod === "home-delivery" ? "company-delivery" : deliveryMethod === "business-delivery" ? "company-delivery" : deliveryMethod;
       const normalizedDeliveryInfo = {
         ...deliveryInfo,
-        deliveryMethod,
-        deliveryService: deliveryMethod === "company-delivery" ? deliveryInfo.deliveryService : deliveryMethod === "pickup" ? "pickup" : "farmer",
-        address: deliveryMethod === "pickup" ? deliveryInfo.pickupLocation || "Pickup from farm" : deliveryInfo.address,
+        deliveryMethod: normalizedDeliveryMethod,
+        deliveryService: normalizedDeliveryMethod === "company-delivery" ? deliveryInfo.deliveryService || "gig" : normalizedDeliveryMethod === "pickup" ? "pickup" : "farmer",
+        address: normalizedDeliveryMethod === "pickup" ? deliveryInfo.pickupLocation || "Pickup from farm" : deliveryInfo.address,
       };
 
       const createdOrders = [];
@@ -223,6 +226,8 @@ const Checkout = () => {
           crop_id: item.id,
           quantity: item.quantity,
           delivery_info: normalizedDeliveryInfo,
+          deliveryMethod: normalizedDeliveryMethod,
+          delivery_address: normalizedDeliveryInfo.address,
         });
         if (orderResult.error) {
           throw new Error(`Failed to create order for ${item.name}: ${orderResult.error}`);
@@ -605,47 +610,47 @@ const Checkout = () => {
                         <input
                           type="radio"
                           name="deliveryMethod"
-                          value="pickup"
-                          checked={deliveryMethod === "pickup"}
+                          value="collection-point"
+                          checked={deliveryMethod === "collection-point"}
                           onChange={() => {
-                            setDeliveryMethod("pickup");
-                            setDeliveryInfo((prev) => ({ ...prev, deliveryMethod: "pickup", deliveryService: "" }));
+                            setDeliveryMethod("collection-point");
+                            setDeliveryInfo((prev) => ({ ...prev, deliveryMethod: "collection-point", deliveryService: "" }));
                           }}
                         />
-                        Pickup from farm / collection point
+                        Collection point / pickup from farm
                       </label>
 
                       <label className="flex items-center gap-2 rounded-md border p-2">
                         <input
                           type="radio"
                           name="deliveryMethod"
-                          value="farmer-delivery"
-                          checked={deliveryMethod === "farmer-delivery"}
+                          value="home-delivery"
+                          checked={deliveryMethod === "home-delivery"}
                           onChange={() => {
-                            setDeliveryMethod("farmer-delivery");
-                            setDeliveryInfo((prev) => ({ ...prev, deliveryMethod: "farmer-delivery", deliveryService: "farmer" }));
+                            setDeliveryMethod("home-delivery");
+                            setDeliveryInfo((prev) => ({ ...prev, deliveryMethod: "home-delivery", deliveryService: "gig" }));
                           }}
                         />
-                        Farmer delivers it to me
+                        Home delivery
                       </label>
 
                       <label className="flex items-center gap-2 rounded-md border p-2">
                         <input
                           type="radio"
                           name="deliveryMethod"
-                          value="company-delivery"
-                          checked={deliveryMethod === "company-delivery"}
+                          value="business-delivery"
+                          checked={deliveryMethod === "business-delivery"}
                           onChange={() => {
-                            setDeliveryMethod("company-delivery");
-                            setDeliveryInfo((prev) => ({ ...prev, deliveryMethod: "company-delivery", deliveryService: "sendstack" }));
+                            setDeliveryMethod("business-delivery");
+                            setDeliveryInfo((prev) => ({ ...prev, deliveryMethod: "business-delivery", deliveryService: "gig" }));
                           }}
                         />
-                        Delivery by logistics company
+                        Business delivery
                       </label>
                     </div>
                   </div>
 
-                  {deliveryMethod === "pickup" && (
+                  {deliveryMethod === "collection-point" && (
                     <div>
                       <Label htmlFor="pickupLocation" className="text-sm font-medium">Pickup location *</Label>
                       <textarea
@@ -658,7 +663,7 @@ const Checkout = () => {
                     </div>
                   )}
 
-                  {(deliveryMethod === "farmer-delivery" || deliveryMethod === "company-delivery") && (
+                  {(deliveryMethod === "home-delivery" || deliveryMethod === "business-delivery" || deliveryMethod === "farmer-delivery" || deliveryMethod === "company-delivery") && (
                     <div>
                       <Label htmlFor="address" className="text-sm font-medium">Delivery Address *</Label>
                       <textarea
@@ -672,7 +677,7 @@ const Checkout = () => {
                     </div>
                   )}
 
-                  {deliveryMethod === "company-delivery" && (
+                  {(deliveryMethod === "home-delivery" || deliveryMethod === "business-delivery" || deliveryMethod === "company-delivery") && (
                     <div>
                       <Label className="text-sm font-medium">Delivery company *</Label>
                       <div className="flex flex-col gap-2 mt-2">

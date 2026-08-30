@@ -2,8 +2,9 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { supabase } from '../app.js';
 import { uploadToSupabaseStorage, getStorageFallbackUrl } from '../services/storageService.js';
+import { sendOperationsCredentials } from '../services/smsService.js';
 
-const allowedRoles = new Set(['farmer', 'buyer', 'vendor', 'admin']);
+const allowedRoles = new Set(['farmer', 'buyer', 'vendor', 'admin', 'operations']);
 
 const handleError = (res, status, message, details) => {
 	if (details) {
@@ -26,6 +27,7 @@ const sanitizeUser = (user) => ({
 	payout_account_name: user.payout_account_name,
 	payout_account_number: user.payout_account_number,
 	status: user.status,
+	verification_status: user.verification_status,
 	created_at: user.created_at
 });
 
@@ -42,7 +44,7 @@ export const listUsers = async (req, res) => {
 
 		let query = supabase
 			.from('users')
-			.select('id, name, email, role, location, phone, bio, avatar, status, created_at')
+			.select('id, name, email, role, location, phone, bio, avatar, status, verification_status, created_at')
 			.order('created_at', { ascending: false })
 			.range(start, start + size - 1);
 
@@ -61,19 +63,27 @@ export const listUsers = async (req, res) => {
 
 export const createUser = async (req, res) => {
 	try {
-		const { name, email, password, role, location, phone, bio } = req.body;
-		if (!name || !email || !password || !role) {
+		const { name, email, password, role, location, phone, bio, ghana_card_photo, face_photo } = req.body;
+		const normalizedRole = typeof role === 'string' ? role.trim().toLowerCase() : '';
+		if (!name || !email || !password || !normalizedRole) {
 			return handleError(res, 400, 'name, email, password and role are required');
 		}
-		if (!allowedRoles.has(role)) {
+		if (!allowedRoles.has(normalizedRole)) {
 			return handleError(res, 400, 'Invalid role');
+		}
+
+		// For operations role, require phone number
+		if (normalizedRole === 'operations') {
+			if (!phone) {
+				return handleError(res, 400, 'Phone number is required for operations staff');
+			}
 		}
 
 		const { data: existing, error: existingError } = await supabase
 			.from('users')
 			.select('id')
 			.eq('email', email)
-			.eq('role', role)
+			.eq('role', normalizedRole)
 			.maybeSingle();
 		if (existingError && existingError.code !== 'PGRST116') throw existingError;
 		if (existing) {
@@ -81,23 +91,41 @@ export const createUser = async (req, res) => {
 		}
 
 		const password_hash = await bcrypt.hash(password, 12);
+		
+		// Build insert object
+		const insertData = {
+			name,
+			email,
+			role: normalizedRole,
+			password_hash,
+			location: location || null,
+			phone: phone || null,
+			bio: bio || null,
+			status: 'Active',
+			// Operations staff must upload photos after login
+			verification_status: normalizedRole === 'operations' ? 'pending' : 'approved'
+		};
+
+		// Only include photos if provided
+		if (ghana_card_photo) {
+			insertData.ghana_card_photo = ghana_card_photo;
+		}
+		if (face_photo) {
+			insertData.face_photo = face_photo;
+		}
+
 		const { data: created, error } = await supabase
 			.from('users')
-			.insert([
-				{
-					name,
-					email,
-					role,
-					password_hash,
-					location: location || null,
-					phone: phone || null,
-					bio: bio || null,
-					status: 'Active'
-				}
-			])
+			.insert([insertData])
 			.select('*')
 			.single();
 		if (error) throw error;
+
+		// Send SMS credentials for operations staff
+		if (normalizedRole === 'operations' && phone) {
+			const smsResult = await sendOperationsCredentials(phone, email, password);
+			console.log('SMS sent to operations staff:', smsResult);
+		}
 
 		res.status(201).json(sanitizeUser(created));
 	} catch (err) {
@@ -417,4 +445,75 @@ export const updateProfile = async (req, res) => {
 	} catch (err) {
 		handleError(res, 500, 'Failed to update profile', err.message);
 	}
+};
+/**
+ * Change password - for first login or general password update
+ * POST /api/users/change-password
+ */
+export const changePassword = async (req, res) => {
+try {
+const user = req.session.user;
+if (!user) {
+return handleError(res, 401, 'Not authenticated');
+}
+
+const { currentPassword, newPassword, confirmPassword } = req.body;
+
+if (!currentPassword || !newPassword || !confirmPassword) {
+return handleError(res, 400, 'Current password, new password, and confirm password are required');
+}
+
+if (newPassword !== confirmPassword) {
+return handleError(res, 400, 'New passwords do not match');
+}
+
+if (newPassword.length < 8) {
+return handleError(res, 400, 'New password must be at least 8 characters');
+}
+
+// Get user with password hash
+const { data: userData, error: userError } = await supabase
+.from('users')
+.select('id, password_hash, password_changed')
+.eq('id', user.id)
+.single();
+
+if (userError) throw userError;
+if (!userData) {
+return handleError(res, 404, 'User not found');
+}
+
+// Verify current password
+const isPasswordValid = await bcrypt.compare(currentPassword, userData.password_hash);
+if (!isPasswordValid) {
+return handleError(res, 401, 'Current password is incorrect');
+}
+
+// Hash new password
+const newPasswordHash = await bcrypt.hash(newPassword, 12);
+
+// Update password and set password_changed flag
+const { data: updated, error } = await supabase
+.from('users')
+.update({
+password_hash: newPasswordHash,
+password_changed: true,
+last_login: new Date().toISOString(),
+})
+.eq('id', user.id)
+.select('*')
+.single();
+
+if (error) throw error;
+
+// Update session
+req.session.user.password_changed = true;
+
+res.json({
+message: 'Password changed successfully',
+user: sanitizeUser(updated),
+});
+} catch (err) {
+handleError(res, 500, 'Failed to change password', err.message);
+}
 };

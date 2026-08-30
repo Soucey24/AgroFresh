@@ -14,6 +14,7 @@ import {
   X,
   ShieldCheck,
   FileBarChart,
+  BriefcaseBusiness,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -39,6 +40,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     { href: "/admin/orders", icon: ShoppingCart, label: "Orders" },
     { href: "/admin/payments", icon: CreditCard, label: "Payments" },
     { href: "/admin/payouts", icon: WalletCards, label: "Farmer Payouts" },
+    { href: "/admin/operations", icon: BriefcaseBusiness, label: "Operations" },
     { href: "/admin/settings", icon: Settings, label: "Settings" },
   ];
 

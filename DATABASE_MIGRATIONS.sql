@@ -343,8 +343,27 @@ DROP TABLE IF EXISTS crop_types;
 COMMIT;
 
 -- ============================================
--- Reviews Table (Customer feedback)
+-- Operations Staff Verification (Add to users table)
 -- ============================================
+
+-- Add columns to users table for operations staff verification
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS ghana_card_photo BYTEA;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS face_photo BYTEA;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_status VARCHAR(20) DEFAULT 'pending';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_notes TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed BOOLEAN DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP WITH TIME ZONE;
+
+-- Create indexes for faster lookups
+CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
+CREATE INDEX IF NOT EXISTS idx_users_verification_status ON users(verification_status);
+CREATE INDEX IF NOT EXISTS idx_users_phone_verification ON users(phone, verification_status);
+CREATE INDEX IF NOT EXISTS idx_users_role_verification ON users(role, verification_status);
+CREATE INDEX IF NOT EXISTS idx_users_password_changed ON users(password_changed);
+
+COMMIT;
 
 CREATE TABLE IF NOT EXISTS reviews (
   id SERIAL PRIMARY KEY,

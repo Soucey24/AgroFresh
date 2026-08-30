@@ -2,7 +2,7 @@
 -- Run this in Supabase SQL Editor
 
 -- Create ENUM types first
-CREATE TYPE user_role AS ENUM ('farmer', 'buyer', 'vendor', 'admin');
+CREATE TYPE user_role AS ENUM ('farmer', 'buyer', 'vendor', 'admin', 'operations');
 CREATE TYPE user_status AS ENUM ('Active', 'Inactive');
 CREATE TYPE crop_status AS ENUM ('draft', 'active', 'rejected');
 CREATE TYPE order_status AS ENUM ('pending', 'confirmed', 'preparing', 'ready', 'shipped', 'delivered', 'completed', 'paid', 'cancelled');

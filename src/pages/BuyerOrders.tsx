@@ -41,6 +41,17 @@ const BuyerOrders = () => {
     }
   };
 
+  const getDeliveryMethodLabel = (order: any) => {
+    const delivery = getDeliveryInfo(order);
+    const method = delivery.deliveryMethod || delivery.delivery_method || order.delivery_service || 'collection-point';
+    if (method === 'collection-point' || method === 'pickup') return 'Collection point';
+    if (method === 'home-delivery') return 'Home delivery';
+    if (method === 'business-delivery') return 'Business delivery';
+    if (method === 'farmer-delivery') return 'Farmer delivery';
+    if (method === 'company-delivery') return 'Logistics delivery';
+    return String(method).replace('-', ' ');
+  };
+
   const downloadReceipt = (order: any) => {
     const crop = getReceiptCrop(order);
     const quantity = Number(order.quantity || 0);
@@ -220,6 +231,7 @@ const BuyerOrders = () => {
                 <th className="px-4 py-2 text-left">Crop</th>
                 <th className="px-4 py-2 text-left">Farmer</th>
                 <th className="px-4 py-2 text-left">Quantity</th>
+                <th className="px-4 py-2 text-left">Delivery</th>
                 <th className="px-4 py-2 text-left">Status</th>
                 <th className="px-4 py-2 text-left">Date</th>
                 <th className="px-4 py-2 text-left">Trust actions</th>
@@ -252,6 +264,16 @@ const BuyerOrders = () => {
                         : 'Farmer information unavailable')}
                   </td>
                   <td className="px-4 py-2">{order.quantity}</td>
+                  <td className="px-4 py-2">
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium">{getDeliveryMethodLabel(order)}</div>
+                      {order.tracking_url ? (
+                        <a href={order.tracking_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Track delivery</a>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">{order.delivery_status || 'Awaiting dispatch'}</span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-2"><Badge>{order.status}</Badge></td>
                   <td className="px-4 py-2">{new Date(order.created_at).toLocaleString()}</td>
                   <td className="px-4 py-2">

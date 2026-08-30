@@ -339,6 +339,10 @@ export async function updateOrder(id, order) {
   return res.json();
 }
 
+export async function transitionOrderStatus(id, status) {
+  return updateOrder(id, { status });
+}
+
 export async function deleteOrder(id) {
   const res = await fetch(`${API_BASE}/api/orders/${id}`, {
     method: 'DELETE',
@@ -431,6 +435,49 @@ export async function getPayouts() {
 
 export async function updatePayout(id, data) {
   const res = await fetch(`${API_BASE}/api/payouts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(data) });
+  return res.json();
+}
+
+// Quality Check APIs
+export async function analyzeQuality(orderId, cropId, imageBase64) {
+  const res = await fetch(`${API_BASE}/api/quality-checks/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      order_id: orderId,
+      crop_id: cropId,
+      file_base64: imageBase64
+    })
+  });
+  return res.json();
+}
+
+export async function completeQualityCheck(checkId, orderId, decision, data) {
+  const res = await fetch(`${API_BASE}/api/quality-checks/${checkId}/complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      order_id: orderId,
+      decision,
+      ...data
+    })
+  });
+  return res.json();
+}
+
+export async function getQualityCheck(checkId) {
+  const res = await fetch(`${API_BASE}/api/quality-checks/${checkId}`, {
+    credentials: 'include'
+  });
+  return res.json();
+}
+
+export async function listQualityChecks(orderId) {
+  const url = new URL(`${API_BASE}/api/quality-checks`);
+  if (orderId) url.searchParams.append('order_id', orderId);
+  const res = await fetch(url, { credentials: 'include' });
   return res.json();
 }
 

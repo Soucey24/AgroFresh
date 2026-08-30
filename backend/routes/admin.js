@@ -14,6 +14,14 @@ import {
 } from '../controllers/adminController.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { approveFarmerVerification, getPendingVerifications } from '../controllers/adminController.js';
+import {
+  verifyUser,
+  rejectUserVerification,
+  getUnverifiedUsers,
+  getVerificationStatusStats,
+  getUserVerification,
+  bulkApproveVerification,
+} from '../controllers/verificationController.js';
 
 const router = express.Router();
 
@@ -55,5 +63,13 @@ router.put('/settings', updateAdminSettings);
 router.get('/verifications/pending', getPendingVerifications);
 router.patch('/verifications/:id/approve', approveFarmerVerification);
 router.patch('/verifications/:id/reject', approveFarmerVerification);
+
+// Face Verification Routes (Operations & Farmers)
+router.get('/face-verification/stats', getVerificationStatusStats);
+router.get('/face-verification/unverified', getUnverifiedUsers);
+router.get('/face-verification/user/:userId', getUserVerification);
+router.post('/face-verification/verify/:userId', verifyUser);
+router.post('/face-verification/reject/:userId', rejectUserVerification);
+router.post('/face-verification/bulk-verify', bulkApproveVerification);
 
 export default router; 

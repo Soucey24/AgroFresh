@@ -6,6 +6,7 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { checkPasswordChangeRequired } from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 import cropsRoutes from './routes/crops.js';
 import ordersRoutes from './routes/orders.js';
@@ -18,6 +19,7 @@ import webhooksRouter from './routes/webhooks.js';
 import otpRoutes from './routes/otp.js';
 import notificationsRoutes from './routes/notifications.js';
 import complaintsRoutes from './routes/complaints.js';
+import qualityChecksRoutes from './routes/qualityChecks.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -86,6 +88,9 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use('/uploads', express.static(uploadsDirectory));
 
+// Check if password change is required for authenticated users
+app.use('/api', checkPasswordChangeRequired);
+
 app.use('/api/auth', authRoutes);
 app.use('/api/crops', cropsRoutes);
 app.use('/api/orders', ordersRoutes);
@@ -98,6 +103,7 @@ app.use('/api/webhooks', webhooksRouter);
 app.use('/api', otpRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/complaints', complaintsRoutes);
+app.use('/api/quality-checks', qualityChecksRoutes);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', environment: process.env.NODE_ENV || 'development' });
