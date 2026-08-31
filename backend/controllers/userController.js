@@ -131,13 +131,22 @@ export const createUser = async (req, res) => {
 			.single();
 		if (error) throw error;
 
-		// Send SMS credentials for operations staff
+		let smsResult = { success: false, error: 'Not attempted' };
 		if (normalizedRole === 'operations' && phone) {
-			const smsResult = await sendOperationsCredentials(phone, email, password);
-			console.log('SMS sent to operations staff:', smsResult);
+			try {
+				smsResult = await sendOperationsCredentials(phone, email, password);
+				console.log('SMS sent to operations staff:', smsResult);
+			} catch (smsError) {
+				smsResult = { success: false, error: smsError.message || 'Unknown SMS error' };
+				console.error('Operations SMS send failed:', smsResult.error);
+			}
 		}
 
-		res.status(201).json(sanitizeUser(created));
+		res.status(201).json({
+			...sanitizeUser(created),
+			sms_sent: Boolean(smsResult.success),
+			sms_error: smsResult.success ? null : smsResult.error,
+		});
 	} catch (err) {
 		handleError(res, 500, 'Failed to create user', err.message);
 	}

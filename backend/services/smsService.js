@@ -2,8 +2,8 @@ import axios from 'axios';
 
 // ARkesel SMS Service
 const ARKESEL_API_KEY = process.env.ARKESEL_API_KEY || '';
-const ARKESEL_BASE_URL = 'https://sms.arkesel.com/api';
-const SENDER_ID = process.env.SMS_SENDER_ID || 'AgroFresh';
+const ARKESEL_ENDPOINT = 'https://sms.arkesel.com/api/v2/sms/send';
+const SENDER_ID = process.env.ARKESEL_SENDER || process.env.SMS_SENDER_ID || 'AgroFresh';
 
 /**
  * Send SMS via ARkesel
@@ -18,31 +18,43 @@ export const sendSMS = async (phone, message) => {
       return { success: false, error: 'SMS service not configured' };
     }
 
-    // Normalize phone number to international format
     let normalizedPhone = String(phone || '').trim();
+    if (!normalizedPhone) {
+      return { success: false, error: 'Phone number is missing' };
+    }
+
     if (normalizedPhone.startsWith('0')) {
       normalizedPhone = '233' + normalizedPhone.slice(1);
+    } else if (normalizedPhone.startsWith('+233')) {
+      normalizedPhone = normalizedPhone.replace('+', '');
     } else if (!normalizedPhone.startsWith('233')) {
       normalizedPhone = '233' + normalizedPhone;
     }
 
-    const response = await axios.post(`${ARKESEL_BASE_URL}/send`, {
-      api_key: ARKESEL_API_KEY,
-      senders_name: SENDER_ID,
+    const response = await axios.post(ARKESEL_ENDPOINT, {
+      sender: SENDER_ID,
       message,
       recipients: [normalizedPhone],
-    }, { timeout: 10000 });
+    }, {
+      headers: {
+        'api-key': ARKESEL_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000,
+    });
 
     return {
       success: true,
-      messageId: response.data?.message_ids?.[0],
+      messageId: response.data?.data?.[0]?.message_id || response.data?.message_id,
       phone: normalizedPhone,
     };
   } catch (error) {
-    console.error('Failed to send SMS:', error.message);
+    const detail = error.response?.data || error.message;
+    const messageText = typeof detail === 'string' ? detail : JSON.stringify(detail);
+    console.error('Failed to send SMS:', messageText);
     return {
       success: false,
-      error: error.message,
+      error: messageText,
     };
   }
 };

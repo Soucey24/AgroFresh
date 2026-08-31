@@ -199,8 +199,12 @@ const Operations = () => {
       }
 
       setForm({ name: '', email: '', password: '', location: '', phone: '' });
-      setMessage(`Operations staff created! Login credentials sent via SMS to ${form.phone}`);
-      
+      if (result?.sms_sent) {
+        setMessage(`Operations staff created! Login credentials sent via SMS to ${form.phone}`);
+      } else {
+        setMessage(`Operations staff created successfully. SMS delivery failed: ${result?.sms_error || 'check Arkesel configuration and phone number.'}`);
+      }
+
       // Refresh operations staff list
       const refreshed = await listUsers();
       if (!refreshed?.error) {
