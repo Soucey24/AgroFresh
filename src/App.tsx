@@ -66,6 +66,7 @@ const App = () => (
           <Route path="/admin/payments" element={<AdminPayments />} />
           <Route path="/admin/payouts" element={<Payouts />} />
           <Route path="/admin/operations" element={<Operations />} />
+          <Route path="/operations" element={<RequireAuth><Operations /></RequireAuth>} />
           <Route path="/admin/settings" element={<Settings />} />
           <Route path="/buyer-orders" element={<BuyerOrders />} />
           <Route path="/farmer-orders" element={<FarmerOrders />} />

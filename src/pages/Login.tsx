@@ -50,6 +50,8 @@ const Login = () => {
       }
     } else if (result.role === "buyer") {
       navigate("/buyers");
+    } else if (result.role === "operations") {
+      navigate("/operations");
     } else if (result.role === "admin" || result.role === "vendor") {
       navigate("/admin");
     } else {
