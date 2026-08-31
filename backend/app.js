@@ -20,6 +20,7 @@ import otpRoutes from './routes/otp.js';
 import notificationsRoutes from './routes/notifications.js';
 import complaintsRoutes from './routes/complaints.js';
 import qualityChecksRoutes from './routes/qualityChecks.js';
+import verificationRoutes from './routes/verification.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -104,6 +105,7 @@ app.use('/api', otpRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/complaints', complaintsRoutes);
 app.use('/api/quality-checks', qualityChecksRoutes);
+app.use('/api/verification', verificationRoutes);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', environment: process.env.NODE_ENV || 'development' });

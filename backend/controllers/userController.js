@@ -305,6 +305,102 @@ export const changePassword = async (req, res) => {
 	}
 };
 
+/**
+ * Verify photos for operations staff or farmers
+ * POST /api/users/verify-photos
+ * Expects: ghana_card_photo, face_photo (base64)
+ */
+export const verifyPhotos = async (req, res) => {
+	try {
+		const user = req.session.user;
+		if (!user) {
+			return handleError(res, 401, 'Not authenticated');
+		}
+
+		const { ghana_card_photo, face_photo } = req.body;
+
+		if (!ghana_card_photo || !face_photo) {
+			return handleError(res, 400, 'Both ghana_card_photo and face_photo are required');
+		}
+
+		// Only operations and farmers can submit verification
+		if (!['operations', 'farmer'].includes(user.role)) {
+			return handleError(res, 403, 'Only operations staff and farmers can submit verification');
+		}
+
+		// Store photos in database
+		const updateData = {
+			ghana_card_photo,
+			face_photo,
+			verification_status: 'pending',
+		};
+
+		// Import face verification service
+		const { verifyFaceMatch, updateVerificationStatus } = await import(
+			'../services/faceVerification.js'
+		).then((m) => m.default || m);
+
+		// Attempt automatic face verification
+		let verificationResult = {
+			match: false,
+			confidence: 0,
+			liveness_detected: false,
+		};
+
+		try {
+			verificationResult = await verifyFaceMatch(ghana_card_photo, face_photo);
+		} catch (verifyErr) {
+			console.warn('Face verification failed, marking for manual review:', verifyErr.message);
+			// Continue with pending status for manual review
+		}
+
+		// If match is confident enough, auto-approve
+		if (verificationResult.match && verificationResult.confidence >= 0.75) {
+			updateData.verification_status = 'approved';
+			updateData.verification_notes = `Auto-verified: ${(verificationResult.confidence * 100).toFixed(1)}% confidence`;
+		} else if (verificationResult.match === null || verificationResult.status === 'pending_manual_review') {
+			updateData.verification_status = 'pending';
+			updateData.verification_notes = 'Pending manual review by admin';
+		}
+
+		// Update user in database
+		const { data: updatedUser, error } = await supabase
+			.from('users')
+			.update(updateData)
+			.eq('id', user.id)
+			.select('*')
+			.single();
+
+		if (error) throw error;
+
+		// If approved, send SMS notification
+		if (updateData.verification_status === 'approved') {
+			const { sendVerificationStatus } = await import('../services/smsService.js').then(
+				(m) => m.default || m
+			);
+			try {
+				await sendVerificationStatus(
+					user.phone,
+					'approved',
+					'Your verification has been approved. You now have full access.'
+				);
+			} catch (smsErr) {
+				console.warn('Failed to send approval SMS:', smsErr.message);
+			}
+		}
+
+		res.json({
+			message: 'Photos submitted for verification',
+			verification_status: updateData.verification_status,
+			verification_notes: updateData.verification_notes,
+			confidence: verificationResult.confidence,
+			user: sanitizeUser(updatedUser),
+		});
+	} catch (err) {
+		handleError(res, 500, 'Failed to verify photos', err.message);
+	}
+};
+
 export const verifyEmailChange = async (req, res) => {
 	try {
 		const { token } = req.query;

@@ -596,6 +596,52 @@ export async function rejectFarmerVerification(verificationId) {
   return res.json();
 }
 
+// Verification APIs (new endpoints)
+export async function getVerificationStats() {
+  const res = await fetch(`${API_BASE}/api/verification/stats`, {
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error('Failed to fetch verification stats');
+  return res.json();
+}
+
+export async function getUnverifiedUsers(role = 'operations') {
+  const res = await fetch(`${API_BASE}/api/verification/unverified?role=${role}`, {
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error('Failed to fetch unverified users');
+  return res.json();
+}
+
+export async function getUserVerification(userId) {
+  const res = await fetch(`${API_BASE}/api/verification/user/${userId}`, {
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error('Failed to fetch user verification');
+  return res.json();
+}
+
+export async function approveUserVerification(userId) {
+  const res = await fetch(`${API_BASE}/api/verification/verify/${userId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error('Failed to approve verification');
+  return res.json();
+}
+
+export async function rejectUserVerification(userId, rejectionReason) {
+  const res = await fetch(`${API_BASE}/api/verification/reject/${userId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason: rejectionReason }),
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error('Failed to reject verification');
+  return res.json();
+}
+
 // Admin Payment APIs
 export async function getPaymentStats() {
   const res = await fetch(`${API_BASE}/api/admin/payments/stats`, {

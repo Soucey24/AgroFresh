@@ -31,6 +31,7 @@ import FarmerVerification from "./pages/FarmerVerification";
 import FarmerQuickActionPage from "./pages/FarmerQuickActionPage";
 import OrderConfirmation from "./pages/OrderConfirmation";
 import Profile from "./pages/Profile";
+import OperationsProfile from "./pages/OperationsProfile";
 import ChangePassword from "./pages/ChangePassword";
 import DeliveryTracking from './pages/DeliveryTracking';
 
@@ -72,6 +73,7 @@ const App = () => (
           <Route path="/verify-farmer" element={<FarmerVerification />} />
           <Route path="/order-confirmation" element={<OrderConfirmation />} />
           <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
+          <Route path="/operations-profile" element={<RequireAuth><OperationsProfile /></RequireAuth>} />
           <Route path="/delivery-tracking/:orderId" element={<DeliveryTracking />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
