@@ -73,7 +73,6 @@ export function checkPasswordChangeRequired(req, res, next) {
 
   next();
 }
-};
 
 export const requireFarmerApproved = async (req, res, next) => {
   if (!req.session?.user) {

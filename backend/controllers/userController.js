@@ -63,12 +63,22 @@ export const listUsers = async (req, res) => {
 
 export const createUser = async (req, res) => {
 	try {
+		console.log('📝 CREATE USER REQUEST - Full body:', JSON.stringify(req.body, null, 2));
+		
 		const { name, email, password, role, location, phone, bio, ghana_card_photo, face_photo } = req.body;
+		console.log('🔍 Extracted fields:', { name, email, role, phone, location, has_password: !!password });
+		
 		const normalizedRole = typeof role === 'string' ? role.trim().toLowerCase() : '';
+		console.log('✏️ Normalized role:', normalizedRole);
+		console.log('✅ Allowed roles:', Array.from(allowedRoles));
+		console.log('🎯 Role match:', allowedRoles.has(normalizedRole));
+		
 		if (!name || !email || !password || !normalizedRole) {
+			console.log('❌ Missing required fields');
 			return handleError(res, 400, 'name, email, password and role are required');
 		}
 		if (!allowedRoles.has(normalizedRole)) {
+			console.log(`❌ Role "${normalizedRole}" NOT in allowed roles:`, Array.from(allowedRoles));
 			return handleError(res, 400, 'Invalid role');
 		}
 
@@ -263,45 +273,6 @@ export const uploadAvatar = async (req, res) => {
 		res.json({ message: 'Avatar uploaded successfully', avatar: avatarPath });
 	} catch (err) {
 		handleError(res, 500, 'Failed to upload avatar', err.message);
-	}
-};
-
-export const changePassword = async (req, res) => {
-	try {
-		if (!req.session.user) return handleError(res, 401, 'Not authenticated');
-
-		const { currentPassword, newPassword } = req.body;
-		if (!currentPassword || !newPassword) {
-			return handleError(res, 400, 'currentPassword and newPassword are required');
-		}
-		if (newPassword.length < 8) {
-			return handleError(res, 400, 'New password must be at least 8 characters long');
-		}
-
-		const { data: user, error: userError } = await supabase
-			.from('users')
-			.select('password_hash')
-			.eq('id', req.session.user.id)
-			.single();
-
-		if (userError) throw userError;
-
-		const isValid = await bcrypt.compare(currentPassword, user.password_hash);
-		if (!isValid) {
-			return handleError(res, 401, 'Current password is incorrect');
-		}
-
-		const password_hash = await bcrypt.hash(newPassword, 12);
-		const { error } = await supabase
-			.from('users')
-			.update({ password_hash })
-			.eq('id', req.session.user.id);
-
-		if (error) throw error;
-
-		res.json({ message: 'Password changed successfully' });
-	} catch (err) {
-		handleError(res, 500, 'Failed to change password', err.message);
 	}
 };
 

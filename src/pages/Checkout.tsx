@@ -31,6 +31,7 @@ interface DeliveryInfo {
   pickupLocation: string;
   specialInstructions: string;
   preferredTime: string;
+  email?: string;
   deliveryMethod: "collection-point" | "home-delivery" | "business-delivery" | "pickup" | "farmer-delivery" | "company-delivery" | "";
   deliveryService: "sendstack" | "gig" | "farmer" | "other" | "";
 }
