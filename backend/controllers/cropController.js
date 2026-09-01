@@ -189,8 +189,27 @@ export const createCrop = async (req, res) => {
     const { name, description, price, quantity, unit, expiry_date, planting_date, harvest_date_predicted, status } = req.body;
     const farmer_id = req.session.user?.id;
 
-    if (!name || price === undefined || quantity === undefined || !farmer_id) {
-      return handleError(res, 400, 'Missing required fields: name, price, quantity');
+    if (!name) {
+      return handleError(res, 400, 'Please enter a crop name');
+    }
+    if (price === undefined || price === null) {
+      return handleError(res, 400, 'Please enter a price per unit');
+    }
+    if (quantity === undefined || quantity === null) {
+      return handleError(res, 400, 'Please enter the quantity available');
+    }
+    if (!farmer_id) {
+      return handleError(res, 401, 'You must be logged in to create a listing');
+    }
+
+    const numericPrice = Number(price);
+    const numericQty = Number(quantity);
+    
+    if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
+      return handleError(res, 400, 'Price must be a positive number');
+    }
+    if (!Number.isInteger(numericQty) || numericQty <= 0) {
+      return handleError(res, 400, 'Quantity must be a whole number greater than 0');
     }
 
     let image = null;
@@ -297,9 +316,19 @@ export const createCrop = async (req, res) => {
       console.error('[notifications] crop submission SMS failed:', notificationError.message);
     });
 
+    console.log('[crop] Crop created successfully:', { cropId: crop.id, farmerId: farmer_id, name });
     res.status(201).json(transformCrop(crop));
   } catch (err) {
-    handleError(res, 500, 'Failed to create crop', err.message);
+    console.error('[crop] Error creating crop:', { error: err.message, stack: err.stack });
+    
+    if (err.message.includes('violates unique constraint')) {
+      return handleError(res, 400, 'A crop with this name already exists. Please use a different name.');
+    }
+    if (err.message.includes('violates foreign key')) {
+      return handleError(res, 400, 'Invalid farmer information');
+    }
+    
+    handleError(res, 500, 'Failed to create your crop listing. Please try again or contact support.', err.message);
   }
 };
 

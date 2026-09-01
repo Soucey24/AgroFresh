@@ -147,13 +147,19 @@ export const createOrder = async (req, res) => {
 		const { crop_id, quantity, delivery_info, deliveryMethod, delivery_method, delivery_address } = req.body;
 		const buyer_id = req.session.user?.id;
 
-		if (!crop_id || !quantity || !buyer_id) {
-			return handleError(res, 400, 'Missing required fields: crop_id and quantity');
+		if (!crop_id) {
+			return handleError(res, 400, 'Please select a crop to order');
+		}
+		if (!quantity) {
+			return handleError(res, 400, 'Please enter the quantity');
+		}
+		if (!buyer_id) {
+			return handleError(res, 401, 'You must be logged in to place an order');
 		}
 
 		const qty = Number(quantity);
 		if (!Number.isInteger(qty) || qty <= 0) {
-			return handleError(res, 400, 'Quantity must be a positive integer');
+			return handleError(res, 400, 'Quantity must be a whole number greater than 0');
 		}
 
 		const { data: crop, error: cropError } = await supabase
@@ -163,21 +169,29 @@ export const createOrder = async (req, res) => {
 			.single();
 
 		if (cropError?.code === 'PGRST116') {
-			return handleError(res, 404, 'Crop not found');
+			return handleError(res, 404, 'This crop is no longer available');
 		}
 		if (cropError) throw cropError;
 
 		const farmerApproved = await isFarmerApproved(crop.farmer_id);
 		if (!farmerApproved) {
-			return handleError(res, 403, 'This farmer account is not approved yet and cannot receive orders.');
+			console.warn('[order] Farmer not approved:', { farmerId: crop.farmer_id, cropId: crop_id });
+			return handleError(res, 403, 'This farmer is not yet approved to sell. Please try another farmer.');
 		}
-		if (!crop.available || crop.quantity < qty) {
-			return handleError(res, 400, `Only ${crop.quantity} items available`);
+		if (!crop.available) {
+			return handleError(res, 400, 'This crop is currently unavailable');
+		}
+		if (crop.quantity < qty) {
+			return handleError(res, 400, `Only ${crop.quantity} ${crop.quantity === 1 ? 'item' : 'items'} available. Please reduce your quantity.`);
 		}
 
 		let parsedDeliveryInfo = null;
 		if (delivery_info) {
-			parsedDeliveryInfo = typeof delivery_info === 'string' ? JSON.parse(delivery_info) : delivery_info;
+			try {
+				parsedDeliveryInfo = typeof delivery_info === 'string' ? JSON.parse(delivery_info) : delivery_info;
+			} catch (parseErr) {
+				return handleError(res, 400, 'Invalid delivery information provided');
+			}
 		}
 		if (!parsedDeliveryInfo && (deliveryMethod || delivery_method)) {
 			parsedDeliveryInfo = { deliveryMethod: deliveryMethod || delivery_method };
@@ -205,7 +219,13 @@ export const createOrder = async (req, res) => {
 			.select()
 			.single();
 
-		if (orderError) throw orderError;
+		if (orderError) {
+			console.error('[order] Insert failed:', { orderError, payload: { buyer_id, farmer_id: crop.farmer_id, crop_id, quantity: qty, status: 'pending_payment' } });
+			if (orderError.code === 'PGRST116') {
+				return handleError(res, 500, 'Failed to save your order. Please try again.');
+			}
+			throw orderError;
+		}
 
 		const remaining = crop.quantity - qty;
 		const { error: cropUpdateError } = await supabase
@@ -222,9 +242,20 @@ export const createOrder = async (req, res) => {
 			console.error('[notifications] order creation SMS failed:', notificationError.message);
 		});
 
+		console.log('[order] Order created successfully:', { orderId: order.id, buyerId: buyer_id, farmerId: crop.farmer_id, cropId: crop_id });
 		res.status(201).json(order);
 	} catch (err) {
-		handleError(res, 500, 'Failed to create order', err.message);
+		console.error('[order] Error creating order:', { error: err.message, stack: err.stack });
+		
+		// Provide user-friendly error messages
+		if (err.message.includes('unique') || err.message.includes('unique constraint')) {
+			return handleError(res, 400, 'This order could not be created. Please try again.');
+		}
+		if (err.message.includes('violates foreign key')) {
+			return handleError(res, 400, 'Invalid crop or farmer information');
+		}
+		
+		handleError(res, 500, 'Failed to create your order. Please try again or contact support.', err.message);
 	}
 };
 

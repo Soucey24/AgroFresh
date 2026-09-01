@@ -80,16 +80,25 @@ export const createPayment = async (req, res) => {
 		const { order_id, amount, payment_method, payment_channel, phone_number, email } = req.body;
 		const buyer_id = req.session.user?.id;
 
-		if (!order_id || !amount || !payment_method || !buyer_id) {
-			return handleError(res, 400, 'Missing required fields: order_id, amount, payment_method');
+		if (!order_id) {
+			return handleError(res, 400, 'Order ID is required');
+		}
+		if (!amount) {
+			return handleError(res, 400, 'Payment amount is required');
+		}
+		if (!payment_method) {
+			return handleError(res, 400, 'Please select a payment method');
+		}
+		if (!buyer_id) {
+			return handleError(res, 401, 'You must be logged in to make a payment');
 		}
 		if (!allowedMethods.has(payment_method)) {
-			return handleError(res, 400, 'Unsupported payment method');
+			return handleError(res, 400, `Payment method '${payment_method}' is not available. Please use: ${Array.from(allowedMethods).join(', ')}`);
 		}
 
 		const numericAmount = Number(amount);
 		if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-			return handleError(res, 400, 'Amount must be a positive number');
+			return handleError(res, 400, 'Payment amount must be greater than 0');
 		}
 
 		const { data: order, error: orderError } = await supabase
@@ -100,11 +109,11 @@ export const createPayment = async (req, res) => {
 			.single();
 
 		if (orderError?.code === 'PGRST116') {
-			return handleError(res, 404, 'Order not found');
+			return handleError(res, 404, 'Order not found. Please check and try again.');
 		}
 		if (orderError) throw orderError;
 		if (['paid', 'completed', 'cancelled'].includes(order.status)) {
-			return handleError(res, 400, `Order cannot be paid in '${order.status}' state`);
+			return handleError(res, 400, `This order has already been ${order.status}. You cannot make another payment.`);
 		}
 
 		const reference_id = generateReferenceId();
