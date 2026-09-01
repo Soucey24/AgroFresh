@@ -78,13 +78,17 @@ const Orders = () => {
 
   const getStatusBadgeVariant = (status) => {
     switch (status) {
-      case 'pending': return 'secondary';
+      case 'pending_payment': return 'secondary';
       case 'confirmed': return 'default';
-      case 'preparing': return 'default';
-      case 'ready': return 'default';
-      case 'shipped': return 'default';
+      case 'farmer_preparing': return 'default';
+      case 'sent_to_operations_centre': return 'default';
+      case 'received_at_centre': return 'default';
+      case 'quality_check': return 'default';
+      case 'ready_for_dispatch': return 'default';
+      case 'packed': return 'default';
+      case 'dispatched': return 'default';
       case 'delivered': return 'default';
-      case 'completed': return 'default';
+      case 'payout_ready': return 'default';
       case 'paid': return 'default';
       case 'cancelled': return 'destructive';
       default: return 'secondary';
@@ -170,13 +174,17 @@ const Orders = () => {
             className="border rounded px-2 py-1"
           >
             <option value="all">All Statuses</option>
-            <option value="pending">Pending</option>
+            <option value="pending_payment">Pending payment</option>
             <option value="confirmed">Confirmed</option>
-            <option value="preparing">Preparing</option>
-            <option value="ready">Ready</option>
-            <option value="shipped">Shipped</option>
+            <option value="farmer_preparing">Preparing shipment</option>
+            <option value="sent_to_operations_centre">Sent to centre</option>
+            <option value="received_at_centre">Received at centre</option>
+            <option value="quality_check">Quality check</option>
+            <option value="ready_for_dispatch">Ready for dispatch</option>
+            <option value="packed">Packed</option>
+            <option value="dispatched">Dispatched</option>
             <option value="delivered">Delivered</option>
-            <option value="completed">Completed</option>
+            <option value="payout_ready">Payout ready</option>
             <option value="paid">Paid</option>
             <option value="cancelled">Cancelled</option>
           </select>

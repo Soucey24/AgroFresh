@@ -88,15 +88,15 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
 
   const opsUsers = useMemo(() => users.filter((user) => user.role === 'operations'), [users]);
   const pendingDrops = useMemo(
-    () => orders.filter((order) => ['pending', 'paid', 'confirmed'].includes(String(order.status || '').toLowerCase())),
+    () => orders.filter((order) => ['sent_to_operations_centre', 'received_at_centre', 'quality_check'].includes(String(order.status || '').toLowerCase())),
     [orders],
   );
   const qualityChecks = useMemo(
-    () => orders.filter((order) => ['preparing', 'ready', 'packed'].includes(String(order.status || '').toLowerCase())),
+    () => orders.filter((order) => ['quality_check', 'ready_for_dispatch', 'packed'].includes(String(order.status || '').toLowerCase())),
     [orders],
   );
   const dispatch = useMemo(
-    () => orders.filter((order) => ['shipped', 'dispatched', 'delivered'].includes(String(order.status || '').toLowerCase())),
+    () => orders.filter((order) => ['dispatched', 'delivered', 'payout_ready'].includes(String(order.status || '').toLowerCase())),
     [orders],
   );
   const pendingPayouts = useMemo(
@@ -128,6 +128,11 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
       setMessage(result.error || 'Failed to update order status.');
     }
   };
+
+  const formatStatusLabel = (status: string) => status
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 
   const handlePayoutApproval = async (payoutId: number) => {
     const result = await updatePayout(payoutId, { status: 'paid' });
@@ -295,7 +300,7 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
                     <Badge variant="secondary">{String(order.status || 'pending').toUpperCase()}</Badge>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" onClick={() => handleStatusUpdate(order.id, 'confirmed')}>Received at centre</Button>
+                    <Button size="sm" onClick={() => handleStatusUpdate(order.id, 'received_at_centre')}>Receive at centre</Button>
                     <Button size="sm" variant="outline" onClick={() => openQualityCheck(buildOrderRecord(order))}>Quality check</Button>
                   </div>
                 </div>
@@ -337,8 +342,8 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
   const renderQueue = () => (
     <Card>
       <CardHeader>
-        <CardTitle>Collection point queue</CardTitle>
-        <CardDescription>Orders waiting for farmer drop-off and intake</CardDescription>
+        <CardTitle>Centre intake queue</CardTitle>
+        <CardDescription>Farmer shipments arriving at the operations collection centre</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {pendingDrops.length === 0 ? (
@@ -381,11 +386,11 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
                   <p className="font-medium">Order #{order.id}</p>
                   <p className="text-sm text-muted-foreground">Grade review and packing</p>
                 </div>
-                <Badge className="bg-amber-500/10 text-amber-700">{String(order.status || 'ready').toUpperCase()}</Badge>
+                <Badge className="bg-amber-500/10 text-amber-700">{formatStatusLabel(String(order.status || 'quality_check')).toUpperCase()}</Badge>
               </div>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => openQualityCheck(buildOrderRecord(order))}>Run quality check</Button>
-                <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(order.id, 'ready')}>Mark ready</Button>
+                <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(order.id, 'ready_for_dispatch')}>Mark ready</Button>
                 <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(order.id, 'packed')}>Pack order</Button>
               </div>
             </div>
@@ -412,7 +417,7 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
                   <p className="font-medium">Order #{order.id}</p>
                   <p className="text-sm text-muted-foreground">In transit to buyer</p>
                 </div>
-                <Badge className="bg-blue-500/10 text-blue-700">{String(order.status || 'shipped').toUpperCase()}</Badge>
+                <Badge className="bg-blue-500/10 text-blue-700">{formatStatusLabel(String(order.status || 'dispatched')).toUpperCase()}</Badge>
               </div>
               <div className="space-y-2 rounded-md border border-dashed p-2">
                 <div className="flex gap-2">

@@ -218,8 +218,17 @@ const BuyerOrders = () => {
               className="border rounded px-2 py-1"
             >
               <option value="all">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="completed">Completed</option>
+              <option value="pending_payment">Pending payment</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="farmer_preparing">Preparing shipment</option>
+              <option value="sent_to_operations_centre">Sent to centre</option>
+              <option value="received_at_centre">Received at centre</option>
+              <option value="quality_check">Quality check</option>
+              <option value="ready_for_dispatch">Ready for dispatch</option>
+              <option value="dispatched">Dispatched</option>
+              <option value="delivered">Delivered</option>
+              <option value="payout_ready">Payout ready</option>
+              <option value="paid">Paid</option>
               <option value="cancelled">Cancelled</option>
             </select>
           </div>

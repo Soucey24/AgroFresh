@@ -261,9 +261,9 @@ export const getCropStats = async (_req, res) => {
 export const getOrderStats = async (_req, res) => {
   try {
     const [completed, inTransit, pending, cancelled] = await Promise.all([
-      supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
-      supabase.from('orders').select('*', { count: 'exact', head: true }).in('status', ['shipped', 'ready']),
-      supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('orders').select('*', { count: 'exact', head: true }).in('status', ['delivered', 'payout_ready', 'paid']),
+      supabase.from('orders').select('*', { count: 'exact', head: true }).in('status', ['dispatched', 'ready_for_dispatch', 'packed', 'quality_check']),
+      supabase.from('orders').select('*', { count: 'exact', head: true }).in('status', ['pending_payment', 'confirmed', 'farmer_preparing', 'sent_to_operations_centre', 'received_at_centre']),
       supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'cancelled')
     ]);
 

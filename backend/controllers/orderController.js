@@ -4,30 +4,34 @@ import { isFarmerApproved } from '../middleware/auth.js';
 import { notifyOrderCreated, notifyOrderStatusChanged } from '../services/notificationService.js';
 
 const ORDER_STATUSES = new Set([
-	'pending',
+	'pending_payment',
 	'confirmed',
-	'preparing',
-	'ready',
+	'farmer_preparing',
+	'sent_to_operations_centre',
+	'received_at_centre',
+	'quality_check',
+	'ready_for_dispatch',
 	'packed',
-	'shipped',
 	'dispatched',
 	'delivered',
-	'completed',
+	'payout_ready',
 	'paid',
 	'cancelled'
 ]);
 
-// State machine: valid transitions for order statuses
+// State machine: valid transitions for the buyer -> farmer -> operations flow
 const STATE_TRANSITIONS = {
-	pending: ['confirmed', 'cancelled'],
-	confirmed: ['preparing', 'cancelled'],
-	preparing: ['ready', 'cancelled'],
-	ready: ['packed', 'cancelled'],
-	packed: ['dispatched', 'shipped', 'cancelled'],
-	shipped: ['delivered', 'cancelled'],
+	pending_payment: ['confirmed', 'cancelled'],
+	confirmed: ['farmer_preparing', 'cancelled'],
+	farmer_preparing: ['sent_to_operations_centre', 'cancelled'],
+	sent_to_operations_centre: ['received_at_centre', 'cancelled'],
+	received_at_centre: ['quality_check', 'cancelled'],
+	quality_check: ['ready_for_dispatch', 'packed', 'cancelled'],
+	ready_for_dispatch: ['packed', 'dispatched', 'cancelled'],
+	packed: ['dispatched', 'cancelled'],
 	dispatched: ['delivered', 'cancelled'],
-	delivered: ['completed'],
-	completed: [],
+	delivered: ['payout_ready', 'completed'],
+	payout_ready: ['paid'],
 	paid: [],
 	cancelled: []
 };
@@ -195,7 +199,7 @@ export const createOrder = async (req, res) => {
 					delivery_address: normalizedDeliveryAddress,
 					delivery_service: normalizedDeliveryService,
 					delivery_status: 'pending',
-					status: 'pending'
+					status: 'pending_payment'
 				}
 			])
 			.select()
