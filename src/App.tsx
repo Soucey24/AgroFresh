@@ -21,6 +21,12 @@ import AdminOrders from "./pages/admin/Orders";
 import AdminPayments from "./pages/admin/Payments";
 import Payouts from "./pages/admin/Payouts";
 import Operations from "./pages/admin/Operations";
+import OperationsDashboardPage from "./pages/operations/OperationsDashboardPage";
+import OperationsQueuePage from "./pages/operations/OperationsQueuePage";
+import OperationsQualityPage from "./pages/operations/OperationsQualityPage";
+import OperationsDispatchPage from "./pages/operations/OperationsDispatchPage";
+import OperationsPayoutsPage from "./pages/operations/OperationsPayoutsPage";
+import OperationsTeamPage from "./pages/operations/OperationsTeamPage";
 import BuyerOrders from "./pages/BuyerOrders";
 import FarmerOrders from "./pages/FarmerOrders";
 import Settings from "./pages/admin/Settings";
@@ -65,8 +71,13 @@ const App = () => (
           <Route path="/admin/orders" element={<AdminOrders />} />
           <Route path="/admin/payments" element={<AdminPayments />} />
           <Route path="/admin/payouts" element={<Payouts />} />
-          <Route path="/admin/operations" element={<Operations />} />
-          <Route path="/operations" element={<RequireAuth><Operations /></RequireAuth>} />
+          <Route path="/admin/operations" element={<RequireAuth><Operations section="dashboard" /></RequireAuth>} />
+          <Route path="/operations" element={<RequireAuth><OperationsDashboardPage isAdminMode={false} /></RequireAuth>} />
+          <Route path="/operations/queue" element={<RequireAuth><OperationsQueuePage /></RequireAuth>} />
+          <Route path="/operations/quality" element={<RequireAuth><OperationsQualityPage /></RequireAuth>} />
+          <Route path="/operations/dispatch" element={<RequireAuth><OperationsDispatchPage /></RequireAuth>} />
+          <Route path="/operations/payouts" element={<RequireAuth><OperationsPayoutsPage /></RequireAuth>} />
+          <Route path="/operations/team" element={<RequireAuth><OperationsTeamPage /></RequireAuth>} />
           <Route path="/admin/settings" element={<Settings />} />
           <Route path="/buyer-orders" element={<BuyerOrders />} />
           <Route path="/farmer-orders" element={<FarmerOrders />} />
