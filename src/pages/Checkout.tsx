@@ -231,7 +231,13 @@ const Checkout = () => {
           delivery_address: normalizedDeliveryInfo.address,
         });
         if (orderResult.error) {
-          throw new Error(`Failed to create order for ${item.name}: ${orderResult.error}`);
+          const errorMsg = orderResult.error || 'Unknown error';
+          console.error(`[Checkout] Order creation failed for ${item.name}:`, errorMsg);
+          throw new Error(errorMsg);
+        }
+        if (!orderResult.id) {
+          console.error(`[Checkout] Order created but no ID returned:`, orderResult);
+          throw new Error('Order was created but response was invalid');
         }
         createdOrders.push(orderResult);
         provisionalOrderIds.push(orderResult.id);
@@ -242,13 +248,17 @@ const Checkout = () => {
       setOrderId(primaryOrderId);
       setShowPaymentModal(true);
     } catch (error) {
-      console.error('Error creating orders:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error('[Checkout] Full error creating orders:', error);
+      
       await Promise.all(provisionalOrderIds.map((id) => deleteOrder(id))).catch((cleanupError) => {
         console.error('Error cleaning up provisional orders:', cleanupError);
       });
+      
+      // Show specific error message from backend
       toast({ 
-        title: "Error", 
-        description: "Failed to create orders. Please try again.",
+        title: "Unable to create order", 
+        description: errorMessage || "Failed to create orders. Please try again.",
         variant: "destructive"
       });
     } finally {
