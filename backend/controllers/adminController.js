@@ -1,5 +1,6 @@
 import { supabase } from '../app.js';
 import { notifyVerificationDecision } from '../services/notificationService.js';
+import { fetchExternalMarketDemand } from '../services/externalMarketDemandService.js';
 
 const defaultSettings = {
   platformName: 'AgroFresh GH',
@@ -418,6 +419,96 @@ export const getAdminOrders = async (_req, res) => {
     res.json(data || []);
   } catch (err) {
     handleError(res, 500, 'Failed to fetch orders', err.message);
+  }
+};
+
+export const getMarketDemandAnalysis = async (req, res) => {
+  try {
+    const cropType = String(req.query.crop_type || '').trim().toLowerCase();
+    const nearExpiryDays = Math.max(0, Number(req.query.near_expiry_days || 7));
+
+    if (!cropType) {
+      return res.status(400).json({ error: 'crop_type is required' });
+    }
+
+    const [{ data: orders, error: ordersError }, { data: crops, error: cropsError }] = await Promise.all([
+      supabase
+        .from('orders')
+        .select('id, status, quantity, created_at, crop:crops(name, category), buyer:users!orders_buyer_id_fkey(location)')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('crops')
+        .select('name, category, quantity, expiry_date, available')
+        .eq('available', true)
+    ]);
+
+    if (ordersError) throw ordersError;
+    if (cropsError) throw cropsError;
+
+    const matchesCrop = (crop) => {
+      const value = `${crop?.name || ''} ${crop?.category || ''}`.toLowerCase();
+      return value.includes(cropType);
+    };
+    const matchingOrders = (orders || []).filter((order) => matchesCrop(order.crop));
+    const externalDemand = await fetchExternalMarketDemand(cropType);
+    const today = new Date();
+    const expiryLimit = new Date(today.getTime() + nearExpiryDays * 24 * 60 * 60 * 1000);
+    const nearSpoilageStock = (crops || [])
+      .filter((crop) => matchesCrop(crop) && crop.expiry_date && new Date(crop.expiry_date) <= expiryLimit)
+      .reduce((total, crop) => total + Number(crop.quantity || 0), 0);
+
+    const byLocation = new Map();
+    matchingOrders.forEach((order) => {
+      const location = String(order.buyer?.location || '').trim();
+      if (!location) return;
+      const current = byLocation.get(location) || { location, historicalOrders: 0, recentOrders: 0, fulfilledOrders: 0, quantityOrdered: 0 };
+      const orderDate = new Date(order.created_at || 0);
+      const isRecent = today.getTime() - orderDate.getTime() <= 30 * 24 * 60 * 60 * 1000;
+      const isFulfilled = ['delivered', 'payout_ready', 'paid'].includes(order.status);
+      current.historicalOrders += 1;
+      current.recentOrders += isRecent ? 1 : 0;
+      current.fulfilledOrders += isFulfilled ? 1 : 0;
+      current.quantityOrdered += Number(order.quantity || 0);
+      byLocation.set(location, current);
+    });
+
+    const rankedLocations = [...byLocation.values()]
+      .map((candidate) => {
+        const internalScore = candidate.historicalOrders * 1 + candidate.recentOrders * 2 + candidate.fulfilledOrders * 1.5;
+        const external = externalDemand.records.find((record) => record.location.toLowerCase() === candidate.location.toLowerCase());
+        return {
+          ...candidate,
+          internalDemandScore: Number(internalScore.toFixed(2)),
+          externalDemandScore: external?.externalDemandScore || 0,
+          predictedDemandScore: Number((internalScore + (external?.externalDemandScore || 0)).toFixed(2)),
+        };
+      })
+      .concat(externalDemand.records
+        .filter((record) => !byLocation.has(record.location))
+        .map((record) => ({
+          location: record.location,
+          historicalOrders: 0,
+          recentOrders: 0,
+          fulfilledOrders: 0,
+          quantityOrdered: 0,
+          internalDemandScore: 0,
+          externalDemandScore: record.externalDemandScore,
+          predictedDemandScore: record.externalDemandScore,
+        })))
+      .sort((left, right) => right.predictedDemandScore - left.predictedDemandScore);
+
+    res.json({
+      cropType,
+      nearExpiryDays,
+      nearSpoilageStock,
+      candidateLocations: rankedLocations,
+      dataSource: externalDemand.available ? `${externalDemand.provider} + AgroFresh sales` : 'AgroFresh sales (external provider unavailable)',
+      methodology: externalDemand.available
+        ? 'External market demand blended with historical orders, 30-day order activity, fulfilled orders, and available stock nearing expiry.'
+        : 'Historical orders, 30-day order activity, fulfilled orders, and available stock nearing expiry.'
+    });
+  } catch (err) {
+    handleError(res, 500, 'Failed to analyze market demand', err.message);
   }
 };
 

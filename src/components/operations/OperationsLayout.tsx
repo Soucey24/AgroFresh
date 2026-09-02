@@ -5,6 +5,7 @@ import {
   ClipboardCheck,
   Truck,
   CheckCircle2,
+  TrendingUp,
   LogOut,
   Leaf,
   Menu,
@@ -32,6 +33,7 @@ const OperationsLayout = ({ children }: OperationsLayoutProps) => {
     { href: "/operations/quality-history", icon: ClipboardCheck, label: "Quality History" },
     { href: "/operations/dispatch", icon: Truck, label: "Dispatch" },
     { href: "/operations/delivered", icon: CheckCircle2, label: "Delivered Orders" },
+    { href: "/operations/market-demand", icon: TrendingUp, label: "Market Demand" },
   ];
 
   const isActive = (path: string) => {

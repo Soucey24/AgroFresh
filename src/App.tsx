@@ -27,6 +27,7 @@ import OperationsQualityPage from "./pages/operations/OperationsQualityPage";
 import OperationsQualityHistoryPage from "./pages/operations/OperationsQualityHistoryPage";
 import OperationsDispatchPage from "./pages/operations/OperationsDispatchPage";
 import OperationsDeliveredPage from "./pages/operations/OperationsDeliveredPage";
+import OperationsMarketDemandPage from "./pages/operations/OperationsMarketDemandPage";
 import OperationsPayoutsPage from "./pages/operations/OperationsPayoutsPage";
 import OperationsTeamPage from "./pages/operations/OperationsTeamPage";
 import BuyerOrders from "./pages/BuyerOrders";
@@ -35,6 +36,7 @@ import Settings from "./pages/admin/Settings";
 import Verifications from "./pages/admin/Verifications";
 import Reports from "./pages/admin/Reports";
 import FarmerInsights from "./pages/FarmerInsights";
+import FarmerMarketDemand from "./pages/FarmerMarketDemand";
 import FarmerVerification from "./pages/FarmerVerification";
 import FarmerQuickActionPage from "./pages/FarmerQuickActionPage";
 import OrderConfirmation from "./pages/OrderConfirmation";
@@ -80,11 +82,13 @@ const App = () => (
           <Route path="/operations/quality-history" element={<RequireAuth><OperationsQualityHistoryPage /></RequireAuth>} />
           <Route path="/operations/dispatch" element={<RequireAuth><OperationsDispatchPage /></RequireAuth>} />
           <Route path="/operations/delivered" element={<RequireAuth><OperationsDeliveredPage /></RequireAuth>} />
+          <Route path="/operations/market-demand" element={<RequireAuth><OperationsMarketDemandPage /></RequireAuth>} />
           <Route path="/operations/payouts" element={<RequireAuth><OperationsPayoutsPage /></RequireAuth>} />
           <Route path="/operations/team" element={<RequireAuth><OperationsTeamPage /></RequireAuth>} />
           <Route path="/admin/settings" element={<Settings />} />
           <Route path="/buyer-orders" element={<BuyerOrders />} />
           <Route path="/farmer-orders" element={<FarmerOrders />} />
+          <Route path="/farmer-market-demand" element={<RequireAuth><FarmerMarketDemand /></RequireAuth>} />
           <Route path="/farmer-insights/:cropId" element={<FarmerInsights />} />
           <Route path="/verify-farmer" element={<FarmerVerification />} />
           <Route path="/order-confirmation" element={<OrderConfirmation />} />

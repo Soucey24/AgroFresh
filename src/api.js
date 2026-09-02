@@ -674,6 +674,18 @@ export async function getOrderStats() {
   return res.json();
 }
 
+export async function getMarketDemandAnalysis(cropType, nearExpiryDays = 7) {
+  const params = new URLSearchParams({ crop_type: cropType, near_expiry_days: String(nearExpiryDays) });
+  const res = await fetch(`${API_BASE}/api/admin/market-demand?${params}`, { credentials: 'include' });
+  return res.json();
+}
+
+export async function getFarmerMarketDemand(cropType, nearExpiryDays = 7) {
+  const params = new URLSearchParams({ crop_type: cropType, near_expiry_days: String(nearExpiryDays) });
+  const res = await fetch(`${API_BASE}/api/orders/market-demand?${params}`, { credentials: 'include' });
+  return res.json();
+}
+
 // Admin Crop APIs
 export async function getAdminCrops() {
   const res = await fetch(`${API_BASE}/api/admin/crops`, {

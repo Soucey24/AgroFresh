@@ -5,12 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { createUser, getAdminOrders, getPayouts, listQualityChecks, listUsers, updateOrder, updatePayout } from "@/api";
+import { createUser, getAdminOrders, getMarketDemandAnalysis, getPayouts, listQualityChecks, listUsers, updateOrder, updatePayout } from "@/api";
 import OperationsLayout from "@/components/operations/OperationsLayout";
 import { QualityCheckForm } from "@/components/operations/QualityCheckForm";
 import { useToast } from "@/hooks/use-toast";
 
-export type OperationsSection = 'dashboard' | 'queue' | 'quality' | 'history' | 'dispatch' | 'delivered' | 'payouts' | 'team';
+export type OperationsSection = 'dashboard' | 'queue' | 'quality' | 'history' | 'dispatch' | 'delivered' | 'market-demand' | 'payouts' | 'team';
 
 interface OperationsSectionPageProps {
   section?: OperationsSection;
@@ -77,6 +77,9 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [loadError, setLoadError] = useState('');
+  const [demandCropType, setDemandCropType] = useState('tomato');
+  const [demandData, setDemandData] = useState<any>(null);
+  const [demandLoading, setDemandLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
@@ -111,6 +114,15 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
 
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (section !== 'market-demand') return;
+    setDemandLoading(true);
+    getMarketDemandAnalysis(demandCropType)
+      .then((result) => setDemandData(result?.error ? null : result))
+      .catch(() => setDemandData(null))
+      .finally(() => setDemandLoading(false));
+  }, [demandCropType, section]);
 
   useEffect(() => {
     const refreshLoop = window.setInterval(() => {
@@ -973,6 +985,52 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
     );
   };
 
+  const renderMarketDemand = () => (
+    <Card>
+      <CardHeader>
+        <CardTitle>Market demand analysis</CardTitle>
+        <CardDescription>Rank buyer locations where produce is most likely to move, especially when stock is nearing spoilage.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="w-full sm:max-w-xs">
+            <label className="mb-1 block text-sm font-medium" htmlFor="demand-crop-type">Crop type</label>
+            <Input id="demand-crop-type" value={demandCropType} onChange={(event) => setDemandCropType(event.target.value)} placeholder="e.g. tomato" />
+          </div>
+          <Button type="button" disabled={demandLoading || !demandCropType.trim()} onClick={() => setDemandCropType((value) => value.trim().toLowerCase())}>
+            {demandLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Analyze demand
+          </Button>
+        </div>
+
+        {demandLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Analyzing market demand...</div>
+        ) : !demandData ? (
+          <p className="text-sm text-muted-foreground">No demand analysis is available for this crop yet.</p>
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-md border p-3"><p className="text-sm text-muted-foreground">Crop analyzed</p><p className="font-semibold">{demandData.cropType}</p></div>
+              <div className="rounded-md border p-3"><p className="text-sm text-muted-foreground">Available stock near spoilage</p><p className="font-semibold">{demandData.nearSpoilageStock || 0} units</p></div>
+            </div>
+            {demandData.candidateLocations?.length ? (
+              <div className="space-y-3">
+                {demandData.candidateLocations.map((candidate: any, index: number) => (
+                  <div key={candidate.location} className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div><p className="font-medium">{index + 1}. {candidate.location}</p><p className="text-sm text-muted-foreground">{candidate.recentOrders} recent orders · {candidate.fulfilledOrders} fulfilled · {candidate.quantityOrdered} units ordered</p></div>
+                    <Badge className="w-fit">Score {candidate.predictedDemandScore}</Badge>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-sm text-muted-foreground">No buyer locations are available for this crop yet.</p>}
+            <p className="text-xs text-muted-foreground">{demandData.methodology}</p>
+            <p className="text-xs font-medium text-primary">Data source: {demandData.dataSource}</p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+
   const renderPayouts = () => (
     <Card>
       <CardHeader>
@@ -1042,6 +1100,7 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
     history: renderHistory(),
     dispatch: renderDispatch(),
     delivered: renderDelivered(),
+    'market-demand': renderMarketDemand(),
     payouts: renderPayouts(),
     team: renderTeam(),
   };

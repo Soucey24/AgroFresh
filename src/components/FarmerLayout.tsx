@@ -44,10 +44,12 @@ const FarmerLayout = ({ children }: FarmerLayoutProps) => {
     { href: "/farmers/add", icon: PlusCircle, label: "Add Product" },
     { href: "/farmers#my-crops", icon: Sprout, label: "My Crops" },
     { href: "/farmer-orders", icon: ShoppingCart, label: "Orders" },
+    { href: "/farmer-market-demand", icon: TrendingUp, label: "Market Demand" },
   ];
 
   const quickActions = [
     { href: '/farmers/sales-report', icon: TrendingUp, label: 'Sales Report' },
+    { href: '/farmer-market-demand', icon: TrendingUp, label: 'Market Demand by Location' },
     { href: '/farmers/payouts', icon: DollarSign, label: 'Request Payment' },
     { href: '/farmers/availability', icon: Calendar, label: 'Update Availability' },
   ];

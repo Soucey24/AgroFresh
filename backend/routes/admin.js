@@ -8,6 +8,7 @@ import {
   getAdminCrops,
   reviewCropListing,
   getAdminOrders,
+  getMarketDemandAnalysis,
   getAdminPayments,
   getAdminSettings,
   updateAdminSettings
@@ -51,6 +52,7 @@ router.patch('/crops/:id/review', reviewCropListing);
 
 // Admin orders with all details
 router.get('/orders', getAdminOrders);
+router.get('/market-demand', getMarketDemandAnalysis);
 
 // Admin payments with all details
 router.get('/payments', getAdminPayments);
