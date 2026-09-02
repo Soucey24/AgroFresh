@@ -92,8 +92,9 @@ function DeliveryStatusCard({ order }) {
     <div>
       <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${status === 'Delivered' ? 'bg-green-100 text-green-800' : status === 'In Transit' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'}`}>{status || 'N/A'}</span>
       {trackingUrl && (
-        <a href={trackingUrl} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 underline">Track</a>
+        <a href={trackingUrl} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 underline">Open courier tracking</a>
       )}
+      {order.tracking_number && <div className="text-xs text-muted-foreground">Tracking number: {order.tracking_number}</div>}
       <button onClick={refreshStatus} className="ml-2 text-blue-600 underline">Refresh</button>
     </div>
   );

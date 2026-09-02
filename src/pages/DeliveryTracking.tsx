@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { getOrderTracking } from '@/api';
 
 const DeliveryTracking = () => {
   const { orderId } = useParams();
@@ -11,8 +12,7 @@ const DeliveryTracking = () => {
 
   useEffect(() => {
     if (!orderId) return;
-    fetch(`/api/orders/${orderId}/tracking`)
-      .then(res => res.json())
+    getOrderTracking(orderId)
       .then(data => {
         setTrackingInfo(data);
         setLoading(false);
@@ -38,6 +38,10 @@ const DeliveryTracking = () => {
           <div className="mb-4">
             <strong>Order ID:</strong> {trackingInfo.orderId}<br />
             <strong>Status:</strong> {trackingInfo.status}<br />
+            {trackingInfo.tracking_number && <><strong>Tracking number:</strong> {trackingInfo.tracking_number}<br /></>}
+            {trackingInfo.tracking_url && (
+              <><strong>Logistics tracking:</strong> <a href={trackingInfo.tracking_url} target="_blank" rel="noreferrer" className="text-blue-600 underline">Open courier tracking</a><br /></>
+            )}
             <strong>Last Updated:</strong> {new Date(trackingInfo.lastUpdated).toLocaleString()}<br />
             <ul className="mt-2 text-sm">
               {trackingInfo.history.map((h: any, i: number) => (

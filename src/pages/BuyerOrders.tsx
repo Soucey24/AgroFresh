@@ -277,7 +277,10 @@ const BuyerOrders = () => {
                     <div className="space-y-1">
                       <div className="text-sm font-medium">{getDeliveryMethodLabel(order)}</div>
                       {order.tracking_url ? (
-                        <a href={order.tracking_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Track delivery</a>
+                        <div className="space-y-1">
+                          {order.tracking_number && <div className="text-xs text-muted-foreground">Tracking: {order.tracking_number}</div>}
+                          <a href={order.tracking_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Track delivery</a>
+                        </div>
                       ) : (
                         <span className="text-xs text-muted-foreground">{order.delivery_status || 'Awaiting dispatch'}</span>
                       )}

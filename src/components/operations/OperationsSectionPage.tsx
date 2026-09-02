@@ -10,7 +10,7 @@ import OperationsLayout from "@/components/operations/OperationsLayout";
 import { QualityCheckForm } from "@/components/operations/QualityCheckForm";
 import { useToast } from "@/hooks/use-toast";
 
-export type OperationsSection = 'dashboard' | 'queue' | 'quality' | 'history' | 'dispatch' | 'payouts' | 'team';
+export type OperationsSection = 'dashboard' | 'queue' | 'quality' | 'history' | 'dispatch' | 'delivered' | 'payouts' | 'team';
 
 interface OperationsSectionPageProps {
   section?: OperationsSection;
@@ -22,6 +22,10 @@ type OrderRecord = {
   crop_id: number;
   status: string;
   quantity: number;
+  delivery_service?: string;
+  delivery_status?: string;
+  tracking_number?: string;
+  tracking_url?: string;
 };
 
 type UserRecord = {
@@ -52,6 +56,10 @@ const buildOrderRecord = (order: any): OrderRecord => ({
   crop_id: Number(order.crop_id ?? order.crop?.id ?? 0),
   quantity: Number(order.quantity ?? 0),
   status: String(order.status || 'pending'),
+  delivery_service: order.delivery_service,
+  delivery_status: order.delivery_status,
+  tracking_number: order.tracking_number,
+  tracking_url: order.tracking_url,
 });
 
 const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: OperationsSectionPageProps) => {
@@ -162,7 +170,7 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
   const dispatch = useMemo(
     () => orders.filter((order) => {
       const status = normalizeStatus(order.status);
-      return ['ready_for_dispatch', 'packed', 'dispatched', 'delivered', 'payout_ready'].includes(status);
+      return ['ready_for_dispatch', 'packed', 'dispatched', 'payout_ready'].includes(status);
     }),
     [orders],
   );
@@ -222,6 +230,9 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
         toast({ title: 'Order updated', description });
         if (nextStatus === 'packed') {
           navigate('/operations/dispatch');
+        }
+        if (nextStatus === 'delivered') {
+          navigate('/operations/delivered');
         }
       } else {
         setMessage(result.error || 'Failed to update order status.');
@@ -842,6 +853,7 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
                   <p className="text-sm text-muted-foreground">
                     {['ready_for_dispatch', 'packed'].includes(normalizeStatus(order.status)) ? 'Ready for carrier assignment' : 'In transit to buyer'}
                   </p>
+                  {order.tracking_number && <p className="text-xs text-muted-foreground">Tracking: {order.tracking_number}</p>}
                 </div>
                 <Badge className="bg-blue-500/10 text-blue-700">{formatStatusLabel(String(order.status || 'dispatched')).toUpperCase()}</Badge>
               </div>
@@ -899,11 +911,19 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
                     {actionLoading[`dispatch-${order.id}`] && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Assign dispatch
                   </Button>
+                  {order.tracking_url && (
+                    <a href={order.tracking_url} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-md border px-3 py-2 text-sm text-blue-600 underline">
+                      Open tracking
+                    </a>
+                  )}
                   <Button size="sm" variant="outline" disabled={actionLoading[`status-${order.id}-delivered`]} onClick={() => handleStatusUpdate(order.id, 'delivered')}>
                     {actionLoading[`status-${order.id}-delivered`] && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Mark delivered
                   </Button>
                 </div>
+                {normalizeStatus(order.status) === 'dispatched' && !order.tracking_url && (
+                  <p className="text-xs text-amber-700">Courier tracking has not been supplied yet. Add the real tracking number and URL before sharing this shipment.</p>
+                )}
               </div>
             </div>
           ))
@@ -911,6 +931,47 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
       </CardContent>
     </Card>
   );
+
+  const renderDelivered = () => {
+    const deliveredOrders = orders.filter((order) => normalizeStatus(order.status) === 'delivered');
+
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Delivered orders</CardTitle>
+          <CardDescription>Orders confirmed as delivered to the buyer</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {deliveredOrders.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No delivered orders yet.</p>
+          ) : (
+            deliveredOrders.map((order) => (
+              <div key={order.id} className="space-y-2 rounded-md border p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-medium">Order #{order.id}</p>
+                    <p className="text-sm text-muted-foreground">{order.quantity || 0} units delivered</p>
+                    {order.tracking_number && <p className="text-xs text-muted-foreground">Tracking: {order.tracking_number}</p>}
+                  </div>
+                  <Badge className="w-fit bg-green-500/10 text-green-700">DELIVERED</Badge>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {order.tracking_url && (
+                    <a href={order.tracking_url} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-md border px-3 py-2 text-sm text-blue-600 underline">
+                      Open tracking
+                    </a>
+                  )}
+                  <Button size="sm" variant="outline" onClick={() => navigate(`/delivery-tracking/${order.id}`)}>
+                    View delivery timeline
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
 
   const renderPayouts = () => (
     <Card>
@@ -980,6 +1041,7 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
     quality: renderQuality(),
     history: renderHistory(),
     dispatch: renderDispatch(),
+    delivered: renderDelivered(),
     payouts: renderPayouts(),
     team: renderTeam(),
   };

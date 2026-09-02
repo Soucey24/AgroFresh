@@ -26,6 +26,7 @@ import OperationsQueuePage from "./pages/operations/OperationsQueuePage";
 import OperationsQualityPage from "./pages/operations/OperationsQualityPage";
 import OperationsQualityHistoryPage from "./pages/operations/OperationsQualityHistoryPage";
 import OperationsDispatchPage from "./pages/operations/OperationsDispatchPage";
+import OperationsDeliveredPage from "./pages/operations/OperationsDeliveredPage";
 import OperationsPayoutsPage from "./pages/operations/OperationsPayoutsPage";
 import OperationsTeamPage from "./pages/operations/OperationsTeamPage";
 import BuyerOrders from "./pages/BuyerOrders";
@@ -78,6 +79,7 @@ const App = () => (
           <Route path="/operations/quality" element={<RequireAuth><OperationsQualityPage /></RequireAuth>} />
           <Route path="/operations/quality-history" element={<RequireAuth><OperationsQualityHistoryPage /></RequireAuth>} />
           <Route path="/operations/dispatch" element={<RequireAuth><OperationsDispatchPage /></RequireAuth>} />
+          <Route path="/operations/delivered" element={<RequireAuth><OperationsDeliveredPage /></RequireAuth>} />
           <Route path="/operations/payouts" element={<RequireAuth><OperationsPayoutsPage /></RequireAuth>} />
           <Route path="/operations/team" element={<RequireAuth><OperationsTeamPage /></RequireAuth>} />
           <Route path="/admin/settings" element={<Settings />} />
