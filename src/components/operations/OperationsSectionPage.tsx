@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { createUser, getAdminOrders, getMarketDemandAnalysis, getPayouts, listQualityChecks, listUsers, updateOrder, updatePayout } from "@/api";
+import { createDelivery, createUser, getAdminOrders, getMarketDemandAnalysis, getPayouts, listQualityChecks, listUsers, updateOrder, updatePayout } from "@/api";
 import OperationsLayout from "@/components/operations/OperationsLayout";
 import { QualityCheckForm } from "@/components/operations/QualityCheckForm";
 import { useToast } from "@/hooks/use-toast";
@@ -26,6 +26,7 @@ type OrderRecord = {
   delivery_status?: string;
   tracking_number?: string;
   tracking_url?: string;
+  delivery_info?: any;
 };
 
 type UserRecord = {
@@ -60,6 +61,7 @@ const buildOrderRecord = (order: any): OrderRecord => ({
   delivery_status: order.delivery_status,
   tracking_number: order.tracking_number,
   tracking_url: order.tracking_url,
+  delivery_info: order.delivery_info,
 });
 
 const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: OperationsSectionPageProps) => {
@@ -287,17 +289,28 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
     const action = `dispatch-${orderId}`;
     setActionBusy(action, true);
     const draft = dispatchDrafts[orderId] ?? {};
-    const provider = draft.provider || 'gig';
-    const trackingNumber = draft.tracking_number || `GIG-${orderId}-${Date.now().toString().slice(-6)}`;
-    const trackingUrl = draft.tracking_url || `https://www.giglogistics.com/track/${trackingNumber}`;
-
     try {
+      const provider = draft.provider || 'sendstack';
+      const order = orders.find((candidate) => candidate.id === orderId);
+      const deliveryInfo = typeof order?.delivery_info === 'string'
+        ? JSON.parse(order.delivery_info)
+        : order?.delivery_info || {};
+      const deliveryResult = await createDelivery(orderId, {
+        ...deliveryInfo,
+        deliveryService: provider,
+        address: deliveryInfo.address || deliveryInfo.pickupLocation,
+      });
+
+      if (deliveryResult?.error || deliveryResult?.success === false) {
+        throw new Error(deliveryResult?.error || 'Sendstack could not create the delivery.');
+      }
+
       const result = await updateOrder(orderId, {
         status: 'dispatched',
-        delivery_status: 'In Transit',
+        delivery_status: deliveryResult.delivery_status || 'Order Placed',
         delivery_service: provider,
-        tracking_number: trackingNumber,
-        tracking_url: trackingUrl,
+        tracking_number: deliveryResult.tracking_number,
+        tracking_url: deliveryResult.tracking_url,
       });
 
       if (!result?.error) {
@@ -872,7 +885,7 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
               <div className="space-y-2 rounded-md border border-dashed p-2">
                 <div className="flex gap-2">
                   <select
-                    value={dispatchDrafts[order.id]?.provider || 'gig'}
+                    value={dispatchDrafts[order.id]?.provider || 'sendstack'}
                     onChange={(event) => setDispatchDrafts((current) => ({
                       ...current,
                       [order.id]: {
@@ -883,8 +896,8 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
                     }))}
                     className="w-full rounded-md border bg-background px-2 py-1 text-sm"
                   >
-                    <option value="gig">GIG Logistics</option>
                     <option value="sendstack">Sendstack</option>
+                    <option value="gig">GIG Logistics</option>
                     <option value="other">Other courier</option>
                   </select>
                 </div>

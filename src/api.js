@@ -371,6 +371,16 @@ export async function updateOrderTracking(id, tracking) {
   return res.json();
 }
 
+export async function createDelivery(orderId, deliveryInfo, cartItems = []) {
+  const res = await fetch(`${API_BASE}/api/orders/delivery`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ orderId, deliveryInfo, cartItems }),
+  });
+  return res.json();
+}
+
 export async function getOrderTracking(id) {
   const res = await fetch(`${API_BASE}/api/orders/${id}/tracking`, {
     credentials: 'include'

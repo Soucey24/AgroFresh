@@ -228,7 +228,8 @@ export const createCrop = async (req, res) => {
     const numericPrice = Number(price);
     const numericQty = Number(quantity);
     
-    if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
+    const isDraft = status !== 'active';
+    if (!Number.isFinite(numericPrice) || numericPrice < 0 || (!isDraft && numericPrice === 0)) {
       return handleError(res, 400, 'Price must be a positive number');
     }
     if (!Number.isInteger(numericQty) || numericQty <= 0) {

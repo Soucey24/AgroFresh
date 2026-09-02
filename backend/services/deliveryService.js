@@ -4,23 +4,21 @@ class DeliveryService {
   constructor() {
     this.sendstackAppId = process.env.SENDSTACK_APP_ID;
     this.sendstackAppSecret = process.env.SENDSTACK_APP_SECRET;
-    this.sendstackApiKey = process.env.SENDSTACK_API_KEY;
   }
 
   async createSendstackDelivery(orderData) {
     const { deliveryInfo, cartItems, orderId } = orderData;
     
     if (!this.sendstackAppId || !this.sendstackAppSecret) {
-      console.warn('Sendstack credentials not configured, using fallback');
-      return this.createFallbackDelivery(orderId);
+      throw new Error('Sendstack credentials are not configured');
     }
 
     const payload = {
       orderType: "PROCESSING",
       pickup: {
-        address: "Accra, Ghana", // TODO: Replace with your actual business address
-        pickupName: "AgroFresh Ghana Market",
-        pickupNumber: "0243404515"
+        address: process.env.SENDSTACK_PICKUP_ADDRESS || 'AgroFresh collection centre, Ghana',
+        pickupName: process.env.SENDSTACK_PICKUP_NAME || 'AgroFresh Ghana Market',
+        pickupNumber: process.env.SENDSTACK_PICKUP_PHONE || ''
       },
       drops: [
         {
@@ -76,7 +74,7 @@ class DeliveryService {
       }
     } catch (err) {
       console.error('Error with Sendstack delivery:', err);
-      return this.createFallbackDelivery(orderId);
+      throw err;
     }
   }
 
