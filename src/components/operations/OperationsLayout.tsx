@@ -30,6 +30,7 @@ const OperationsLayout = ({ children }: OperationsLayoutProps) => {
     { href: "/operations", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/operations/queue", icon: Boxes, label: "Collection Queue" },
     { href: "/operations/quality", icon: ClipboardCheck, label: "Quality" },
+    { href: "/operations/quality-history", icon: ClipboardCheck, label: "Quality History" },
     { href: "/operations/dispatch", icon: Truck, label: "Dispatch" },
     { href: "/operations/payouts", icon: WalletCards, label: "Payouts" },
     { href: "/operations/team", icon: Users, label: "Team" },

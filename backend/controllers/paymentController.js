@@ -284,7 +284,7 @@ export const simulatePaymentCompletion = async (req, res) => {
 
 		const { error: updateOrderError } = await supabase
 			.from('orders')
-			.update({ status: 'paid', updated_at: now })
+			.update({ status: 'confirmed', updated_at: now })
 			.eq('id', payment.order_id);
 		if (updateOrderError) throw updateOrderError;
 
@@ -346,7 +346,7 @@ export const verifyPayment = async (req, res) => {
 		if (nextStatus === 'completed') {
 			const { error: orderError } = await supabase
 				.from('orders')
-				.update({ status: 'paid', updated_at: now })
+				.update({ status: 'confirmed', updated_at: now })
 				.eq('id', payment.order_id);
 			if (orderError) throw orderError;
 			if (payment.status !== 'completed') {
@@ -426,7 +426,7 @@ export const paymentWebhook = async (req, res) => {
 		if (nextStatus === 'completed') {
 			const { error: orderError } = await supabase
 				.from('orders')
-				.update({ status: 'paid', updated_at: now })
+				.update({ status: 'confirmed', updated_at: now })
 				.eq('id', payment.order_id);
 			if (orderError) throw orderError;
 			if (payment.status !== 'completed') {

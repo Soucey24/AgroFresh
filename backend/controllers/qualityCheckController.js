@@ -27,15 +27,25 @@ export const analyzeQuality = async (req, res) => {
 		mlPayload.append('crop_id', crop_id);
 
 		if (file_base64) {
-			// Convert base64 to blob
-			const byteString = atob(file_base64.split(',')[1]);
-			const ab = new ArrayBuffer(byteString.length);
-			const view = new Uint8Array(ab);
-			for (let i = 0; i < byteString.length; i++) {
-				view[i] = byteString.charCodeAt(i);
+			const normalizedSource = file_base64.startsWith('data:') ? file_base64 : `data:image/jpeg;base64,${file_base64}`;
+			const match = normalizedSource.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
+
+			if (!match || !match[2]) {
+				return handleError(res, 400, 'Invalid image data: the captured frame is empty or not a valid image.');
 			}
-			const blob = new Blob([ab], { type: 'image/jpeg' });
-			mlPayload.append('image', blob, `quality-check-${order_id}.jpg`);
+
+			try {
+				const byteString = atob(match[2]);
+				const ab = new ArrayBuffer(byteString.length);
+				const view = new Uint8Array(ab);
+				for (let i = 0; i < byteString.length; i++) {
+					view[i] = byteString.charCodeAt(i);
+				}
+				const blob = new Blob([ab], { type: match[1] || 'image/jpeg' });
+				mlPayload.append('image', blob, `quality-check-${order_id}.jpg`);
+			} catch (decodeError) {
+				return handleError(res, 400, 'Invalid image data: could not decode the captured frame.', decodeError.message);
+			}
 		} else if (image_url) {
 			mlPayload.append('image_url', image_url);
 		}
@@ -70,6 +80,10 @@ export const analyzeQuality = async (req, res) => {
 			])
 			.select()
 			.single();
+
+		if (insertError && String(insertError.message).includes('Could not find the table')) {
+			return handleError(res, 500, 'Quality check table is missing. Run the migration in backend/migrations/quality-checks-schema.sql in Supabase.');
+		}
 
 		if (insertError) throw insertError;
 
@@ -140,7 +154,7 @@ export const completeQualityCheck = async (req, res) => {
 		// Handle decision outcomes
 		if (decision === 'approved') {
 			// Move to ready for dispatch
-			nextOrderStatus = 'ready';
+			nextOrderStatus = 'ready_for_dispatch';
 		} else if (decision === 'rejected') {
 			// Cancel order and restore crop quantity
 			nextOrderStatus = 'cancelled';
@@ -185,7 +199,7 @@ export const completeQualityCheck = async (req, res) => {
 		} else if (decision === 'partial') {
 			// Adjust order quantity and refund difference
 			if (quantity_accepted && quantity_accepted < order.quantity) {
-				nextOrderStatus = 'ready'; // Proceed with reduced quantity
+				nextOrderStatus = 'ready_for_dispatch'; // Proceed with reduced quantity
 
 				const { data: payment } = await supabase
 					.from('payments')

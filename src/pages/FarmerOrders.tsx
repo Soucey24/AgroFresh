@@ -112,15 +112,37 @@ const FarmerOrders = () => {
     setUpdating(orderId);
     const payload: any = { status: nextStatus };
     if (nextDeliveryStatus) payload.delivery_status = nextDeliveryStatus;
-    const result = await updateOrder(orderId, payload);
-    if (!result?.error) {
+    
+    try {
+      const result = await updateOrder(orderId, payload);
+      
+      if (result?.error) {
+        console.error('[FarmerOrders] Error updating status:', result.error);
+        alert(`Failed to update status: ${result.error}`);
+        setUpdating(null);
+        return;
+      }
+      
+      if (!result) {
+        console.error('[FarmerOrders] No response from updateOrder');
+        alert('Failed to update order status. Please try again.');
+        setUpdating(null);
+        return;
+      }
+      
       setOrders((prev) => prev.map((item) => item.id === orderId ? {
         ...item,
         status: nextStatus,
         delivery_status: nextDeliveryStatus || item.delivery_status
       } : item));
+      
+      console.log('[FarmerOrders] Status updated successfully:', { orderId, nextStatus });
+    } catch (err) {
+      console.error('[FarmerOrders] Exception updating order:', err);
+      alert(`Error: ${err instanceof Error ? err.message : 'Failed to update order status'}`);
+    } finally {
+      setUpdating(null);
     }
-    setUpdating(null);
   };
 
   const getStatusBadgeVariant = (status: string) => {
@@ -320,26 +342,41 @@ const FarmerOrders = () => {
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Order status</label>
-                    <select
-                      value={order.status}
-                      disabled={updating === order.id}
-                      onChange={(e) => updateOrderStatus(order.id, e.target.value)}
-                      className="w-full border rounded px-3 py-2 bg-background"
-                    >
-                      <option value="pending_payment">Pending payment</option>
-                      <option value="confirmed">Confirmed</option>
-                      <option value="farmer_preparing">Preparing shipment</option>
-                      <option value="sent_to_operations_centre">Sent to centre</option>
-                      <option value="received_at_centre">Received at centre</option>
-                      <option value="quality_check">Quality check</option>
-                      <option value="ready_for_dispatch">Ready for dispatch</option>
-                      <option value="packed">Packed</option>
-                      <option value="dispatched">Dispatched</option>
-                      <option value="delivered">Delivered</option>
-                      <option value="payout_ready">Payout ready</option>
-                      <option value="paid">Paid</option>
-                      <option value="cancelled">Cancelled</option>
-                    </select>
+                    {order.status === 'confirmed' ? (
+                      <select
+                        value={order.status}
+                        disabled={updating === order.id}
+                        onChange={(e) => updateOrderStatus(order.id, e.target.value)}
+                        className="w-full border rounded px-3 py-2 bg-background"
+                      >
+                        <option value="confirmed">Ready to start preparation</option>
+                        <option value="farmer_preparing">Mark as preparing now</option>
+                      </select>
+                    ) : order.status === 'farmer_preparing' ? (
+                      <select
+                        value={order.status}
+                        disabled={updating === order.id}
+                        onChange={(e) => updateOrderStatus(order.id, e.target.value)}
+                        className="w-full border rounded px-3 py-2 bg-background"
+                      >
+                        <option value="farmer_preparing">Preparing shipment</option>
+                        <option value="sent_to_operations_centre">Send to operations centre</option>
+                      </select>
+                    ) : (
+                      <div className="border rounded px-3 py-2 bg-background text-muted-foreground">
+                        {order.status === 'pending_payment' && 'Waiting for buyer payment...'}
+                        {order.status === 'sent_to_operations_centre' && 'Sent to operations centre'}
+                        {order.status === 'received_at_centre' && 'Received at operations centre'}
+                        {order.status === 'quality_check' && 'Quality check in progress...'}
+                        {order.status === 'ready_for_dispatch' && 'Ready for dispatch'}
+                        {order.status === 'packed' && 'Packed'}
+                        {order.status === 'dispatched' && 'Dispatched to buyer'}
+                        {order.status === 'delivered' && 'Delivered to buyer'}
+                        {order.status === 'payout_ready' && 'Payout ready'}
+                        {order.status === 'paid' && 'Payment completed'}
+                        {order.status === 'cancelled' && 'Order cancelled'}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -425,26 +462,41 @@ const FarmerOrders = () => {
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-2">
                           <Badge variant={getStatusBadgeVariant(order.status)}>{order.status}</Badge>
-                          <select
-                            value={order.status}
-                            disabled={updating === order.id}
-                            onChange={(e) => updateOrderStatus(order.id, e.target.value)}
-                            className="border rounded px-2 py-1 bg-background text-sm"
-                          >
-                            <option value="pending_payment">Pending payment</option>
-                            <option value="confirmed">Confirmed</option>
-                            <option value="farmer_preparing">Preparing shipment</option>
-                            <option value="sent_to_operations_centre">Sent to centre</option>
-                            <option value="received_at_centre">Received at centre</option>
-                            <option value="quality_check">Quality check</option>
-                            <option value="ready_for_dispatch">Ready for dispatch</option>
-                            <option value="packed">Packed</option>
-                            <option value="dispatched">Dispatched</option>
-                            <option value="delivered">Delivered</option>
-                            <option value="payout_ready">Payout ready</option>
-                            <option value="paid">Paid</option>
-                            <option value="cancelled">Cancelled</option>
-                          </select>
+                          {order.status === 'confirmed' ? (
+                            <select
+                              value={order.status}
+                              disabled={updating === order.id}
+                              onChange={(e) => updateOrderStatus(order.id, e.target.value)}
+                              className="border rounded px-2 py-1 bg-background text-sm"
+                            >
+                              <option value="confirmed">Ready to prepare</option>
+                              <option value="farmer_preparing">Start preparing</option>
+                            </select>
+                          ) : order.status === 'farmer_preparing' ? (
+                            <select
+                              value={order.status}
+                              disabled={updating === order.id}
+                              onChange={(e) => updateOrderStatus(order.id, e.target.value)}
+                              className="border rounded px-2 py-1 bg-background text-sm"
+                            >
+                              <option value="farmer_preparing">Preparing shipment</option>
+                              <option value="sent_to_operations_centre">Send to centre</option>
+                            </select>
+                          ) : (
+                            <span className="text-xs text-muted-foreground px-2 py-1">
+                              {order.status === 'pending_payment' && 'Waiting for payment...'}
+                              {order.status === 'sent_to_operations_centre' && 'In transit to centre'}
+                              {order.status === 'received_at_centre' && 'At operations centre'}
+                              {order.status === 'quality_check' && 'Quality check pending'}
+                              {order.status === 'ready_for_dispatch' && 'Ready to ship'}
+                              {order.status === 'packed' && 'Packed'}
+                              {order.status === 'dispatched' && 'Shipped'}
+                              {order.status === 'delivered' && 'Delivered'}
+                              {order.status === 'payout_ready' && 'Ready for payout'}
+                              {order.status === 'paid' && 'Paid'}
+                              {order.status === 'cancelled' && 'Cancelled'}
+                            </span>
+                          )}
                           <select
                             value={getDeliveryStageValue(order)}
                             disabled={updating === order.id}

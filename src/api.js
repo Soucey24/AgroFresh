@@ -475,7 +475,7 @@ export async function getQualityCheck(checkId) {
 }
 
 export async function listQualityChecks(orderId) {
-  const url = new URL(`${API_BASE}/api/quality-checks`);
+  const url = new URL(`${API_BASE || window.location.origin}/api/quality-checks`);
   if (orderId) url.searchParams.append('order_id', orderId);
   const res = await fetch(url, { credentials: 'include' });
   return res.json();

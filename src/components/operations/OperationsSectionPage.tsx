@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Box, CheckCircle2, ClipboardCheck, DollarSign, Truck, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Box, CheckCircle2, ClipboardCheck, DollarSign, Loader2, Truck, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { createUser, getAdminOrders, getPayouts, listUsers, updateOrder, updatePayout } from "@/api";
+import { createUser, getAdminOrders, getPayouts, listQualityChecks, listUsers, updateOrder, updatePayout } from "@/api";
 import OperationsLayout from "@/components/operations/OperationsLayout";
 import { QualityCheckForm } from "@/components/operations/QualityCheckForm";
+import { useToast } from "@/hooks/use-toast";
 
-export type OperationsSection = 'dashboard' | 'queue' | 'quality' | 'dispatch' | 'payouts' | 'team';
+export type OperationsSection = 'dashboard' | 'queue' | 'quality' | 'history' | 'dispatch' | 'payouts' | 'team';
 
 interface OperationsSectionPageProps {
   section?: OperationsSection;
@@ -53,9 +55,12 @@ const buildOrderRecord = (order: any): OrderRecord => ({
 });
 
 const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: OperationsSectionPageProps) => {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [payouts, setPayouts] = useState<PayoutRecord[]>([]);
   const [users, setUsers] = useState<UserRecord[]>([]);
+  const [qualityHistory, setQualityHistory] = useState<any[]>([]);
+  const [expandedQualityIds, setExpandedQualityIds] = useState<Record<number, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null);
   const [qualityDialogOpen, setQualityDialogOpen] = useState(false);
@@ -63,21 +68,34 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
   const [form, setForm] = useState({ name: '', email: '', password: '', location: '', phone: '' });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const { toast } = useToast();
+
+  const setActionBusy = (action: string, busy: boolean) => {
+    setActionLoading((current) => ({ ...current, [action]: busy }));
+  };
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [orderData, usersData, payoutData] = await Promise.all([
+        const [orderData, usersData, payoutData, qualityData] = await Promise.all([
           getAdminOrders(),
           listUsers(),
           getPayouts(),
+          listQualityChecks(),
         ]);
+
+        console.log('[Operations] Raw order data:', orderData);
 
         setOrders(Array.isArray(orderData) ? orderData : []);
         setUsers(Array.isArray(usersData) ? usersData : []);
         setPayouts(Array.isArray(payoutData) ? payoutData : []);
+        setQualityHistory(Array.isArray(qualityData) ? qualityData : []);
       } catch (error) {
         console.error('Failed to load operations dashboard', error);
+        const messageText = error instanceof Error ? error.message : 'Unknown error';
+        setLoadError(`Failed to load operations data: ${messageText}`);
       } finally {
         setLoading(false);
       }
@@ -86,17 +104,66 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
     loadData();
   }, []);
 
+  useEffect(() => {
+    const refreshLoop = window.setInterval(() => {
+      void refreshOrders();
+    }, 15000);
+
+    const handleFocus = () => {
+      void refreshOrders();
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.clearInterval(refreshLoop);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
+  const normalizeStatus = (status?: string) => {
+    const raw = String(status || '').trim().toLowerCase();
+    const legacyMap: Record<string, string> = {
+      pending: 'pending_payment',
+      preparing: 'farmer_preparing',
+      ready: 'ready_for_dispatch',
+      shipped: 'dispatched',
+      completed: 'paid',
+      paid: 'paid',
+      confirmed: 'confirmed',
+    };
+
+    return legacyMap[raw] || raw;
+  };
+
   const opsUsers = useMemo(() => users.filter((user) => user.role === 'operations'), [users]);
   const pendingDrops = useMemo(
-    () => orders.filter((order) => ['sent_to_operations_centre', 'received_at_centre', 'quality_check'].includes(String(order.status || '').toLowerCase())),
+    () => {
+      const filtered = orders.filter((order) => {
+        const status = normalizeStatus(order.status);
+        return ['sent_to_operations_centre', 'received_at_centre'].includes(status);
+      });
+      console.log('[Operations] Pending drops filter:', {
+        totalOrders: orders.length,
+        statusValues: orders.map(o => ({ id: o.id, status: o.status, normalized: normalizeStatus(o.status) })),
+        filtered: filtered.map(f => ({ id: f.id, status: f.status, normalized: normalizeStatus(f.status) }))
+      });
+      return filtered;
+    },
     [orders],
   );
   const qualityChecks = useMemo(
-    () => orders.filter((order) => ['quality_check', 'ready_for_dispatch', 'packed'].includes(String(order.status || '').toLowerCase())),
+    () => orders.filter((order) => {
+      const status = normalizeStatus(order.status);
+      return ['quality_check', 'ready_for_dispatch'].includes(status);
+    }),
     [orders],
   );
   const dispatch = useMemo(
-    () => orders.filter((order) => ['dispatched', 'delivered', 'payout_ready'].includes(String(order.status || '').toLowerCase())),
+    () => orders.filter((order) => {
+      const status = normalizeStatus(order.status);
+      return ['ready_for_dispatch', 'packed', 'dispatched', 'delivered', 'payout_ready'].includes(status);
+    }),
     [orders],
   );
   const pendingPayouts = useMemo(
@@ -105,76 +172,149 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
   );
 
   const refreshOrders = async () => {
-    const [refreshed, payoutRefresh] = await Promise.all([
-      getAdminOrders(),
-      getPayouts(),
-    ]);
+    try {
+      const [refreshed, payoutRefresh, qualityRefresh] = await Promise.all([
+        getAdminOrders(),
+        getPayouts(),
+        listQualityChecks(),
+      ]);
 
-    if (refreshed && !('error' in refreshed)) {
-      setOrders(Array.isArray(refreshed) ? refreshed : []);
-    }
+      console.log('[Operations] Refresh response:', { refreshed, payoutRefresh, qualityRefresh });
 
-    if (payoutRefresh && !('error' in payoutRefresh)) {
-      setPayouts(Array.isArray(payoutRefresh) ? payoutRefresh : []);
+      if (refreshed && !('error' in refreshed)) {
+        const orderArray = Array.isArray(refreshed) ? refreshed : [];
+        console.log('[Operations] Updated orders:', orderArray);
+        console.log('[Operations] Order statuses after refresh:', orderArray.map(o => ({ id: o.id, status: o.status, type: typeof o.status })));
+        orderArray.forEach(o => console.log(`Order ${o.id}: status="${o.status}"`));
+        setOrders(orderArray);
+        setLoadError('');
+      } else {
+        console.error('[Operations] Error refreshing orders:', refreshed);
+        const nextError = refreshed?.error || 'Unknown error while refreshing orders';
+        setLoadError(`Operations data unavailable: ${nextError}`);
+      }
+
+      if (payoutRefresh && !('error' in payoutRefresh)) {
+        setPayouts(Array.isArray(payoutRefresh) ? payoutRefresh : []);
+      }
+
+      if (qualityRefresh && !('error' in qualityRefresh)) {
+        setQualityHistory(Array.isArray(qualityRefresh) ? qualityRefresh : []);
+      }
+    } catch (err) {
+      console.error('[Operations] Refresh failed:', err);
     }
   };
 
   const handleStatusUpdate = async (orderId: number, nextStatus: string) => {
-    const result = await updateOrder(orderId, { status: nextStatus });
-    if (!result?.error) {
-      await refreshOrders();
-      setMessage(`Order #${orderId} moved to ${nextStatus}.`);
-    } else {
-      setMessage(result.error || 'Failed to update order status.');
+    const action = `status-${orderId}-${nextStatus}`;
+    setActionBusy(action, true);
+    console.log('[Operations] Updating order status:', { orderId, nextStatus });
+    try {
+      const result = await updateOrder(orderId, { status: nextStatus });
+      console.log('[Operations] Update result:', result);
+
+      if (!result?.error) {
+        await refreshOrders();
+        const destination = nextStatus === 'packed' ? ' Continue in Dispatch to assign delivery.' : '';
+        const description = `Order #${orderId} moved to ${formatStatusLabel(nextStatus)}.${destination}`;
+        setMessage(description);
+        toast({ title: 'Order updated', description });
+        if (nextStatus === 'packed') {
+          navigate('/operations/dispatch');
+        }
+      } else {
+        setMessage(result.error || 'Failed to update order status.');
+        toast({ title: 'Order update failed', description: result.error || 'Failed to update order status.', variant: 'destructive' });
+      }
+    } catch (error) {
+      const description = error instanceof Error ? error.message : 'Failed to update order status.';
+      setMessage(description);
+      toast({ title: 'Order update failed', description, variant: 'destructive' });
+    } finally {
+      setActionBusy(action, false);
     }
   };
 
-  const formatStatusLabel = (status: string) => status
+  const formatStatusLabel = (status: string) => normalizeStatus(status)
     .split('_')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
   const handlePayoutApproval = async (payoutId: number) => {
-    const result = await updatePayout(payoutId, { status: 'paid' });
-    if (!result?.error) {
-      await refreshOrders();
-      setMessage(`Payout #${payoutId} approved and marked as paid.`);
-    } else {
-      setMessage(result.error || 'Failed to approve payout.');
+    const action = `payout-${payoutId}`;
+    setActionBusy(action, true);
+    try {
+      const result = await updatePayout(payoutId, { status: 'paid' });
+      if (!result?.error) {
+        await refreshOrders();
+        const description = `Payout #${payoutId} approved and marked as paid.`;
+        setMessage(description);
+        toast({ title: 'Payout approved', description });
+      } else {
+        setMessage(result.error || 'Failed to approve payout.');
+        toast({ title: 'Payout approval failed', description: result.error || 'Failed to approve payout.', variant: 'destructive' });
+      }
+    } finally {
+      setActionBusy(action, false);
     }
   };
 
   const handleDispatchAssignment = async (orderId: number) => {
+    const action = `dispatch-${orderId}`;
+    setActionBusy(action, true);
     const draft = dispatchDrafts[orderId] ?? {};
     const provider = draft.provider || 'gig';
     const trackingNumber = draft.tracking_number || `GIG-${orderId}-${Date.now().toString().slice(-6)}`;
     const trackingUrl = draft.tracking_url || `https://www.giglogistics.com/track/${trackingNumber}`;
 
-    const result = await updateOrder(orderId, {
-      status: 'dispatched',
-      delivery_status: 'In Transit',
-      delivery_service: provider,
-      tracking_number: trackingNumber,
-      tracking_url: trackingUrl,
-    });
+    try {
+      const result = await updateOrder(orderId, {
+        status: 'dispatched',
+        delivery_status: 'In Transit',
+        delivery_service: provider,
+        tracking_number: trackingNumber,
+        tracking_url: trackingUrl,
+      });
 
-    if (!result?.error) {
-      await refreshOrders();
-      setMessage(`Order #${orderId} marked dispatched with ${provider.toUpperCase()} tracking.`);
-    } else {
-      setMessage(result.error || 'Failed to assign dispatch.');
+      if (!result?.error) {
+        await refreshOrders();
+        const description = `Order #${orderId} is now in transit with ${provider.toUpperCase()} tracking.`;
+        setMessage(description);
+        toast({ title: 'Dispatch assigned', description });
+      } else {
+        setMessage(result.error || 'Failed to assign dispatch.');
+        toast({ title: 'Dispatch failed', description: result.error || 'Failed to assign dispatch.', variant: 'destructive' });
+      }
+    } finally {
+      setActionBusy(action, false);
     }
   };
 
   const openQualityCheck = (order: OrderRecord) => {
     setSelectedOrder(order);
     setQualityDialogOpen(true);
+    toast({ title: 'Quality check opened', description: `Order #${order.id} is ready for inspection.` });
   };
 
   const handleQualityComplete = async () => {
     await refreshOrders();
     setQualityDialogOpen(false);
     setSelectedOrder(null);
+    toast({ title: 'Quality check saved', description: 'The result was recorded and the order board was refreshed.' });
+  };
+
+  const recentQualityChecks = useMemo(() => {
+    return [...qualityHistory]
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+      .slice(0, 5);
+  }, [qualityHistory]);
+
+  const toggleQualityDetails = (id: number) => {
+    setExpandedQualityIds((current) => ({
+      ...current,
+      [id]: !current[id],
+    }));
   };
 
   const stats = [
@@ -200,6 +340,7 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
 
       if (result?.error) {
         setMessage(result.error);
+        toast({ title: 'Staff creation failed', description: result.error, variant: 'destructive' });
         return;
       }
 
@@ -209,6 +350,11 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
       } else {
         setMessage(`Operations staff created successfully. SMS delivery failed: ${result?.sms_error || 'check Arkesel configuration and phone number.'}`);
       }
+      toast({
+        title: 'Operations staff created',
+        description: result?.sms_sent ? 'Login credentials were sent by SMS.' : 'The account was created, but SMS delivery failed.',
+        variant: result?.sms_sent ? 'default' : 'destructive',
+      });
 
       const refreshed = await listUsers();
       if (refreshed && !('error' in refreshed)) {
@@ -216,7 +362,9 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
       }
     } catch (err) {
       setSaving(false);
-      setMessage(`Error: ${String(err)}`);
+      const description = `Error: ${String(err)}`;
+      setMessage(description);
+      toast({ title: 'Staff creation failed', description, variant: 'destructive' });
     }
   };
 
@@ -300,7 +448,10 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
                     <Badge variant="secondary">{String(order.status || 'pending').toUpperCase()}</Badge>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" onClick={() => handleStatusUpdate(order.id, 'received_at_centre')}>Receive at centre</Button>
+                    <Button size="sm" disabled={actionLoading[`status-${order.id}-received_at_centre`]} onClick={() => handleStatusUpdate(order.id, 'received_at_centre')}>
+                      {actionLoading[`status-${order.id}-received_at_centre`] && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Receive at centre
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => openQualityCheck(buildOrderRecord(order))}>Quality check</Button>
                   </div>
                 </div>
@@ -359,8 +510,18 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
                 <Badge variant="secondary">{String(order.status || 'pending').toUpperCase()}</Badge>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => handleStatusUpdate(order.id, 'confirmed')}>Received at centre</Button>
-                <Button size="sm" variant="outline" onClick={() => openQualityCheck(buildOrderRecord(order))}>Quality check</Button>
+                {normalizeStatus(order.status) === 'sent_to_operations_centre' && (
+                  <Button size="sm" disabled={actionLoading[`status-${order.id}-received_at_centre`]} onClick={() => handleStatusUpdate(order.id, 'received_at_centre')}>
+                    {actionLoading[`status-${order.id}-received_at_centre`] && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Received at centre
+                  </Button>
+                )}
+                {(normalizeStatus(order.status) === 'received_at_centre' || normalizeStatus(order.status) === 'sent_to_operations_centre') && (
+                  <Button size="sm" variant="outline" disabled={actionLoading[`status-${order.id}-quality_check`]} onClick={() => handleStatusUpdate(order.id, 'quality_check')}>
+                    {actionLoading[`status-${order.id}-quality_check`] && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Move to quality check
+                  </Button>
+                )}
               </div>
             </div>
           ))
@@ -369,36 +530,299 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
     </Card>
   );
 
+  const downloadQualityReport = (check: any) => {
+    const payload = {
+      id: check.id,
+      order_id: check.order_id,
+      crop_id: check.crop_id,
+      decision: check.decision,
+      status: check.status,
+      quality_score: Number(check.quality_score ?? 0),
+      notes: check.notes || '',
+      defects: Array.isArray(check.defects) ? check.defects : [],
+      color_analysis: check.color_analysis || {},
+      quantity_accepted: check.quantity_accepted ?? null,
+      created_at: check.created_at || null,
+      image_url: check.image_url || null,
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `quality-report-order-${check.order_id || check.id}-${new Date(check.created_at || Date.now()).toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'Report downloaded', description: `Quality report for order #${check.order_id || check.id} was downloaded.` });
+  };
+
   const renderQuality = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle>Quality & packing board</CardTitle>
-        <CardDescription>Orders receiving quality checks or packing approval</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {qualityChecks.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No quality checks currently in progress.</p>
-        ) : (
-          qualityChecks.map((order) => (
-            <div key={order.id} className="space-y-2 rounded-md border p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-medium">Order #{order.id}</p>
-                  <p className="text-sm text-muted-foreground">Grade review and packing</p>
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Quality & packing board</CardTitle>
+          <CardDescription>Orders receiving quality checks or packing approval</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {qualityChecks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No quality checks currently in progress.</p>
+          ) : (
+            qualityChecks.map((order) => (
+              <div key={order.id} className="space-y-2 rounded-md border p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium">Order #{order.id}</p>
+                    <p className="text-sm text-muted-foreground">Grade review and packing</p>
+                  </div>
+                  <Badge className="bg-amber-500/10 text-amber-700">{formatStatusLabel(String(order.status || 'quality_check')).toUpperCase()}</Badge>
                 </div>
-                <Badge className="bg-amber-500/10 text-amber-700">{formatStatusLabel(String(order.status || 'quality_check')).toUpperCase()}</Badge>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => openQualityCheck(buildOrderRecord(order))}>Run quality check</Button>
+                  <Button size="sm" variant="outline" disabled={actionLoading[`status-${order.id}-ready_for_dispatch`]} onClick={() => handleStatusUpdate(order.id, 'ready_for_dispatch')}>
+                    {actionLoading[`status-${order.id}-ready_for_dispatch`] && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Mark ready
+                  </Button>
+                  <Button size="sm" variant="outline" disabled={actionLoading[`status-${order.id}-packed`]} onClick={() => handleStatusUpdate(order.id, 'packed')}>
+                    {actionLoading[`status-${order.id}-packed`] && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Pack order
+                  </Button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => openQualityCheck(buildOrderRecord(order))}>Run quality check</Button>
-                <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(order.id, 'ready_for_dispatch')}>Mark ready</Button>
-                <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(order.id, 'packed')}>Pack order</Button>
-              </div>
-            </div>
-          ))
-        )}
-      </CardContent>
-    </Card>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent quality results</CardTitle>
+          <CardDescription>Latest product freshness and quality decisions</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {recentQualityChecks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No quality results have been recorded yet.</p>
+          ) : (
+            recentQualityChecks.map((check) => {
+              const isExpanded = Boolean(expandedQualityIds[check.id]);
+              const defects = Array.isArray(check.defects) ? check.defects : [];
+              const colorAnalysis = check.color_analysis || {};
+
+              return (
+                <div key={check.id} className="rounded-md border p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium">Order #{check.order_id}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {check.created_at ? new Date(check.created_at).toLocaleString() : 'Recent'}
+                      </p>
+                    </div>
+                    <Badge
+                      className={
+                        check.decision === 'approved'
+                          ? 'bg-green-100 text-green-800'
+                          : check.decision === 'partial'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-red-100 text-red-800'
+                      }
+                    >
+                      {String(check.decision || 'pending').toUpperCase()}
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Freshness score</p>
+                      <p className="font-medium">{Number(check.quality_score || 0).toFixed(1)}/100</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Status</p>
+                      <p className="font-medium">{String(check.status || 'pending')}</p>
+                    </div>
+                  </div>
+
+                  {check.image_url ? (
+                    <img
+                      src={check.image_url}
+                      alt={`Quality check for order ${check.order_id}`}
+                      className="h-24 w-full rounded-md object-cover border"
+                    />
+                  ) : (
+                    <div className="flex h-24 w-full items-center justify-center rounded-md border border-dashed bg-muted/20 text-xs text-muted-foreground">
+                      No image preview
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => toggleQualityDetails(check.id)}>
+                      {isExpanded ? 'Hide details' : 'View details'}
+                    </Button>
+                    <Button size="sm" onClick={() => downloadQualityReport(check)}>
+                      Download report
+                    </Button>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="space-y-2 rounded-md bg-muted/20 p-3 text-sm">
+                      {check.notes && (
+                        <div>
+                          <p className="text-muted-foreground">Notes</p>
+                          <p className="break-words">{check.notes}</p>
+                        </div>
+                      )}
+
+                      {defects.length > 0 && (
+                        <div>
+                          <p className="text-muted-foreground">Detected issues</p>
+                          <ul className="list-disc pl-5">
+                            {defects.map((defect: any, index: number) => (
+                              <li key={`${check.id}-defect-${index}`}>
+                                {typeof defect === 'string' ? defect : defect?.type || 'Unknown defect'}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {colorAnalysis && (colorAnalysis.brightness !== undefined || colorAnalysis.saturation !== undefined) && (
+                        <div>
+                          <p className="text-muted-foreground">Color analysis</p>
+                          <p>Brightness: {Number(colorAnalysis.brightness ?? 0).toFixed(2)}</p>
+                          <p>Saturation: {Number(colorAnalysis.saturation ?? 0).toFixed(2)}</p>
+                        </div>
+                      )}
+
+                      {check.quantity_accepted !== null && check.quantity_accepted !== undefined && (
+                        <div>
+                          <p className="text-muted-foreground">Accepted quantity</p>
+                          <p>{check.quantity_accepted}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
+
+  const renderHistory = () => {
+    const [orderFilter, setOrderFilter] = useState('');
+    const [decisionFilter, setDecisionFilter] = useState('all');
+
+    const filteredChecks = useMemo(() => {
+      const normalizedOrder = orderFilter.trim();
+      return qualityHistory.filter((check) => {
+        const matchesOrder = !normalizedOrder || String(check.order_id).includes(normalizedOrder);
+        const matchesDecision = decisionFilter === 'all' || String(check.decision || 'pending') === decisionFilter;
+        return matchesOrder && matchesDecision;
+      });
+    }, [decisionFilter, orderFilter, qualityHistory]);
+
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Quality history</CardTitle>
+          <CardDescription>Complete quality-check log with filters and downloadable reports</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+            <div className="flex-1">
+              <label className="mb-1 block text-sm font-medium">Filter by order</label>
+              <Input
+                value={orderFilter}
+                onChange={(event) => setOrderFilter(event.target.value)}
+                placeholder="Search order #"
+              />
+            </div>
+            <div className="md:w-56">
+              <label className="mb-1 block text-sm font-medium">Decision</label>
+              <select
+                value={decisionFilter}
+                onChange={(event) => setDecisionFilter(event.target.value)}
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              >
+                <option value="all">All decisions</option>
+                <option value="approved">Approved</option>
+                <option value="partial">Partial</option>
+                <option value="rejected">Rejected</option>
+                <option value="pending">Pending</option>
+              </select>
+            </div>
+            <div className="flex items-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setOrderFilter('');
+                  setDecisionFilter('all');
+                }}
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+
+          {filteredChecks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No quality records match your current filters.</p>
+          ) : (
+            <div className="space-y-3">
+              {filteredChecks.map((check) => (
+                <div key={check.id} className="rounded-md border p-3 space-y-3">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="font-medium">Order #{check.order_id}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {check.created_at ? new Date(check.created_at).toLocaleString() : 'Unknown time'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge className={
+                        check.decision === 'approved'
+                          ? 'bg-green-100 text-green-800'
+                          : check.decision === 'partial'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-red-100 text-red-800'
+                      }>
+                        {String(check.decision || 'pending').toUpperCase()}
+                      </Badge>
+                      <Button size="sm" onClick={() => downloadQualityReport(check)}>
+                        Download report
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
+                    <div>
+                      <p className="text-muted-foreground">Score</p>
+                      <p className="font-medium">{Number(check.quality_score || 0).toFixed(1)}/100</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Status</p>
+                      <p className="font-medium">{String(check.status || 'pending')}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Accepted qty</p>
+                      <p className="font-medium">{check.quantity_accepted ?? '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Decision</p>
+                      <p className="font-medium">{String(check.decision || 'pending')}</p>
+                    </div>
+                  </div>
+
+                  {check.notes && (
+                    <p className="text-sm text-muted-foreground break-words">{check.notes}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
 
   const renderDispatch = () => (
     <Card>
@@ -415,7 +839,9 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="font-medium">Order #{order.id}</p>
-                  <p className="text-sm text-muted-foreground">In transit to buyer</p>
+                  <p className="text-sm text-muted-foreground">
+                    {['ready_for_dispatch', 'packed'].includes(normalizeStatus(order.status)) ? 'Ready for carrier assignment' : 'In transit to buyer'}
+                  </p>
                 </div>
                 <Badge className="bg-blue-500/10 text-blue-700">{formatStatusLabel(String(order.status || 'dispatched')).toUpperCase()}</Badge>
               </div>
@@ -469,8 +895,14 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
                   />
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => handleDispatchAssignment(order.id)}>Assign dispatch</Button>
-                  <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(order.id, 'delivered')}>Mark delivered</Button>
+                  <Button size="sm" variant="outline" disabled={actionLoading[`dispatch-${order.id}`]} onClick={() => handleDispatchAssignment(order.id)}>
+                    {actionLoading[`dispatch-${order.id}`] && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Assign dispatch
+                  </Button>
+                  <Button size="sm" variant="outline" disabled={actionLoading[`status-${order.id}-delivered`]} onClick={() => handleStatusUpdate(order.id, 'delivered')}>
+                    {actionLoading[`status-${order.id}-delivered`] && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Mark delivered
+                  </Button>
                 </div>
               </div>
             </div>
@@ -501,7 +933,10 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
                 <Badge variant="secondary">PENDING</Badge>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => handlePayoutApproval(payout.id)}>Approve &amp; process</Button>
+                <Button size="sm" disabled={actionLoading[`payout-${payout.id}`]} onClick={() => handlePayoutApproval(payout.id)}>
+                  {actionLoading[`payout-${payout.id}`] && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Approve &amp; process
+                </Button>
               </div>
             </div>
           ))
@@ -543,6 +978,7 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
     dashboard: renderDashboard(),
     queue: renderQueue(),
     quality: renderQuality(),
+    history: renderHistory(),
     dispatch: renderDispatch(),
     payouts: renderPayouts(),
     team: renderTeam(),
@@ -566,6 +1002,12 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
           <div className="text-sm text-muted-foreground">Loading operations dashboard...</div>
         ) : (
           sectionContent[section]
+        )}
+
+        {loadError && (
+          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {loadError}
+          </div>
         )}
 
         {message && <p className="text-sm text-muted-foreground">{message}</p>}

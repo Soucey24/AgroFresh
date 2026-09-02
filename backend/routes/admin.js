@@ -25,8 +25,8 @@ import {
 
 const router = express.Router();
 
-// All admin routes require either admin or legacy vendor role
-router.use(requireAuth, requireRole(['admin', 'vendor']));
+// All admin routes require either admin, operations, or legacy vendor role
+router.use(requireAuth, requireRole(['admin', 'operations', 'vendor']));
 
 // Dashboard statistics
 router.get('/stats', getDashboardStats);

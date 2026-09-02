@@ -45,13 +45,26 @@ const handleError = (res, status, message, details) => {
 
 const canAccessOrder = (user, order) => {
 	if (!user || !order) return false;
-	if (user.role === 'admin' || user.role === 'vendor') return true;
+	if (user.role === 'admin' || user.role === 'vendor' || user.role === 'operations') return true;
 	return user.id === order.buyer_id || user.id === order.farmer_id;
 };
 
 const canTransitionOrder = (user) => {
 	// Only operations staff and admin can transition orders through states
 	return user && ['admin', 'operations'].includes(user.role);
+};
+
+const canFarmerUpdateStatus = (user, currentStatus, newStatus) => {
+	// Farmers can only transition these specific statuses
+	if (!user || user.role !== 'farmer') return false;
+	
+	// Allow: confirmed -> farmer_preparing (start preparing)
+	if (currentStatus === 'confirmed' && newStatus === 'farmer_preparing') return true;
+	
+	// Allow: farmer_preparing -> sent_to_operations_centre (send to operations)
+	if (currentStatus === 'farmer_preparing' && newStatus === 'sent_to_operations_centre') return true;
+	
+	return false;
 };
 
 const isValidTransition = (currentStatus, newStatus) => {
@@ -304,10 +317,14 @@ export const updateOrder = async (req, res) => {
 			return handleError(res, 403, 'Not authorized to update this order');
 		}
 
-		// Validate state transitions - operations/admin only
+		// Validate state transitions - operations/admin only, except farmers can move from farmer_preparing -> sent_to_operations_centre
 		if (status !== undefined && status !== order.status) {
-			if (!canTransitionOrder(user)) {
-				return handleError(res, 403, 'Only operations staff and admin can transition order statuses');
+			const isFarmerOwnOrder = user.id === order.farmer_id;
+			const isOperationsOrAdmin = canTransitionOrder(user);
+			const isFarmerAllowedTransition = isFarmerOwnOrder && canFarmerUpdateStatus(user, order.status, status);
+			
+			if (!isOperationsOrAdmin && !isFarmerAllowedTransition) {
+				return handleError(res, 403, 'Not authorized to transition this order status');
 			}
 
 			if (!ORDER_STATUSES.has(status)) {
