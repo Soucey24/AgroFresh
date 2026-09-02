@@ -12,6 +12,15 @@ const inferCropCategory = (crop) => {
   return 'Vegetables';
 };
 
+const isDigitalAddress = (value) => /^[A-Z]{1,3}-\d{3,}-\d+$/i.test(String(value || '').trim());
+
+const getPhysicalFarmerLocation = (crop, verificationByUserId) => {
+  const verification = verificationByUserId.get(crop.farmer_id);
+  const verifiedLocation = [verification?.town_village, verification?.district, verification?.region].filter(Boolean).join(', ');
+  if (verifiedLocation) return verifiedLocation;
+  return isDigitalAddress(crop.users?.location) ? 'Location unavailable' : (crop.users?.location || 'Location unavailable');
+};
+
 const handleError = (res, status, message, details) => {
   console.error(`[${status}] ${message}`, details);
   res.status(status).json({ error: message });
@@ -26,12 +35,24 @@ const transformCrop = (crop) => ({
   quantity: crop.quantity,
   unit: crop.unit || 'kg',
   expiryDate: crop.expiry_date,
+  listingLocation: crop.listing_location || null,
   farmer: crop.users?.name || 'Unknown',
-  location: crop.users?.location || 'Unknown',
+  location: crop.listing_location || crop.users?.location || 'Unknown',
   harvestDate: crop.created_at,
   image: crop.image,
   available: crop.available
 });
+
+const logCropLocation = (crop, verificationByUserId) => {
+  console.log('[crops-supabase] location trace', {
+    cropId: crop.id,
+    farmerId: crop.farmer_id,
+    listingLocation: crop.listing_location || null,
+    profileLocation: crop.users?.location || null,
+    verification: verificationByUserId?.get(crop.farmer_id) || null,
+    resolvedLocation: crop.listing_location || crop.users?.location || 'Unknown'
+  });
+};
 
 export const listCrops = async (req, res) => {
   try {
@@ -60,7 +81,25 @@ export const listCrops = async (req, res) => {
 
     if (error) throw error;
 
-    const transformedCrops = crops.map(transformCrop);
+    const farmerIds = [...new Set((crops || []).map((crop) => crop.farmer_id).filter(Boolean))];
+    const verificationByUserId = new Map();
+    if (farmerIds.length) {
+      const { data: verifications, error: verificationError } = await supabase
+        .from('user_verifications')
+        .select('user_id, region, district, town_village, status, submitted_at')
+        .in('user_id', farmerIds)
+        .order('submitted_at', { ascending: false });
+      if (verificationError) throw verificationError;
+      (verifications || []).forEach((verification) => {
+        if (!verificationByUserId.has(verification.user_id)) verificationByUserId.set(verification.user_id, verification);
+      });
+    }
+
+    crops.forEach((crop) => logCropLocation(crop, verificationByUserId));
+    const transformedCrops = crops.map((crop) => transformCrop({
+      ...crop,
+      users: { ...crop.users, location: getPhysicalFarmerLocation(crop, verificationByUserId) },
+    }));
     res.json(transformedCrops);
   } catch (err) {
     handleError(res, 500, 'Failed to fetch crops', err.message);
@@ -69,7 +108,7 @@ export const listCrops = async (req, res) => {
 
 export const createCrop = async (req, res) => {
   try {
-    const { name, category, description, price, quantity, unit, expiry_date } = req.body;
+    const { name, category, listing_location, description, price, quantity, unit, expiry_date } = req.body;
     const farmer_id = req.session.user?.id;
 
     // Validation
@@ -90,6 +129,7 @@ export const createCrop = async (req, res) => {
       .insert([{
         name,
         category: category || null,
+        listing_location: listing_location || null,
         description: description || null,
         price: parseFloat(price),
         quantity: parseInt(quantity),
@@ -135,7 +175,7 @@ export const getCrop = async (req, res) => {
 export const updateCrop = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, category, description, price, quantity, unit, expiry_date } = req.body;
+    const { name, category, listing_location, description, price, quantity, unit, expiry_date } = req.body;
     const farmer_id = req.session.user?.id;
 
     // Get current crop
@@ -167,6 +207,7 @@ export const updateCrop = async (req, res) => {
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (category !== undefined) updateData.category = category;
+    if (listing_location !== undefined) updateData.listing_location = listing_location;
     if (description !== undefined) updateData.description = description;
     if (price !== undefined) updateData.price = parseFloat(price);
     if (quantity !== undefined) {

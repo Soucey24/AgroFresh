@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Navigation from "@/components/Navigation";
 import BackgroundSlideshow from "@/components/BackgroundSlideshow";
 import { getProfile, getReviewsForCrop, listCrops } from "../api";
@@ -19,6 +18,7 @@ interface Crop {
   unit: string;
   price: number;
   category?: string | null;
+  listingLocation?: string | null;
   description: string;
   farmer: string;
   location: string;
@@ -117,12 +117,16 @@ const Buyers = () => {
     });
   }, []);
 
+  const isDigitalAddress = (value: string) => /^[A-Z]{1,3}-\d{3,}-\d+$/i.test(String(value || '').trim());
+  const getListingLocation = (crop: Crop) => crop.listingLocation || crop.location;
+  const displayLocation = (location: string) => isDigitalAddress(location) ? 'Location unavailable' : location;
+
   const filteredCrops = crops.filter(crop => {
     const matchesSearch = crop.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          crop.farmer.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === "all" ||
                  getCropCategory(crop).toLowerCase() === selectedCategory.toLowerCase();
-    const matchesLocation = locationFilter === "all" || crop.location === locationFilter;
+    const matchesLocation = locationFilter === "all" || displayLocation(getListingLocation(crop)) === locationFilter;
     return matchesSearch && matchesCategory && matchesLocation;
   });
 
@@ -173,7 +177,19 @@ const Buyers = () => {
     return diffDays;
   };
 
-  const locations = Array.from(new Set(crops.map((crop) => crop.location).filter(Boolean))).sort();
+  const locations = Array.from(new Set(crops.map((crop) => displayLocation(getListingLocation(crop))).filter((location) => location && location !== 'Location unavailable'))).sort();
+
+  useEffect(() => {
+    console.log('[Buyers] location trace', crops.map((crop) => ({
+      id: crop.id,
+      name: crop.name,
+      listingLocation: crop.listingLocation || null,
+      fallbackLocation: crop.location || null,
+      resolvedLocation: getListingLocation(crop),
+      displayedLocation: displayLocation(getListingLocation(crop)),
+    })));
+    console.log('[Buyers] location filter options', locations);
+  }, [crops, locations.join('|')]);
 
   return (
     <div className="min-h-screen bg-background relative">
@@ -244,18 +260,22 @@ const Buyers = () => {
                       className="pl-10"
                     />
                   </div>
-                  <Select value={locationFilter} onValueChange={setLocationFilter}>
-                    <SelectTrigger className="w-full">
-                      <MapPin className="mr-2 h-4 w-4" />
-                      <SelectValue placeholder="Farmer location" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All farmer locations</SelectItem>
-                      {locations.map((location) => (
-                        <SelectItem key={location} value={location}>{location}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <label className="relative block">
+                    <MapPin className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <select
+                      value={locationFilter}
+                      onChange={(event) => setLocationFilter(event.target.value)}
+                      className="h-10 w-full appearance-none rounded-md border border-input bg-background px-9 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                      aria-label="Filter by farmer location"
+                    >
+                      <option value="all">All farmer locations</option>
+                      {locations.length > 0 ? locations.map((location) => (
+                        <option key={location} value={location}>{location}</option>
+                      )) : (
+                        <option value="no-locations" disabled>No physical locations available</option>
+                      )}
+                    </select>
+                  </label>
                 </div>
               </div>
 
@@ -311,7 +331,7 @@ const Buyers = () => {
                       <div className="space-y-1 text-xs sm:text-sm">
                         <div className="flex items-center gap-2">
                           <MapPin className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                          <span className="truncate">{crop.location}</span>
+                          <span className="truncate">{displayLocation(getListingLocation(crop))}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Clock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
@@ -400,7 +420,7 @@ const Buyers = () => {
                   {selectedCrop.farmerAvatar ? <img src={getImageUrl(selectedCrop.farmerAvatar)} alt={selectedCrop.farmer} className="h-12 w-12 rounded-full object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 font-semibold text-primary">{selectedCrop.farmer.slice(0, 1)}</div>}
                   <div>
                     <div className="flex items-center gap-2 font-semibold">{selectedCrop.farmer}{selectedCrop.farmerVerified && <Badge variant="outline" className="border-emerald-500 text-emerald-700">Verified</Badge>}</div>
-                    <div className="text-sm text-muted-foreground">{selectedCrop.location}</div>
+                    <div className="text-sm text-muted-foreground">{displayLocation(getListingLocation(selectedCrop))}</div>
                   </div>
                 </div>
                 <p className="mt-3 text-sm text-muted-foreground">{selectedCrop.farmerBio || 'This farmer has not added a profile description yet.'}</p>
