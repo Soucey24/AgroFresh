@@ -459,7 +459,7 @@ const Farmers = () => {
       const yyyy = date.getFullYear();
       const mm = String(date.getMonth() + 1).padStart(2, '0');
       const dd = String(date.getDate()).padStart(2, '0');
-      formData.append('expiry_date', `${yyyy}-${mm}-${dd}`);
+      formData.append('harvest_date', `${yyyy}-${mm}-${dd}`);
     }
     if (imageFile) {
       formData.append('image', imageFile);
@@ -487,7 +487,7 @@ const Farmers = () => {
         const yyyy = date.getFullYear();
         const mm = String(date.getMonth() + 1).padStart(2, '0');
         const dd = String(date.getDate()).padStart(2, '0');
-        formData.append('expiry_date', `${yyyy}-${mm}-${dd}`);
+        formData.append('harvest_date', `${yyyy}-${mm}-${dd}`);
       }
       if (editImageFile) {
         formData.append('image', editImageFile);
@@ -1133,7 +1133,7 @@ const Farmers = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
                 <Label htmlFor="edit-expiryDate" className="text-sm font-medium sm:text-right">
-                  Expiry Date
+                  Harvest Date
                 </Label>
                 <Input 
                   type="date" 

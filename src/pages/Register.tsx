@@ -205,15 +205,32 @@ const Register = () => {
                 </div>
               </div>
 
+              {formData.userType === 'farmer' && (
+                <div>
+                  <Label htmlFor="location">Farm location</Label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="location"
+                      placeholder="e.g. Tamale, Northern Region"
+                      value={formData.location}
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      className="pl-10"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
-                <Label htmlFor="digital_address">Digital address</Label>
+                <Label htmlFor="digital_address">Digital address (private)</Label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="digital_address"
                     placeholder="GhanaPost GPS digital address"
                     value={formData.digital_address}
-                    onChange={(e) => setFormData({...formData, digital_address: e.target.value, location: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, digital_address: e.target.value })}
                     className="pl-10"
                     required
                   />

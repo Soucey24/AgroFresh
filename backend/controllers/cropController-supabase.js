@@ -1,5 +1,17 @@
 import { supabase } from '../app.js';
 
+const inferCropCategory = (crop) => {
+  if (crop.category) return crop.category;
+  const text = `${crop.name || ''} ${crop.description || ''}`.toLowerCase();
+  if (/spice|pepper|ginger|garlic|turmeric|clove|cinnamon/.test(text)) return 'Spices';
+  if (/oil|palm|coconut/.test(text)) return 'Oil';
+  if (/cereal|maize|corn|millet|oat|rice|wheat/.test(text)) return 'Cereals';
+  if (/grain|bean|soy|sorghum|groundnut|peanut/.test(text)) return 'Grains';
+  if (/fruit|mango|banana|orange|pineapple|pawpaw|watermelon/.test(text)) return 'Fruits';
+  if (/livestock|goat|sheep|cattle|chicken|poultry|pig/.test(text)) return 'LifeStocks';
+  return 'Vegetables';
+};
+
 const handleError = (res, status, message, details) => {
   console.error(`[${status}] ${message}`, details);
   res.status(status).json({ error: message });
@@ -8,7 +20,7 @@ const handleError = (res, status, message, details) => {
 const transformCrop = (crop) => ({
   id: crop.id,
   name: crop.name,
-  category: crop.description,
+  category: inferCropCategory(crop),
   description: crop.description,
   price: parseFloat(crop.price),
   quantity: crop.quantity,
@@ -57,7 +69,7 @@ export const listCrops = async (req, res) => {
 
 export const createCrop = async (req, res) => {
   try {
-    const { name, description, price, quantity, unit, expiry_date } = req.body;
+    const { name, category, description, price, quantity, unit, expiry_date } = req.body;
     const farmer_id = req.session.user?.id;
 
     // Validation
@@ -77,6 +89,7 @@ export const createCrop = async (req, res) => {
       .from('crops')
       .insert([{
         name,
+        category: category || null,
         description: description || null,
         price: parseFloat(price),
         quantity: parseInt(quantity),
@@ -122,7 +135,7 @@ export const getCrop = async (req, res) => {
 export const updateCrop = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, price, quantity, unit, expiry_date } = req.body;
+    const { name, category, description, price, quantity, unit, expiry_date } = req.body;
     const farmer_id = req.session.user?.id;
 
     // Get current crop
@@ -153,6 +166,7 @@ export const updateCrop = async (req, res) => {
     // Build update object
     const updateData = {};
     if (name !== undefined) updateData.name = name;
+    if (category !== undefined) updateData.category = category;
     if (description !== undefined) updateData.description = description;
     if (price !== undefined) updateData.price = parseFloat(price);
     if (quantity !== undefined) {

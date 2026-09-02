@@ -92,6 +92,7 @@ const AddProduct = () => {
 
     const formData = new FormData();
     formData.append("name", name);
+    formData.append("category", form.category);
     formData.append("description", form.description.trim() || `${form.category} from ${form.location || "farm"}`);
     formData.append("price", String(form.price || 0));
     formData.append("quantity", String(form.quantity));
@@ -180,6 +181,7 @@ const AddProduct = () => {
 
       const formData = new FormData();
       formData.append("name", form.name.trim());
+      formData.append("category", form.category);
       formData.append("description", form.description.trim() || `${form.category} from ${form.location || "farm"}`);
       formData.append("price", String(form.price));
       formData.append("quantity", String(form.quantity));

@@ -4,6 +4,29 @@ import { isFarmerApproved } from '../middleware/auth.js';
 import { notifyCropDecision, notifyCropSubmitted } from '../services/notificationService.js';
 import { uploadToSupabaseStorage, getStorageFallbackUrl } from '../services/storageService.js';
 
+const FALLBACK_SHELF_LIFE_DAYS = {
+  tomato: 7,
+  lettuce: 2,
+  yam: 90,
+  maize: 15,
+  pepper: 10,
+  cucumber: 3,
+  okra: 1,
+  cassava: 60
+};
+
+const inferCropCategory = (crop) => {
+  if (crop.category) return crop.category;
+  const text = `${crop.name || ''} ${crop.description || ''}`.toLowerCase();
+  if (/spice|pepper|ginger|garlic|turmeric|clove|cinnamon/.test(text)) return 'Spices';
+  if (/oil|palm|coconut/.test(text)) return 'Oil';
+  if (/cereal|maize|corn|millet|oat|rice|wheat/.test(text)) return 'Cereals';
+  if (/grain|bean|soy|sorghum|groundnut|peanut/.test(text)) return 'Grains';
+  if (/fruit|mango|banana|orange|pineapple|pawpaw|watermelon/.test(text)) return 'Fruits';
+  if (/livestock|goat|sheep|cattle|chicken|poultry|pig/.test(text)) return 'LifeStocks';
+  return 'Vegetables';
+};
+
 const handleError = (res, status, message, details) => {
   console.error(`[${status}] ${message}`, details);
   res.status(status).json({ error: message });
@@ -12,7 +35,7 @@ const handleError = (res, status, message, details) => {
 const transformCrop = (crop) => ({
   id: crop.id,
   name: crop.name,
-  category: crop.description,
+  category: inferCropCategory(crop),
   description: crop.description,
   price: parseFloat(crop.price),
   quantity: crop.quantity,
@@ -186,7 +209,7 @@ export const listCrops = async (req, res) => {
 
 export const createCrop = async (req, res) => {
   try {
-    const { name, description, price, quantity, unit, expiry_date, planting_date, harvest_date_predicted, status } = req.body;
+    const { name, category, description, price, quantity, unit, expiry_date, harvest_date, planting_date, harvest_date_predicted, status } = req.body;
     const farmer_id = req.session.user?.id;
 
     if (!name) {
@@ -225,10 +248,18 @@ export const createCrop = async (req, res) => {
     const cropType = normalizeCropType(name || description || '');
     const region = req.session.user?.location || 'Ashanti';
 
-    let predictedHarvestDate = harvest_date_predicted || null;
+    let predictedHarvestDate = harvest_date || harvest_date_predicted || null;
     let predictedExpiryDate = null;
 
-    if (planting_date && !predictedHarvestDate && normalizedStatus !== 'draft') {
+    if (predictedHarvestDate) {
+      const freshnessResult = await MLService.calculateFreshness(cropType, predictedHarvestDate, 'room_temp', 85);
+      const shelfLifeDays = freshnessResult?.status === 'success' && freshnessResult.data?.shelf_life !== undefined
+        ? Number(freshnessResult.data.shelf_life)
+        : FALLBACK_SHELF_LIFE_DAYS[cropType] || 7;
+      const expiry = new Date(`${predictedHarvestDate}T00:00:00Z`);
+      expiry.setUTCDate(expiry.getUTCDate() + shelfLifeDays);
+      predictedExpiryDate = expiry.toISOString().slice(0, 10);
+    } else if (planting_date && normalizedStatus !== 'draft') {
       const harvestPrediction = await MLService.predictHarvest(cropType, planting_date, region);
       if (harvestPrediction?.status === 'success' && harvestPrediction.data?.estimated_harvest) {
         predictedHarvestDate = harvestPrediction.data.estimated_harvest;
@@ -246,13 +277,14 @@ export const createCrop = async (req, res) => {
       }
     }
 
-    const derivedExpiryDate = expiry_date || predictedExpiryDate || predictedHarvestDate || null;
+    const derivedExpiryDate = harvest_date ? predictedExpiryDate : (expiry_date || predictedExpiryDate || predictedHarvestDate || null);
 
     // Create crop
     const { data: crop, error } = await supabase
       .from('crops')
       .insert([{
         name,
+        category: category || null,
         description: description || null,
         price: parseFloat(price),
         quantity: parseInt(quantity),
@@ -383,7 +415,7 @@ export const getCrop = async (req, res) => {
 export const updateCrop = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, price, quantity, unit, expiry_date, status, review_notes } = req.body;
+    const { name, category, description, price, quantity, unit, expiry_date, status, review_notes } = req.body;
     const farmer_id = req.session.user?.id;
 
     // Get current crop
@@ -415,6 +447,7 @@ export const updateCrop = async (req, res) => {
     // Build update object
     const updateData = {};
     if (name !== undefined) updateData.name = name;
+    if (category !== undefined) updateData.category = category;
     if (description !== undefined) updateData.description = description;
     if (price !== undefined) updateData.price = parseFloat(price);
     if (quantity !== undefined) {

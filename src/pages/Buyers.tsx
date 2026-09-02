@@ -18,6 +18,7 @@ interface Crop {
   quantity: number;
   unit: string;
   price: number;
+  category?: string | null;
   description: string;
   farmer: string;
   location: string;
@@ -35,8 +36,19 @@ interface Crop {
 }
 
 const Buyers = () => {
+  const categories = [
+    { value: "all", label: "All produce" },
+    { value: "Vegetables", label: "Vegetables" },
+    { value: "Fruits", label: "Fruits" },
+    { value: "Grains", label: "Grains" },
+    { value: "Spices", label: "Spices" },
+    { value: "Oil", label: "Oil" },
+    { value: "Cereals", label: "Cereals" },
+    { value: "LifeStocks", label: "Livestock" },
+  ];
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("all");
   const [user, setUser] = useState<{ id?: number | string } | null>(null);
   const [cart, setCart] = useState<Array<{crop: Crop, quantity: number}>>([]);
   const [addedItemIds, setAddedItemIds] = useState<Record<string, boolean>>({});
@@ -47,6 +59,19 @@ const Buyers = () => {
 
   const getCartStorageKey = (currentUser?: { id?: number | string } | null) =>
     currentUser?.id ? `cart_${currentUser.id}` : 'cart_guest';
+
+  const getCropCategory = (crop: Crop) => {
+    if (crop.category?.trim()) return crop.category.trim();
+
+    const searchableText = `${crop.name} ${crop.description}`.toLowerCase();
+    if (/spice|pepper|ginger|garlic|turmeric|clove|cinnamon/.test(searchableText)) return 'Spices';
+    if (/oil|palm|coconut/.test(searchableText)) return 'Oil';
+    if (/cereal|maize|corn|millet|oat|rice|wheat/.test(searchableText)) return 'Cereals';
+    if (/grain|bean|soy|sorghum|groundnut|peanut/.test(searchableText)) return 'Grains';
+    if (/fruit|mango|banana|orange|pineapple|pawpaw|watermelon/.test(searchableText)) return 'Fruits';
+    if (/livestock|goat|sheep|cattle|chicken|poultry|pig/.test(searchableText)) return 'LifeStocks';
+    return 'Vegetables';
+  };
 
   useEffect(() => {
     getProfile()
@@ -95,9 +120,10 @@ const Buyers = () => {
   const filteredCrops = crops.filter(crop => {
     const matchesSearch = crop.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          crop.farmer.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === "all" || 
-                           crop.name.toLowerCase().includes(selectedCategory.toLowerCase());
-    return matchesSearch && matchesCategory;
+    const matchesCategory = selectedCategory === "all" ||
+                 getCropCategory(crop).toLowerCase() === selectedCategory.toLowerCase();
+    const matchesLocation = locationFilter === "all" || crop.location === locationFilter;
+    return matchesSearch && matchesCategory && matchesLocation;
   });
 
   const addToCart = (crop: Crop, quantity: number) => {
@@ -131,12 +157,23 @@ const Buyers = () => {
   };
 
   const getDaysUntilExpiry = (expiryDate: string) => {
+    if (!expiryDate) return null;
     const today = new Date();
-    const expiry = new Date(expiryDate);
+    const trimmedExpiryDate = String(expiryDate).trim();
+    const numericDate = Number(trimmedExpiryDate);
+    if (/^\d+$/.test(trimmedExpiryDate) && numericDate <= 0) return null;
+    const expiry = new Date(
+      Number.isFinite(numericDate) && numericDate > 0
+        ? (numericDate < 100000000000 ? numericDate * 1000 : numericDate)
+        : trimmedExpiryDate,
+    );
+    if (Number.isNaN(expiry.getTime())) return null;
     const diffTime = expiry.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
   };
+
+  const locations = Array.from(new Set(crops.map((crop) => crop.location).filter(Boolean))).sort();
 
   return (
     <div className="min-h-screen bg-background relative">
@@ -171,41 +208,62 @@ const Buyers = () => {
             </Card>
           )}
 
-          {/* Search and Filters */}
-          <div className="bg-card/40 backdrop-blur-sm rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
-            <div className="flex flex-col gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search crops or farmers..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+          <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+            <aside className="rounded-lg border border-border/50 bg-card/40 p-4 backdrop-blur-sm lg:sticky lg:top-6">
+              <div className="mb-3 flex items-center gap-2 font-semibold">
+                <Filter className="h-4 w-4 text-primary" />
+                Categories
               </div>
-              
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="w-full">
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  <SelectItem value="tomato">Tomatoes</SelectItem>
-                  <SelectItem value="onion">Onions</SelectItem>
-                  <SelectItem value="pepper">Peppers</SelectItem>
-                  <SelectItem value="cassava">Cassava</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+              <div className="space-y-1">
+                {categories.map((category) => (
+                  <button
+                    key={category.value}
+                    type="button"
+                    onClick={() => setSelectedCategory(category.value)}
+                    className={`w-full rounded-md px-3 py-2 text-left text-sm transition-colors ${
+                      selectedCategory === category.value
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                    }`}
+                  >
+                    {category.label}
+                  </button>
+                ))}
+              </div>
+            </aside>
 
-          {/* Products Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-            {filteredCrops.map((crop) => {
+            <div className="min-w-0">
+              <div className="mb-6 rounded-lg bg-card/40 p-4 backdrop-blur-sm sm:p-6">
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(220px,280px)]">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search crops or farmers..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Select value={locationFilter} onValueChange={setLocationFilter}>
+                    <SelectTrigger className="w-full">
+                      <MapPin className="mr-2 h-4 w-4" />
+                      <SelectValue placeholder="Farmer location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All farmer locations</SelectItem>
+                      {locations.map((location) => (
+                        <SelectItem key={location} value={location}>{location}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {filteredCrops.map((crop) => {
               const daysUntilExpiry = getDaysUntilExpiry(crop.expiryDate);
               
-              return (
+                  return (
                 <Card key={crop.id} onClick={() => setSelectedCrop(crop)} className="cursor-pointer bg-card/40 backdrop-blur-sm border-border/50 hover:shadow-lg transition-all duration-300 group">
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start gap-2">
@@ -219,7 +277,7 @@ const Buyers = () => {
                             {crop.qualityScore}% Quality
                           </Badge>
                         )}
-                        {daysUntilExpiry <= 2 && (
+                        {daysUntilExpiry !== null && daysUntilExpiry >= 0 && daysUntilExpiry <= 2 && (
                           <Badge variant="destructive" className="text-xs flex-shrink-0">
                             Expires in {daysUntilExpiry} days
                           </Badge>
@@ -285,12 +343,15 @@ const Buyers = () => {
                         />
                         <Button 
                           className={`gap-2 ${addedItemIds[crop.id] ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`} 
-                          onClick={() => {
+                          onClick={(event) => {
+                            event.stopPropagation();
                             const quantityInput = document.getElementById(`quantity-${crop.id}`) as HTMLInputElement;
                             const quantity = parseInt(quantityInput?.value || "1");
                             if (quantity > 0 && quantity <= crop.quantity) {
                               addToCart(crop, quantity);
                               quantityInput.value = "";
+                            } else {
+                              toast.error(`Enter a quantity between 1 and ${crop.quantity}.`);
                             }
                           }}
                         >
@@ -305,8 +366,10 @@ const Buyers = () => {
                     </div>
                   </CardContent>
                 </Card>
-              );
-            })}
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>

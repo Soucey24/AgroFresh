@@ -200,14 +200,6 @@ const Checkout = () => {
         });
         return;
       }
-      if (normalizedMethod === "company-delivery" && !deliveryInfo.deliveryService) {
-        toast({
-          title: "Delivery company required",
-          description: "Please choose a delivery company or courier.",
-          variant: "destructive"
-        });
-        return;
-      }
     }
 
     const provisionalOrderIds: number[] = [];
@@ -685,28 +677,6 @@ const Checkout = () => {
                         className="w-full min-h-20 px-3 py-2 border border-input bg-background rounded-md text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 mt-1"
                         required
                       />
-                    </div>
-                  )}
-
-                  {(deliveryMethod === "home-delivery" || deliveryMethod === "business-delivery" || deliveryMethod === "company-delivery") && (
-                    <div>
-                      <Label className="text-sm font-medium">Delivery company *</Label>
-                      <div className="flex flex-col gap-2 mt-2">
-                        {['sendstack', 'gig', 'other'].map((option) => (
-                          <label key={option} className="flex items-center gap-2 rounded-md border p-2">
-                            <input
-                              type="radio"
-                              name="deliveryService"
-                              value={option}
-                              checked={deliveryInfo.deliveryService === option}
-                              onChange={() => setDeliveryInfo({ ...deliveryInfo, deliveryService: option as any })}
-                            />
-                            {option === 'sendstack' && 'Sendstack'}
-                            {option === 'gig' && 'GIG Logistics'}
-                            {option === 'other' && 'Other courier / rider'}
-                          </label>
-                        ))}
-                      </div>
                     </div>
                   )}
 
