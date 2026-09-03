@@ -2,12 +2,29 @@ import { supabase } from '../app.js';
 
 class DeliveryService {
   constructor() {
-    this.sendstackAppId = process.env.SENDSTACK_APP_ID;
-    this.sendstackAppSecret = process.env.SENDSTACK_APP_SECRET;
+    this.sendstackAppId = String(process.env.SENDSTACK_APP_ID || '').trim();
+    this.sendstackAppSecret = String(process.env.SENDSTACK_APP_SECRET || '').trim();
   }
 
   async createSendstackDelivery(orderData) {
     const { deliveryInfo, cartItems, orderId } = orderData;
+
+    if (String(process.env.SENDSTACK_DEMO_MODE || '').toLowerCase() === 'true') {
+      const demoTrackingNumber = `DEMO-SS-${orderId}-${Date.now().toString().slice(-6)}`;
+      const demoTrackingUrl = `${process.env.FRONTEND_URL || 'http://localhost:8080'}/delivery-tracking/${orderId}`;
+      await this.updateOrderTracking(orderId, {
+        tracking_number: demoTrackingNumber,
+        tracking_url: demoTrackingUrl,
+        delivery_status: 'Demo shipment created',
+      });
+      return {
+        success: true,
+        demo: true,
+        tracking_number: demoTrackingNumber,
+        tracking_url: demoTrackingUrl,
+        delivery_status: 'Demo shipment created',
+      };
+    }
     
     if (!this.sendstackAppId || !this.sendstackAppSecret) {
       throw new Error('Sendstack credentials are not configured');

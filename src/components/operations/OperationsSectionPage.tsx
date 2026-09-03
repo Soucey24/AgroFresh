@@ -315,7 +315,9 @@ const OperationsSectionPage = ({ section = 'dashboard', isAdminMode = false }: O
 
       if (!result?.error) {
         await refreshOrders();
-        const description = `Order #${orderId} is now in transit with ${provider.toUpperCase()} tracking.`;
+        const description = deliveryResult.demo
+          ? `Demo shipment created for order #${orderId}. No live courier booking was made.`
+          : `Order #${orderId} is now in transit with ${provider.toUpperCase()} tracking.`;
         setMessage(description);
         toast({ title: 'Dispatch assigned', description });
       } else {

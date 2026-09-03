@@ -26,6 +26,14 @@ const app = express();
 const PORT = Number(process.env.PORT) || 4000;
 const isProduction = process.env.NODE_ENV === 'production';
 
+console.log('[sendstack] credentials loaded', {
+  appIdConfigured: Boolean(String(process.env.SENDSTACK_APP_ID || '').trim()),
+  appIdLength: String(process.env.SENDSTACK_APP_ID || '').trim().length,
+  appSecretConfigured: Boolean(String(process.env.SENDSTACK_APP_SECRET || '').trim()),
+  appSecretLength: String(process.env.SENDSTACK_APP_SECRET || '').trim().length,
+  apiKeyIgnored: true
+});
+
 if (isProduction) {
   app.set('trust proxy', 1);
 }
